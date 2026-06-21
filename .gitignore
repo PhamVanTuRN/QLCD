@@ -1,0 +1,41 @@
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Re]leases/
+x64/
+x86/
+[Aa]rm/
+[Aa]rm64/
+asmdir/
+bin/
+obj/
+log/
+logs/
+
+# Visual Studio 2015/2017/2019/2022 cache/options directory
+.vs/
+# VS Code
+.vscode/
+
+# Rider/IntelliJ
+.idea/
+
+# Node/Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.env*.local
+
+# OS files
+.DS_Store
+Thumbs.db
