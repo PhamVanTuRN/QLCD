@@ -3,25 +3,34 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { 
+  LayoutDashboard, 
+  Network, 
+  Users, 
+  ClipboardList, 
+  Calendar, 
+  DollarSign, 
+  Heart, 
+  Lightbulb, 
+  Award, 
+  Folder, 
+  Key,
+  LogOut
+} from "lucide-react";
 
 const mainNavItems = [
-  { href: "/", label: "Dashboard Tổng quan", icon: "📊" },
-  { href: "/organizations", label: "Cây Tổ chức", icon: "🌿" },
-  { href: "/members", label: "Quản lý Đoàn viên", icon: "👥" },
-  { href: "/quality", label: "Chất lượng Công đoàn", icon: "📋" },
+  { href: "/", label: "Dashboard Tổng quan", icon: LayoutDashboard },
+  { href: "/organizations", label: "Cây Tổ chức", icon: Network },
+  { href: "/members", label: "Quản lý Đoàn viên", icon: Users },
+  { href: "/quality", label: "Chất lượng Công đoàn", icon: ClipboardList },
 ];
 
 const extraNavItems = [
-  { href: "/activities", label: "Hoạt động Công đoàn", icon: "📅" },
-  { href: "/finance", label: "Tài chính & Đoàn phí", icon: "💰" },
-  { href: "/welfare", label: "Phúc lợi & Cứu trợ", icon: "🏥" },
-  { href: "/initiatives", label: "Sáng kiến & Đề tài", icon: "💡" },
-  { href: "/emulations", label: "Thi đua Trực tuyến", icon: "🏆" },
-];
-
-const adminNavItems = [
-  { href: "/catalogs", label: "Quản lý Danh mục", icon: "🗂️" },
-  { href: "/accounts", label: "Tài khoản Tổ chức", icon: "🔑" },
+  { href: "/activities", label: "Hoạt động Công đoàn", icon: Calendar },
+  { href: "/finance", label: "Tài chính & Đoàn phí", icon: DollarSign },
+  { href: "/welfare", label: "Phúc lợi & Cứu trợ", icon: Heart },
+  { href: "/initiatives", label: "Sáng kiến & Đề tài", icon: Lightbulb },
+  { href: "/emulations", label: "Thi đua Trực tuyến", icon: Award },
 ];
 
 export default function Sidebar() {
@@ -37,13 +46,15 @@ export default function Sidebar() {
     }
   };
 
-  const showAdminMenu = user?.phamVi === "CDCS";
+  const isSystemAdmin = user?.vaiTro === "Administrator";
+  const isCdcsUser = user?.phamVi === "CDCS";
 
   return (
     <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col shrink-0">
-      <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-900/50 text-[10px]">
-          108
+      {/* Brand Header with Hospital 108 Logo */}
+      <div className="p-5 border-b border-slate-800 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-white overflow-hidden flex items-center justify-center shadow-lg p-0.5 border border-slate-700/50">
+          <img src="/logo_108.png?v=3" className="w-full h-full object-contain rounded-full" alt="Logo Bệnh viện 108" />
         </div>
         <div>
           <h1 className="font-bold text-sm tracking-wide text-white">QLCD SỐ 108</h1>
@@ -51,9 +62,11 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
         {mainNavItems.map((item) => {
           const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const Icon = item.icon;
           return (
             <Link
               key={item.href}
@@ -64,7 +77,7 @@ export default function Sidebar() {
                   : "text-slate-300 hover:bg-slate-900 hover:text-emerald-400"
               }`}
             >
-              <span>{item.icon}</span> {item.label}
+              <Icon className="w-4 h-4 shrink-0" /> {item.label}
             </Link>
           );
         })}
@@ -75,6 +88,7 @@ export default function Sidebar() {
 
         {extraNavItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
+          const Icon = item.icon;
           return (
             <Link
               key={item.href}
@@ -85,32 +99,40 @@ export default function Sidebar() {
                   : "text-slate-400 hover:bg-slate-900 hover:text-white"
               }`}
             >
-              <span>{item.icon}</span> {item.label}
+              <Icon className="w-4 h-4 shrink-0" /> {item.label}
             </Link>
           );
         })}
 
-        {showAdminMenu && (
+        {isCdcsUser && (
           <>
             <div className="pt-4 border-t border-slate-800/50 my-4">
               <span className="px-4 text-[10px] uppercase font-bold text-slate-500 tracking-wider">Cấu hình hệ thống</span>
             </div>
-            {adminNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium transition-all ${
-                    isActive
-                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 shadow-sm"
-                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
-                  }`}
-                >
-                  <span>{item.icon}</span> {item.label}
-                </Link>
-              );
-            })}
+            
+            <Link
+              href="/catalogs"
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                pathname.startsWith("/catalogs")
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 shadow-sm"
+                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+              }`}
+            >
+              <Folder className="w-4 h-4 shrink-0" /> Quản lý Danh mục
+            </Link>
+
+            {isSystemAdmin && (
+              <Link
+                href="/accounts"
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                  pathname.startsWith("/accounts")
+                    ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 shadow-sm"
+                    : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                }`}
+              >
+                <Key className="w-4 h-4 shrink-0" /> Tài khoản Tổ chức
+              </Link>
+            )}
           </>
         )}
       </nav>
@@ -119,7 +141,7 @@ export default function Sidebar() {
       {user && (
         <div className="p-4 border-t border-slate-800 bg-slate-950/50">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-600 to-emerald-700 flex items-center justify-center font-semibold text-white text-xs">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center font-bold text-white text-xs border border-emerald-400/20 shadow-md">
               {user.hoTen.split(" ").map(w => w[0]).slice(-2).join("")}
             </div>
             <div className="flex-1 min-w-0">
@@ -134,9 +156,9 @@ export default function Sidebar() {
           </div>
           <button
             onClick={logout}
-            className="mt-3 w-full text-center bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-red-400 text-[10px] font-semibold py-2 rounded-lg border border-slate-800 transition-all"
+            className="mt-3 w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-red-400 text-[10px] font-bold py-2 rounded-lg border border-slate-800 transition-all cursor-pointer"
           >
-            🚪 Đăng xuất
+            <LogOut className="w-3.5 h-3.5" /> Đăng xuất
           </button>
         </div>
       )}

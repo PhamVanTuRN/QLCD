@@ -34,15 +34,22 @@ public class FinanceDto
     public string? HoTenDoanVien { get; set; }
     public string? ThangNam { get; set; }
     public string? GhiChu { get; set; }
+    public string? FileMinhChungUrl { get; set; }
+    public Guid? EvidenceFileId { get; set; }
+    public string? EvidenceFileName { get; set; }
+    public long? EvidenceFileSize { get; set; }
+    public string? DownloadUrl { get; set; }
 }
 
 public class GetFinanceQueryHandler : IRequestHandler<GetFinanceQuery, List<FinanceDto>>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetFinanceQueryHandler(IQLCDDbContext context)
+    public GetFinanceQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<List<FinanceDto>> Handle(GetFinanceQuery request, CancellationToken cancellationToken)
@@ -53,29 +60,10 @@ public class GetFinanceQueryHandler : IRequestHandler<GetFinanceQuery, List<Fina
             .AsNoTracking();
 
         // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    query = query.Where(t => t.DonViId == orgId || childOrgIds.Contains(t.DonViId));
-                }
-                else // TOCD
-                {
-                    query = query.Where(t => t.DonViId == orgId);
-                }
-            }
-            else
-            {
-                return new List<FinanceDto>();
-            }
+            query = query.Where(t => allowedOrgIds.Contains(t.DonViId));
         }
 
         // 2. Tìm kiếm & Lọc
@@ -105,35 +93,45 @@ public class GetFinanceQueryHandler : IRequestHandler<GetFinanceQuery, List<Fina
 
         var list = await query
             .OrderByDescending(t => t.NgayGiaoDich)
-            .Select(t => new FinanceDto
+            .Select(t => new
+            {
+                Finance = t,
+                File = _context.EvidenceFiles
+                    .Where(f => f.RelatedEntityId == t.Id && !f.IsDeleted)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        var dtoList = new List<FinanceDto>();
+        foreach (var item in list)
+        {
+            var t = item.Finance;
+            var f = item.File;
+            
+            var dto = new FinanceDto
             {
                 Id = t.Id,
                 DonViId = t.DonViId,
                 TenDonVi = t.DonVi != null ? t.DonVi.TenDonVi : "",
                 LoaiGiaoDich = t.LoaiGiaoDich,
-                TenLoaiGiaoDich = "",
+                TenLoaiGiaoDich = catalogs.TryGetValue(t.LoaiGiaoDich, out var name) ? name : t.LoaiGiaoDich,
                 SoTien = t.SoTien,
                 NgayGiaoDich = t.NgayGiaoDich,
                 NguoiGiaoDich = t.NguoiGiaoDich,
                 DoanVienId = t.DoanVienId,
                 HoTenDoanVien = t.DoanVien != null ? t.DoanVien.HoTen : null,
                 ThangNam = t.ThangNam,
-                GhiChu = t.GhiChu
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var item in list)
-        {
-            if (catalogs.TryGetValue(item.LoaiGiaoDich, out var name))
-            {
-                item.TenLoaiGiaoDich = name;
-            }
-            else
-            {
-                item.TenLoaiGiaoDich = item.LoaiGiaoDich;
-            }
+                GhiChu = t.GhiChu,
+                FileMinhChungUrl = f != null ? f.Id.ToString() : null,
+                EvidenceFileId = f?.Id,
+                EvidenceFileName = f?.OriginalFileName,
+                EvidenceFileSize = f?.FileSize,
+                DownloadUrl = f != null ? $"/api/v1/evidence-files/download/{f.Id}" : null
+            };
+            dtoList.Add(dto);
         }
 
-        return list;
+        return dtoList;
     }
 }

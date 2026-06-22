@@ -36,15 +36,22 @@ public class EmulationDto
     public string? TenXepLoai { get; set; }
     public string? KhenThuong { get; set; }
     public int TrangThai { get; set; }
+    public string? FileMinhChungUrl { get; set; }
+    public Guid? EvidenceFileId { get; set; }
+    public string? EvidenceFileName { get; set; }
+    public long? EvidenceFileSize { get; set; }
+    public string? DownloadUrl { get; set; }
 }
 
 public class GetEmulationsQueryHandler : IRequestHandler<GetEmulationsQuery, List<EmulationDto>>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetEmulationsQueryHandler(IQLCDDbContext context)
+    public GetEmulationsQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<List<EmulationDto>> Handle(GetEmulationsQuery request, CancellationToken cancellationToken)
@@ -55,34 +62,12 @@ public class GetEmulationsQueryHandler : IRequestHandler<GetEmulationsQuery, Lis
             .AsNoTracking();
 
         // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    // Lọc bản ghi cá nhân thuộc tổ quản lý hoặc bản ghi tập thể thuộc tổ quản lý
-                    query = query.Where(e => 
-                        (e.DonViId.HasValue && (e.DonViId == orgId || childOrgIds.Contains(e.DonViId.Value))) ||
-                        (e.DoanVienId.HasValue && (e.DoanVien != null && (e.DoanVien.MaToCongDoan == orgId || childOrgIds.Contains(e.DoanVien.MaToCongDoan)))));
-                }
-                else // TOCD
-                {
-                    query = query.Where(e => 
-                        (e.DonViId.HasValue && e.DonViId == orgId) ||
-                        (e.DoanVienId.HasValue && e.DoanVien != null && e.DoanVien.MaToCongDoan == orgId));
-                }
-            }
-            else
-            {
-                return new List<EmulationDto>();
-            }
+            query = query.Where(e => 
+                (e.DonViId.HasValue && allowedOrgIds.Contains(e.DonViId.Value)) ||
+                (e.DoanVienId.HasValue && e.DoanVien != null && allowedOrgIds.Contains(e.DoanVien.MaToCongDoan)));
         }
 
         // 2. Lọc & Tìm kiếm
@@ -112,7 +97,23 @@ public class GetEmulationsQueryHandler : IRequestHandler<GetEmulationsQuery, Lis
 
         var list = await query
             .OrderByDescending(e => e.Nam)
-            .Select(e => new EmulationDto
+            .Select(e => new
+            {
+                Emulation = e,
+                File = _context.EvidenceFiles
+                    .Where(f => f.RelatedEntityId == e.Id && !f.IsDeleted)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        var dtoList = new List<EmulationDto>();
+        foreach (var item in list)
+        {
+            var e = item.Emulation;
+            var f = item.File;
+            
+            var dto = new EmulationDto
             {
                 Id = e.Id,
                 TenPhongTrao = e.TenPhongTrao,
@@ -125,24 +126,18 @@ public class GetEmulationsQueryHandler : IRequestHandler<GetEmulationsQuery, Lis
                 DiemTuDanhGia = e.DiemTuDanhGia,
                 DiemBchDuyet = e.DiemBchDuyet,
                 XepLoai = e.XepLoai,
-                TenXepLoai = "",
+                TenXepLoai = catalogs.TryGetValue(e.XepLoai, out var name) ? name : e.XepLoai,
                 KhenThuong = e.KhenThuong,
-                TrangThai = e.TrangThai
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var item in list)
-        {
-            if (catalogs.TryGetValue(item.XepLoai, out var name))
-            {
-                item.TenXepLoai = name;
-            }
-            else
-            {
-                item.TenXepLoai = item.XepLoai;
-            }
+                TrangThai = e.TrangThai,
+                FileMinhChungUrl = f != null ? f.Id.ToString() : null,
+                EvidenceFileId = f?.Id,
+                EvidenceFileName = f?.OriginalFileName,
+                EvidenceFileSize = f?.FileSize,
+                DownloadUrl = f != null ? $"/api/v1/evidence-files/download/{f.Id}" : null
+            };
+            dtoList.Add(dto);
         }
 
-        return list;
+        return dtoList;
     }
 }

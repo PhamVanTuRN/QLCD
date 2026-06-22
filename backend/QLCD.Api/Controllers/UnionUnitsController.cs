@@ -8,20 +8,28 @@ using QLCD.Application.Features.UnionUnits.Commands.DeleteUnionUnit;
 using QLCD.Application.Features.UnionUnits.Queries.GetUnionUnitsTree;
 using QLCD.Application.Features.UnionUnits.Queries.GetUnionStats;
 
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common.Interfaces;
+
 namespace QLCD.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/union-units")]
+[Authorize]
 public class UnionUnitsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IQLCDDbContext _context;
 
-    public UnionUnitsController(IMediator mediator)
+    public UnionUnitsController(IMediator mediator, IQLCDDbContext context)
     {
         _mediator = mediator;
+        _context = context;
     }
 
     [HttpPost]
+    [Authorize(Roles = "ADMIN,CDCS")]
     public async Task<IActionResult> Create([FromBody] CreateUnionUnitCommand command)
     {
         try
@@ -54,7 +62,15 @@ public class UnionUnitsController : ControllerBase
     }
 
     [HttpGet("stats")]
-    public async Task<IActionResult> GetStats()
+    public async Task<IActionResult> GetStats(
+        [FromQuery] Guid? maKhoi,
+        [FromQuery] Guid? filterOrgId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        [FromQuery] int? month,
+        [FromQuery] int? quarter,
+        [FromQuery] int? year,
+        [FromQuery] string? searchKeyword)
     {
         try
         {
@@ -65,7 +81,15 @@ public class UnionUnitsController : ControllerBase
             var stats = await _mediator.Send(new GetUnionStatsQuery
             {
                 ScopeOrgId = scopeOrgId,
-                UserRole = userRole
+                UserRole = userRole,
+                MaKhoi = maKhoi,
+                FilterOrgId = filterOrgId,
+                FromDate = fromDate,
+                ToDate = toDate,
+                Month = month,
+                Quarter = quarter,
+                Year = year,
+                SearchKeyword = searchKeyword
             });
             return Ok(new { success = true, data = stats });
         }
@@ -75,7 +99,24 @@ public class UnionUnitsController : ControllerBase
         }
     }
 
+    [HttpGet("khoi-chuyen-mon")]
+    public async Task<IActionResult> GetKhoiChuyenMon()
+    {
+        try
+        {
+            var list = await _context.KhoiChuyenMons
+                .Select(k => new { id = k.Id, tenKhoi = k.TenKhoi })
+                .ToListAsync();
+            return Ok(new { success = true, data = list });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
+        }
+    }
+
     [HttpPut("{id}")]
+    [Authorize(Roles = "ADMIN,CDCS")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUnionUnitCommand command)
     {
         try
@@ -98,6 +139,7 @@ public class UnionUnitsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "ADMIN,CDCS")]
     public async Task<IActionResult> Delete(Guid id)
     {
         try

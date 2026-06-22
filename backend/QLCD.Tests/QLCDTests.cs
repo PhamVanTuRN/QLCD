@@ -196,7 +196,7 @@ public class QLCDTests
         await context.SaveChangesAsync();
 
         // Lấy cây thư mục trước khi chuyển để kiểm tra số liệu
-        var treeQueryHandler = new GetUnionUnitsTreeQueryHandler(context);
+        var treeQueryHandler = new GetUnionUnitsTreeQueryHandler(context, new DummyCurrentUserService());
         var treeBefore = await treeQueryHandler.Handle(new GetUnionUnitsTreeQuery(), CancellationToken.None);
 
         Assert.NotNull(treeBefore);
@@ -207,7 +207,7 @@ public class QLCDTests
         Assert.Equal(0, cdbpBefore.Children.First(c => c.Id == tcdB.Id).SoDoanVien); // Tổ B có 0 đoàn viên
 
         // Act - Chuyển sang Tổ B
-        var transferHandler = new TransferUnionMemberCommandHandler(context);
+        var transferHandler = new TransferUnionMemberCommandHandler(context, new DummyOrganizationScopeService(), new DummyCurrentUserService());
         var result = await transferHandler.Handle(new TransferUnionMemberCommand
         {
             DoanVienId = member.Id,
@@ -227,5 +227,35 @@ public class QLCDTests
         Assert.Equal(1, cdbpAfter.SoDoanVien); // CĐBP 1 vẫn là 1
         Assert.Equal(0, cdbpAfter.Children.First(c => c.Id == tcdA.Id).SoDoanVien); // Tổ A giảm về 0
         Assert.Equal(1, cdbpAfter.Children.First(c => c.Id == tcdB.Id).SoDoanVien); // Tổ B tăng lên 1
+    }
+
+    private class DummyCurrentUserService : QLCD.Application.Common.Interfaces.ICurrentUserService
+    {
+        public Guid? UserId => Guid.Empty;
+        public string? Username => "admin";
+        public string? Role => "ADMIN";
+        public Guid? OrganizationId => null;
+        public bool IsAdmin => true;
+        public bool IsCdcs => false;
+        public bool IsCdbp => false;
+        public bool IsTocd => false;
+    }
+
+    private class DummyOrganizationScopeService : QLCD.Application.Common.Interfaces.IOrganizationScopeService
+    {
+        public Task<System.Collections.Generic.List<Guid>?> GetAllowedOrganizationIdsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<System.Collections.Generic.List<Guid>?>(null);
+        }
+
+        public Task<bool> IsInScopeAsync(Guid targetOrgId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> IsMemberInScopeAsync(Guid memberId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
     }
 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getMembers, createMember, transferMember, deleteMemberApi, getUnionTree, getCatalogsApi, CatalogDto, UnionMemberDto, UnionUnitDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
+import EvidenceUpload from "@/components/EvidenceUpload";
 
 // Mock data khi API trả rỗng
 const mockMembers: UnionMemberDto[] = [
@@ -74,6 +75,9 @@ export default function MembersList() {
   // Catalogs
   const [languagesList, setLanguagesList] = useState<CatalogDto[]>([]);
   const [levelsList, setLevelsList] = useState<CatalogDto[]>([]);
+  const [chucVus, setChucVus] = useState<CatalogDto[]>([]);
+  const [donViCongTacs, setDonViCongTacs] = useState<CatalogDto[]>([]);
+  const [chuyenMons, setChuyenMons] = useState<CatalogDto[]>([]);
 
   // Add member modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -92,6 +96,7 @@ export default function MembersList() {
   const [activeMember, setActiveMember] = useState<UnionMemberDto | null>(null);
   const [targetGroup, setTargetGroup] = useState("");
   const [transferReason, setTransferReason] = useState("");
+  const [transferFileMinhChungUrl, setTransferFileMinhChungUrl] = useState("");
 
   const loadMembers = useCallback(async () => {
     const data = await getMembers({
@@ -100,12 +105,45 @@ export default function MembersList() {
       vaiTro: selectedRole || undefined,
       trangThai: selectedStatus || undefined
     });
-    if (data && data.items.length > 0) {
+    if (data !== null) {
       setMembers(data.items);
       setTotalCount(data.totalCount);
     } else {
-      // Fallback mock data with client-side filtering
+      // Fallback mock data with client-side filtering (only if API fails)
       let filtered = [...mockMembers];
+      
+      // Filter mock data by organization scope
+      if (user && user.phamVi !== "CDCS" && user.donViId) {
+        const userOrg = user.donViId.toLowerCase();
+        // Map mock unit IDs to CĐBP parent IDs to simulate scope
+        // Khối Nội 1: 70967e9e-a3c3-4486-9cb0-65d150382d94
+        // Khối Ngoại: d6e077b4-fd1b-49cc-ae92-32014b418b4c
+        filtered = filtered.filter(m => {
+          if (user.phamVi === "TOCD") {
+            // Check direct match or mapped match
+            if (m.maToCongDoan === userOrg) return true;
+            if (userOrg.includes("tieuhoa") && m.maToCongDoan === "tcd-tieuhoa") return true;
+            if (userOrg.includes("tim") && m.maToCongDoan === "tcd-tim") return true;
+            if (userOrg.includes("chinhhinh") && m.maToCongDoan === "tcd-chinhhinh") return true;
+            if (userOrg.includes("khop") && m.maToCongDoan === "tcd-khop") return true;
+            if (userOrg.includes("tructhuoc") && m.maToCongDoan === "tcd-tructhuoc1") return true;
+            return false;
+          } else if (user.phamVi === "CDBP") {
+            if (userOrg === "70967e9e-a3c3-4486-9cb0-65d150382d94") {
+              return m.maToCongDoan === "tcd-tieuhoa" || m.maToCongDoan === "tcd-tim";
+            }
+            if (userOrg === "d6e077b4-fd1b-49cc-ae92-32014b418b4c") {
+              return m.maToCongDoan === "tcd-chinhhinh" || m.maToCongDoan === "tcd-khop";
+            }
+            if (userOrg === "ccad961d-41db-4321-95c9-d317b6e4a93d") {
+              // Liên cơ quan has no mock child units
+              return false;
+            }
+          }
+          return false;
+        });
+      }
+
       if (searchTerm) {
         const s = searchTerm.toLowerCase();
         filtered = filtered.filter(m => m.hoTen.toLowerCase().includes(s) || m.maNhanVien.toLowerCase().includes(s) || m.soCCCD.includes(s));
@@ -116,12 +154,20 @@ export default function MembersList() {
       setMembers(filtered);
       setTotalCount(filtered.length);
     }
-  }, [searchTerm, selectedGroup, selectedRole, selectedStatus]);
+  }, [searchTerm, selectedGroup, selectedRole, selectedStatus, user]);
 
   const loadGroups = useCallback(async () => {
     const tree = await getUnionTree();
     if (tree) {
-      setGroups(collectGroups(tree));
+      const collected = collectGroups(tree);
+      setGroups(collected);
+      const defaultId = user?.donViId && collected.some(g => g.id === user.donViId)
+        ? user.donViId
+        : collected[0]?.id || "";
+      setAddForm((prev: any) => ({
+        ...prev,
+        maToCongDoan: defaultId
+      }));
     } else {
       setGroups([
         { id: "tcd-tieuhoa", name: "Tổ CĐ Khoa Tiêu hóa" },
@@ -131,7 +177,7 @@ export default function MembersList() {
         { id: "tcd-tructhuoc1", name: "Tổ CĐ trực thuộc CĐCS số 1" }
       ]);
     }
-  }, []);
+  }, [user]);
 
   const loadCatalogs = useCallback(async () => {
     try {
@@ -139,6 +185,12 @@ export default function MembersList() {
       setLanguagesList(langs);
       const lvls = await getCatalogsApi({ loai: "TrinhDoNgoaiNgu", activeOnly: true });
       setLevelsList(lvls);
+      const cv = await getCatalogsApi({ loai: "ChucVu", activeOnly: true });
+      setChucVus(cv);
+      const dv = await getCatalogsApi({ loai: "DonViCongTac", activeOnly: true });
+      setDonViCongTacs(dv);
+      const cm = await getCatalogsApi({ loai: "ChuyenMon", activeOnly: true });
+      setChuyenMons(cm);
     } catch (err) {
       console.error(err);
     }
@@ -213,13 +265,15 @@ export default function MembersList() {
       await transferMember(activeMember.id, {
         denToCongDoanId: targetGroup,
         lyDo: transferReason,
-        ngayHieuLuc: new Date().toISOString()
+        ngayHieuLuc: new Date().toISOString(),
+        fileMinhChungUrl: transferFileMinhChungUrl || undefined
       });
       alert("Chuyển sinh hoạt thành công!");
       setShowTransferModal(false);
       setActiveMember(null);
       setTargetGroup("");
       setTransferReason("");
+      setTransferFileMinhChungUrl("");
       await loadMembers();
     } catch (err: any) {
       alert(err.response?.data?.message || "Lỗi khi chuyển sinh hoạt");
@@ -354,12 +408,14 @@ export default function MembersList() {
                       >
                         ✏️ Sửa
                       </Link>
-                      <button
-                        onClick={() => { setActiveMember(m); setShowTransferModal(true); }}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-slate-700 transition-all"
-                      >
-                        🔄 Điều động
-                      </button>
+                      {user?.phamVi !== "TOCD" && (
+                        <button
+                          onClick={() => { setActiveMember(m); setShowTransferModal(true); }}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-slate-700 transition-all"
+                        >
+                          🔄 Điều động
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeleteMember(m.id, m.hoTen)}
                         className="bg-red-600/10 hover:bg-red-600/20 text-red-400 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-red-500/20 transition-all"
@@ -407,13 +463,13 @@ export default function MembersList() {
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Số CCCD *</label>
-                <input type="text" value={addForm.soCCCD} onChange={e => setAddForm({ ...addForm, soCCCD: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="001095001234" />
+                <input type="text" value={addForm.soCCCD} onChange={e => setAddForm({ ...addForm, soCCCD: e.target.value, maNhanVien: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="001095001234" required />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Mã nhân viên *</label>
-                <input type="text" value={addForm.maNhanVien} onChange={e => setAddForm({ ...addForm, maNhanVien: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="NV-0001" />
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Mã nhân viên (CCCD) *</label>
+                <input type="text" value={addForm.soCCCD} disabled
+                  className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-500 cursor-not-allowed transition-all" placeholder="Tự động đồng bộ theo CCCD" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Đơn vị Công đoàn *</label>
@@ -441,18 +497,27 @@ export default function MembersList() {
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Chức vụ</label>
-                <input type="text" value={addForm.chucVu} onChange={e => setAddForm({ ...addForm, chucVu: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="Phó khoa" />
+                <select value={addForm.chucVu} onChange={e => setAddForm({ ...addForm, chucVu: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  <option value="">Chọn Chức vụ...</option>
+                  {chucVus.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Đơn vị công tác</label>
-                <input type="text" value={addForm.donViCongTac} onChange={e => setAddForm({ ...addForm, donViCongTac: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="Khoa Tiêu hóa" />
+                <select value={addForm.donViCongTac} onChange={e => setAddForm({ ...addForm, donViCongTac: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  <option value="">Chọn Đơn vị công tác...</option>
+                  {donViCongTacs.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Chuyên môn</label>
-                <input type="text" value={addForm.chucDanhChuyenMon} onChange={e => setAddForm({ ...addForm, chucDanhChuyenMon: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="Bác sĩ" />
+                <select value={addForm.chucDanhChuyenMon} onChange={e => setAddForm({ ...addForm, chucDanhChuyenMon: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  <option value="">Chọn Chuyên môn...</option>
+                  {chuyenMons.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Trình độ học vấn</label>
@@ -589,9 +654,18 @@ export default function MembersList() {
                 <textarea rows={3} value={transferReason} onChange={(e) => setTransferReason(e.target.value)} placeholder="Nhập lý do điều động..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all resize-none" />
               </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Quyết định/Minh chứng điều chuyển (PDF)</label>
+                <EvidenceUpload
+                  fileId={transferFileMinhChungUrl}
+                  onChange={(fileId) => setTransferFileMinhChungUrl(fileId || "")}
+                  moduleName="Members"
+                  organizationId={activeMember.maToCongDoan || user?.donViId || ""}
+                />
+              </div>
             </div>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => { setShowTransferModal(false); setActiveMember(null); }}
+              <button onClick={() => { setShowTransferModal(false); setActiveMember(null); setTransferFileMinhChungUrl(""); }}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-700 transition-all">Hủy bỏ</button>
               <button onClick={handleTransfer} disabled={!targetGroup || !transferReason}
                 className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${

@@ -46,10 +46,12 @@ public class UnitStats
 public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQuery, UnionUnitDto?>
 {
     private readonly IQLCDDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetUnionUnitsTreeQueryHandler(IQLCDDbContext context)
+    public GetUnionUnitsTreeQueryHandler(IQLCDDbContext context, ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<UnionUnitDto?> Handle(GetUnionUnitsTreeQuery request, CancellationToken cancellationToken)
@@ -110,13 +112,21 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
             }
         }
 
-        // 4. Tính toán số đoàn viên đệ quy từ dưới lên
-        var root = allDtos.FirstOrDefault(d => d.LoaiToChuc == LoaiToChuc.CDCS);
-        if (root == null) return null;
+        // 4. Tính toán số đoàn viên đệ quy từ dưới lên cho gốc hệ thống
+        var rootSystem = allDtos.FirstOrDefault(d => d.LoaiToChuc == LoaiToChuc.CDCS);
+        if (rootSystem == null) return null;
 
-        CalculateMembersRecursive(root, memberStatsByUnit);
+        CalculateMembersRecursive(rootSystem, memberStatsByUnit);
 
-        return root;
+        // 5. Trim tree to the user's scoped unit root if role is CDBP or TOCD
+        if (!_currentUserService.IsAdmin && !_currentUserService.IsCdcs && _currentUserService.OrganizationId.HasValue)
+        {
+            var userOrgId = _currentUserService.OrganizationId.Value;
+            var userRoot = allDtos.FirstOrDefault(d => d.Id == userOrgId);
+            return userRoot;
+        }
+
+        return rootSystem;
     }
 
     private UnitStats CalculateMembersRecursive(UnionUnitDto node, Dictionary<Guid, UnitStats> memberStats)

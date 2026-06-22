@@ -35,15 +35,21 @@ public class WelfareDto
     public required string LyDo { get; set; }
     public int TrangThai { get; set; }
     public string? FileMinhChungUrl { get; set; }
+    public Guid? EvidenceFileId { get; set; }
+    public string? EvidenceFileName { get; set; }
+    public long? EvidenceFileSize { get; set; }
+    public string? DownloadUrl { get; set; }
 }
 
 public class GetWelfareQueryHandler : IRequestHandler<GetWelfareQuery, List<WelfareDto>>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetWelfareQueryHandler(IQLCDDbContext context)
+    public GetWelfareQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<List<WelfareDto>> Handle(GetWelfareQuery request, CancellationToken cancellationToken)
@@ -54,29 +60,10 @@ public class GetWelfareQueryHandler : IRequestHandler<GetWelfareQuery, List<Welf
             .AsNoTracking();
 
         // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    query = query.Where(w => w.DonViId == orgId || childOrgIds.Contains(w.DonViId));
-                }
-                else // TOCD
-                {
-                    query = query.Where(w => w.DonViId == orgId);
-                }
-            }
-            else
-            {
-                return new List<WelfareDto>();
-            }
+            query = query.Where(w => allowedOrgIds.Contains(w.DonViId));
         }
 
         // 2. Lọc & Tìm kiếm
@@ -106,7 +93,23 @@ public class GetWelfareQueryHandler : IRequestHandler<GetWelfareQuery, List<Welf
 
         var list = await query
             .OrderByDescending(w => w.NgayHoTro)
-            .Select(w => new WelfareDto
+            .Select(w => new
+            {
+                Welfare = w,
+                File = _context.EvidenceFiles
+                    .Where(f => f.RelatedEntityId == w.Id && !f.IsDeleted)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        var dtoList = new List<WelfareDto>();
+        foreach (var item in list)
+        {
+            var w = item.Welfare;
+            var f = item.File;
+            
+            var dto = new WelfareDto
             {
                 Id = w.Id,
                 DoanVienId = w.DoanVienId,
@@ -115,27 +118,20 @@ public class GetWelfareQueryHandler : IRequestHandler<GetWelfareQuery, List<Welf
                 DonViId = w.DonViId,
                 TenDonVi = w.DonVi != null ? w.DonVi.TenDonVi : "",
                 LoaiPhucLoi = w.LoaiPhucLoi,
-                TenLoaiPhucLoi = "",
+                TenLoaiPhucLoi = catalogs.TryGetValue(w.LoaiPhucLoi, out var name) ? name : w.LoaiPhucLoi,
                 KinhPhiHoTro = w.KinhPhiHoTro,
                 NgayHoTro = w.NgayHoTro,
                 LyDo = w.LyDo,
                 TrangThai = w.TrangThai,
-                FileMinhChungUrl = w.FileMinhChungUrl
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var item in list)
-        {
-            if (catalogs.TryGetValue(item.LoaiPhucLoi, out var name))
-            {
-                item.TenLoaiPhucLoi = name;
-            }
-            else
-            {
-                item.TenLoaiPhucLoi = item.LoaiPhucLoi;
-            }
+                FileMinhChungUrl = w.FileMinhChungUrl,
+                EvidenceFileId = f?.Id,
+                EvidenceFileName = f?.OriginalFileName,
+                EvidenceFileSize = f?.FileSize,
+                DownloadUrl = f != null ? $"/api/v1/evidence-files/download/{f.Id}" : null
+            };
+            dtoList.Add(dto);
         }
 
-        return list;
+        return dtoList;
     }
 }

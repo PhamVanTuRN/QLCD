@@ -1,20 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getFinanceApi, createFinanceApi, updateFinanceApi, deleteFinanceApi, getCatalogsApi, CatalogDto, getMembers } from "@/lib/api";
+import { getFinanceApi, createFinanceApi, updateFinanceApi, deleteFinanceApi, getCatalogsApi, CatalogDto, getMembers, getFlattenedUnits, getDownloadUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import EvidenceUpload from "@/components/EvidenceUpload";
 
 export default function FinancePage() {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [types, setTypes] = useState<CatalogDto[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [units, setUnits] = useState<{ id: string; tenDonVi: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     loaiGiaoDich: "",
@@ -23,7 +26,9 @@ export default function FinancePage() {
     nguoiGiaoDich: "",
     doanVienId: "",
     thangNam: "",
-    ghiChu: ""
+    ghiChu: "",
+    fileMinhChungUrl: "",
+    donViId: ""
   });
 
   const showAlert = (type: "success" | "error", message: string) => {
@@ -44,6 +49,12 @@ export default function FinancePage() {
       if (memList && memList.items) {
         setMembers(memList.items);
       }
+
+      const unitList = await getFlattenedUnits();
+      setUnits(unitList);
+      if (unitList.length === 1) {
+        setFormData(prev => ({ ...prev, donViId: unitList[0].id }));
+      }
     } catch (err) {
       console.error(err);
       showAlert("error", "Lỗi tải dữ liệu tài chính");
@@ -58,6 +69,7 @@ export default function FinancePage() {
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setIsDetailView(false);
     setFormData({
       loaiGiaoDich: types[0]?.ma || "THU_DOAN_PHI",
       soTien: 0,
@@ -65,13 +77,16 @@ export default function FinancePage() {
       nguoiGiaoDich: user?.hoTen || "",
       doanVienId: "",
       thangNam: new Date().toLocaleDateString("vi-VN", { month: "2-digit", year: "numeric" }),
-      ghiChu: ""
+      ghiChu: "",
+      fileMinhChungUrl: "",
+      donViId: units.length === 1 ? units[0].id : (user?.donViId || "")
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item: any) => {
     setEditingId(item.id);
+    setIsDetailView(false);
     setFormData({
       loaiGiaoDich: item.loaiGiaoDich,
       soTien: item.soTien || 0,
@@ -79,7 +94,26 @@ export default function FinancePage() {
       nguoiGiaoDich: item.nguoiGiaoDich || "",
       doanVienId: item.doanVienId || "",
       thangNam: item.thangNam || "",
-      ghiChu: item.ghiChu || ""
+      ghiChu: item.ghiChu || "",
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenDetail = (item: any) => {
+    setEditingId(item.id);
+    setIsDetailView(true);
+    setFormData({
+      loaiGiaoDich: item.loaiGiaoDich,
+      soTien: item.soTien || 0,
+      ngayGiaoDich: item.ngayGiaoDich ? item.ngayGiaoDich.split("T")[0] : "",
+      nguoiGiaoDich: item.nguoiGiaoDich || "",
+      doanVienId: item.doanVienId || "",
+      thangNam: item.thangNam || "",
+      ghiChu: item.ghiChu || "",
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
     });
     setIsModalOpen(true);
   };
@@ -106,7 +140,8 @@ export default function FinancePage() {
     try {
       const payload = {
         ...formData,
-        donViId: user?.donViId || "00000000-0000-0000-0000-000000000000",
+        id: editingId || undefined,
+        donViId: formData.donViId || user?.donViId || "00000000-0000-0000-0000-000000000000",
         doanVienId: formData.doanVienId === "" ? null : formData.doanVienId
       };
 
@@ -257,8 +292,21 @@ export default function FinancePage() {
                       {new Date(item.ngayGiaoDich).toLocaleDateString("vi-VN")}
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-white">{item.nguoiGiaoDich}</div>
-                      {item.doanVienTen && <div className="text-[10px] text-slate-500">ĐV liên kết: {item.doanVienTen}</div>}
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-white">{item.nguoiGiaoDich}</div>
+                        {item.evidenceFileId && (
+                          <a
+                            href={getDownloadUrl(item.evidenceFileId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            title="Tải file minh chứng"
+                          >
+                            📄 PDF
+                          </a>
+                        )}
+                      </div>
+                      {item.hoTenDoanVien && <div className="text-[10px] text-slate-500">ĐV liên kết: {item.hoTenDoanVien}</div>}
                     </td>
                     <td className="py-3 px-4 text-center font-mono">{item.thangNam || "—"}</td>
                     <td
@@ -269,9 +317,15 @@ export default function FinancePage() {
                       {isReceipt(item.loaiGiaoDich) ? "+" : "-"}{(item.soTien || 0).toLocaleString()} đ
                     </td>
                     <td className="py-3 px-4 text-slate-400 truncate max-w-[150px]">{item.ghiChu || "—"}</td>
-                    <td className="py-3 px-4 text-slate-400">{item.donViTen || "—"}</td>
+                    <td className="py-3 px-4 text-slate-400">{item.tenDonVi || "—"}</td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenDetail(item)}
+                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                        >
+                          Chi tiết
+                        </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
                           className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
@@ -300,18 +354,39 @@ export default function FinancePage() {
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           <div className="relative z-10 w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
             <div>
-              <h3 className="text-sm font-bold text-white">{editingId ? "Sửa thông tin giao dịch" : "Ghi nhận giao dịch tài chính"}</h3>
+              <h3 className="text-sm font-bold text-white">
+                {isDetailView ? "Chi tiết giao dịch" : editingId ? "Sửa thông tin giao dịch" : "Ghi nhận giao dịch tài chính"}
+              </h3>
               <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến nguồn thu hoặc chi tiêu</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Đơn vị *
+                </label>
+                <select
+                  value={formData.donViId}
+                  onChange={(e) => setFormData({ ...formData, donViId: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  required
+                  disabled={isDetailView || units.length === 1}
+                >
+                  <option value="">-- Chọn đơn vị --</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.tenDonVi}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Loại giao dịch *</label>
                   <select
                     value={formData.loaiGiaoDich}
                     onChange={(e) => setFormData({ ...formData, loaiGiaoDich: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     {types.map((t) => (
                       <option key={t.ma} value={t.ma}>{t.ten}</option>
@@ -325,7 +400,8 @@ export default function FinancePage() {
                     value={formData.soTien}
                     onChange={(e) => setFormData({ ...formData, soTien: parseInt(e.target.value) || 0 })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -338,7 +414,8 @@ export default function FinancePage() {
                     value={formData.ngayGiaoDich}
                     onChange={(e) => setFormData({ ...formData, ngayGiaoDich: e.target.value })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -348,7 +425,8 @@ export default function FinancePage() {
                     value={formData.thangNam}
                     onChange={(e) => setFormData({ ...formData, thangNam: e.target.value })}
                     placeholder="e.g. 06/2026"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -360,7 +438,8 @@ export default function FinancePage() {
                   value={formData.nguoiGiaoDich}
                   onChange={(e) => setFormData({ ...formData, nguoiGiaoDich: e.target.value })}
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 />
               </div>
 
@@ -370,7 +449,8 @@ export default function FinancePage() {
                   <select
                     value={formData.doanVienId}
                     onChange={(e) => setFormData({ ...formData, doanVienId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     <option value="">Chọn đoàn viên (Không bắt buộc)...</option>
                     {members.map((m) => (
@@ -386,8 +466,37 @@ export default function FinancePage() {
                   value={formData.ghiChu}
                   onChange={(e) => setFormData({ ...formData, ghiChu: e.target.value })}
                   rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none disabled:opacity-50"
                 />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">File minh chứng PDF</label>
+                {isDetailView ? (
+                  formData.fileMinhChungUrl ? (
+                    <div className="mt-1">
+                      <a
+                        href={getDownloadUrl(formData.fileMinhChungUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                      >
+                        📄 Tải PDF minh chứng
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                  )
+                ) : (
+                  <EvidenceUpload
+                    fileId={formData.fileMinhChungUrl}
+                    initialFileName={editingId ? transactions.find(t => t.id === editingId)?.evidenceFileName : undefined}
+                    onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
+                    moduleName="Finance"
+                    organizationId={formData.donViId || user?.donViId || ""}
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -396,14 +505,16 @@ export default function FinancePage() {
                   onClick={() => setIsModalOpen(false)}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
-                  Hủy
+                  {isDetailView ? "Đóng" : "Hủy"}
                 </button>
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
-                >
-                  Lưu
-                </button>
+                {!isDetailView && (
+                  <button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                  >
+                    Lưu
+                  </button>
+                )}
               </div>
             </form>
           </div>

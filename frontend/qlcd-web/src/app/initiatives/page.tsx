@@ -1,20 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getInitiativesApi, createInitiativeApi, updateInitiativeApi, deleteInitiativeApi, getCatalogsApi, CatalogDto, getMembers } from "@/lib/api";
+import { getInitiativesApi, createInitiativeApi, updateInitiativeApi, deleteInitiativeApi, getCatalogsApi, CatalogDto, getMembers, getFlattenedUnits, getDownloadUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import EvidenceUpload from "@/components/EvidenceUpload";
 
 export default function InitiativesPage() {
   const { user } = useAuth();
   const [initiatives, setInitiatives] = useState<any[]>([]);
   const [types, setTypes] = useState<CatalogDto[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [units, setUnits] = useState<{ id: string; tenDonVi: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     doanVienId: "",
@@ -25,7 +28,9 @@ export default function InitiativesPage() {
     ngayNghiemThu: "",
     namThucHien: new Date().getFullYear(),
     ketQuaNghiemThu: "",
-    trangThai: 1
+    trangThai: 1,
+    fileMinhChungUrl: "",
+    donViId: ""
   });
 
   const showAlert = (type: "success" | "error", message: string) => {
@@ -46,6 +51,12 @@ export default function InitiativesPage() {
       if (memList && memList.items) {
         setMembers(memList.items);
       }
+
+      const unitList = await getFlattenedUnits();
+      setUnits(unitList);
+      if (unitList.length === 1) {
+        setFormData(prev => ({ ...prev, donViId: unitList[0].id }));
+      }
     } catch (err) {
       console.error(err);
       showAlert("error", "Lỗi tải danh sách sáng kiến");
@@ -60,6 +71,7 @@ export default function InitiativesPage() {
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setIsDetailView(false);
     setFormData({
       doanVienId: members[0]?.id || "",
       tenDeTai: "",
@@ -69,13 +81,16 @@ export default function InitiativesPage() {
       ngayNghiemThu: new Date().toISOString().split("T")[0],
       namThucHien: new Date().getFullYear(),
       ketQuaNghiemThu: "",
-      trangThai: 1
+      trangThai: 1,
+      fileMinhChungUrl: "",
+      donViId: units.length === 1 ? units[0].id : (user?.donViId || "")
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item: any) => {
     setEditingId(item.id);
+    setIsDetailView(false);
     setFormData({
       doanVienId: item.doanVienId,
       tenDeTai: item.tenDeTai,
@@ -85,7 +100,28 @@ export default function InitiativesPage() {
       ngayNghiemThu: item.ngayNghiemThu ? item.ngayNghiemThu.split("T")[0] : "",
       namThucHien: item.namThucHien || new Date().getFullYear(),
       ketQuaNghiemThu: item.ketQuaNghiemThu || "",
-      trangThai: item.trangThai || 1
+      trangThai: item.trangThai || 1,
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenDetail = (item: any) => {
+    setEditingId(item.id);
+    setIsDetailView(true);
+    setFormData({
+      doanVienId: item.doanVienId,
+      tenDeTai: item.tenDeTai,
+      linhVuc: item.linhVuc || "",
+      capDeTai: item.capDeTai,
+      hieuQuaKinhTe: item.hieuQuaKinhTe || "",
+      ngayNghiemThu: item.ngayNghiemThu ? item.ngayNghiemThu.split("T")[0] : "",
+      namThucHien: item.namThucHien || new Date().getFullYear(),
+      ketQuaNghiemThu: item.ketQuaNghiemThu || "",
+      trangThai: item.trangThai || 1,
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
     });
     setIsModalOpen(true);
   };
@@ -112,7 +148,8 @@ export default function InitiativesPage() {
     try {
       const payload = {
         ...formData,
-        donViId: user?.donViId || "00000000-0000-0000-0000-000000000000",
+        id: editingId || undefined,
+        donViId: formData.donViId || user?.donViId || "00000000-0000-0000-0000-000000000000",
         namThucHien: Number(formData.namThucHien),
         trangThai: Number(formData.trangThai),
         ngayNghiemThu: formData.ngayNghiemThu === "" ? null : formData.ngayNghiemThu
@@ -260,8 +297,21 @@ export default function InitiativesPage() {
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-200">{item.doanVienTen || "—"}</div>
-                      <div className="text-[10px] text-slate-500">Mã NV: {item.maNhanVien || "—"}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-slate-200">{item.hoTenDoanVien || "—"}</div>
+                        {item.evidenceFileId && (
+                          <a
+                            href={getDownloadUrl(item.evidenceFileId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            title="Tải file minh chứng"
+                          >
+                            📄 PDF
+                          </a>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500">Mã NV: {item.maNhanVien || "—"} {item.tenDonVi && `• ${item.tenDonVi}`}</div>
                     </td>
                     <td className="py-3 px-4 font-medium">{item.linhVuc}</td>
                     <td className="py-3 px-4 text-center font-mono">{item.namThucHien}</td>
@@ -276,6 +326,12 @@ export default function InitiativesPage() {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenDetail(item)}
+                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                        >
+                          Chi tiết
+                        </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
                           className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
@@ -305,19 +361,38 @@ export default function InitiativesPage() {
           <div className="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
             <div>
               <h3 className="text-sm font-bold text-white">
-                {editingId ? "Sửa thông tin đề tài" : "Đăng ký đề tài / sáng kiến mới"}
+                {isDetailView ? "Chi tiết sáng kiến" : editingId ? "Sửa thông tin đề tài" : "Đăng ký đề tài / sáng kiến mới"}
               </h3>
               <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến đề tài sáng kiến khoa học</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Đơn vị *
+                </label>
+                <select
+                  value={formData.donViId}
+                  onChange={(e) => setFormData({ ...formData, donViId: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  required
+                  disabled={isDetailView || units.length === 1}
+                >
+                  <option value="">-- Chọn đơn vị --</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.tenDonVi}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tác giả (Đoàn viên) *</label>
                 <select
                   value={formData.doanVienId}
                   onChange={(e) => setFormData({ ...formData, doanVienId: e.target.value })}
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 >
                   <option value="">Chọn tác giả đăng ký...</option>
                   {members.map((m) => (
@@ -334,7 +409,8 @@ export default function InitiativesPage() {
                   onChange={(e) => setFormData({ ...formData, tenDeTai: e.target.value })}
                   placeholder="e.g. Cải tiến quy trình tiếp đón người bệnh bằng thẻ quét mã QR"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 />
               </div>
 
@@ -347,7 +423,8 @@ export default function InitiativesPage() {
                     onChange={(e) => setFormData({ ...formData, linhVuc: e.target.value })}
                     placeholder="e.g. Quản lý Y tế"
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -355,7 +432,8 @@ export default function InitiativesPage() {
                   <select
                     value={formData.capDeTai}
                     onChange={(e) => setFormData({ ...formData, capDeTai: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     {types.map((t) => (
                       <option key={t.ma} value={t.ma}>{t.ten}</option>
@@ -372,7 +450,8 @@ export default function InitiativesPage() {
                     value={formData.namThucHien}
                     onChange={(e) => setFormData({ ...formData, namThucHien: parseInt(e.target.value) || new Date().getFullYear() })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -381,7 +460,8 @@ export default function InitiativesPage() {
                     type="date"
                     value={formData.ngayNghiemThu}
                     onChange={(e) => setFormData({ ...formData, ngayNghiemThu: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -391,7 +471,8 @@ export default function InitiativesPage() {
                     value={formData.ketQuaNghiemThu}
                     onChange={(e) => setFormData({ ...formData, ketQuaNghiemThu: e.target.value })}
                     placeholder="e.g. Đạt, Xuất sắc"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -403,21 +484,52 @@ export default function InitiativesPage() {
                   onChange={(e) => setFormData({ ...formData, hieuQuaKinhTe: e.target.value })}
                   placeholder="Mô tả hiệu quả xã hội hoặc số tiền tiết kiệm được cho bệnh viện..."
                   rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none disabled:opacity-50"
                 />
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Trạng thái đề tài</label>
-                <select
-                  value={formData.trangThai}
-                  onChange={(e) => setFormData({ ...formData, trangThai: Number(e.target.value) })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
-                >
-                  <option value={1}>Mới đăng ký</option>
-                  <option value={2}>Nghiệm thu Đạt</option>
-                  <option value={3}>Từ chối/Hủy đề tài</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Trạng thái đề tài</label>
+                  <select
+                    value={formData.trangThai}
+                    onChange={(e) => setFormData({ ...formData, trangThai: Number(e.target.value) })}
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  >
+                    <option value={1}>Mới đăng ký</option>
+                    <option value={2}>Nghiệm thu Đạt</option>
+                    <option value={3}>Từ chối/Hủy đề tài</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">File minh chứng PDF</label>
+                  {isDetailView ? (
+                    formData.fileMinhChungUrl ? (
+                      <div className="mt-1">
+                        <a
+                          href={getDownloadUrl(formData.fileMinhChungUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                        >
+                          📄 Tải PDF minh chứng
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                    )
+                  ) : (
+                    <EvidenceUpload
+                      fileId={formData.fileMinhChungUrl}
+                      initialFileName={editingId ? initiatives.find(i => i.id === editingId)?.evidenceFileName : undefined}
+                      onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
+                      moduleName="Initiatives"
+                      organizationId={formData.donViId || user?.donViId || ""}
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -426,14 +538,16 @@ export default function InitiativesPage() {
                   onClick={() => setIsModalOpen(false)}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
-                  Hủy
+                  {isDetailView ? "Đóng" : "Hủy"}
                 </button>
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
-                >
-                  Lưu
-                </button>
+                {!isDetailView && (
+                  <button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                  >
+                    Lưu
+                  </button>
+                )}
               </div>
             </form>
           </div>

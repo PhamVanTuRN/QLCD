@@ -20,6 +20,7 @@ public record CreateEmulationCommand : IRequest<Guid>
     public required string XepLoai { get; init; }
     public string? KhenThuong { get; init; }
     public int TrangThai { get; init; } = 1;          // 1: Registered, 2: Evaluated, 3: Awarded
+    public string? FileMinhChungUrl { get; init; }
     
     // Auth context
     public Guid? ScopeOrgId { get; init; }
@@ -29,10 +30,12 @@ public record CreateEmulationCommand : IRequest<Guid>
 public class CreateEmulationCommandHandler : IRequestHandler<CreateEmulationCommand, Guid>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public CreateEmulationCommandHandler(IQLCDDbContext context)
+    public CreateEmulationCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<Guid> Handle(CreateEmulationCommand request, CancellationToken cancellationToken)
@@ -58,35 +61,9 @@ public class CreateEmulationCommandHandler : IRequestHandler<CreateEmulationComm
         }
 
         // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(recordUnitId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (recordUnitId != orgId && !childOrgIds.Contains(recordUnitId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền đề cử thi đua ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (recordUnitId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền đề cử thi đua ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền đề cử thi đua ngoài phạm vi quản lý.");
         }
 
         var emulation = new ThiDuaCongDoan
@@ -104,6 +81,19 @@ public class CreateEmulationCommandHandler : IRequestHandler<CreateEmulationComm
 
         _context.ThiDuaCongDoans.Add(emulation);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = emulation.Id;
+                file.OrganizationId = recordUnitId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return emulation.Id;
     }
 }
@@ -121,6 +111,7 @@ public record UpdateEmulationCommand : IRequest<bool>
     public required string XepLoai { get; init; }
     public string? KhenThuong { get; init; }
     public int TrangThai { get; init; }
+    public string? FileMinhChungUrl { get; init; }
     
     // Auth context
     public Guid? ScopeOrgId { get; init; }
@@ -130,10 +121,12 @@ public record UpdateEmulationCommand : IRequest<bool>
 public class UpdateEmulationCommandHandler : IRequestHandler<UpdateEmulationCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public UpdateEmulationCommandHandler(IQLCDDbContext context)
+    public UpdateEmulationCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(UpdateEmulationCommand request, CancellationToken cancellationToken)
@@ -165,56 +158,23 @@ public class UpdateEmulationCommandHandler : IRequestHandler<UpdateEmulationComm
             throw new ArgumentException("Thi đua phải được gán cho một cá nhân hoặc tập thể.");
         }
 
-        // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        // Scope validation - check target org
+        if (!await _scopeService.IsInScopeAsync(recordUnitId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    // Kiểm tra xem đơn vị gốc của bản ghi có trong quyền hạn không
-                    Guid origUnitId = emulation.DonViId ?? Guid.Empty;
-                    if (origUnitId == Guid.Empty && emulation.DoanVienId.HasValue)
-                    {
-                        var origMember = await _context.DoanViens.AsNoTracking().FirstOrDefaultAsync(d => d.Id == emulation.DoanVienId.Value, cancellationToken);
-                        if (origMember != null) origUnitId = origMember.MaToCongDoan;
-                    }
+            throw new UnauthorizedAccessException("Không có quyền chuyển bản ghi thi đua ngoài phạm vi quản lý.");
+        }
 
-                    if (origUnitId != orgId && !childOrgIds.Contains(origUnitId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa bản ghi thi đua này.");
-                    }
+        // Scope validation - check source org
+        Guid origUnitId = emulation.DonViId ?? Guid.Empty;
+        if (origUnitId == Guid.Empty && emulation.DoanVienId.HasValue)
+        {
+            var origMember = await _context.DoanViens.AsNoTracking().FirstOrDefaultAsync(d => d.Id == emulation.DoanVienId.Value, cancellationToken);
+            if (origMember != null) origUnitId = origMember.MaToCongDoan;
+        }
 
-                    if (recordUnitId != orgId && !childOrgIds.Contains(recordUnitId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chuyển bản ghi thi đua ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    Guid origUnitId = emulation.DonViId ?? Guid.Empty;
-                    if (origUnitId == Guid.Empty && emulation.DoanVienId.HasValue)
-                    {
-                        var origMember = await _context.DoanViens.AsNoTracking().FirstOrDefaultAsync(d => d.Id == emulation.DoanVienId.Value, cancellationToken);
-                        if (origMember != null) origUnitId = origMember.MaToCongDoan;
-                    }
-
-                    if (origUnitId != orgId || recordUnitId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa ngoài phạm vi tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+        if (origUnitId != Guid.Empty && !await _scopeService.IsInScopeAsync(origUnitId, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chỉnh sửa bản ghi thi đua này.");
         }
 
         emulation.TenPhongTrao = request.TenPhongTrao;
@@ -228,6 +188,19 @@ public class UpdateEmulationCommandHandler : IRequestHandler<UpdateEmulationComm
         emulation.TrangThai = request.TrangThai;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = emulation.Id;
+                file.OrganizationId = recordUnitId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return true;
     }
 }
@@ -245,10 +218,12 @@ public record DeleteEmulationCommand : IRequest<bool>
 public class DeleteEmulationCommandHandler : IRequestHandler<DeleteEmulationCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public DeleteEmulationCommandHandler(IQLCDDbContext context)
+    public DeleteEmulationCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(DeleteEmulationCommand request, CancellationToken cancellationToken)
@@ -260,44 +235,17 @@ public class DeleteEmulationCommandHandler : IRequestHandler<DeleteEmulationComm
             throw new ArgumentException("Bản ghi thi đua không tồn tại.");
         }
 
-        // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        Guid origUnitId = emulation.DonViId ?? Guid.Empty;
+        if (origUnitId == Guid.Empty && emulation.DoanVienId.HasValue)
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                
-                Guid origUnitId = emulation.DonViId ?? Guid.Empty;
-                if (origUnitId == Guid.Empty && emulation.DoanVienId.HasValue)
-                {
-                    var origMember = await _context.DoanViens.AsNoTracking().FirstOrDefaultAsync(d => d.Id == emulation.DoanVienId.Value, cancellationToken);
-                    if (origMember != null) origUnitId = origMember.MaToCongDoan;
-                }
+            var origMember = await _context.DoanViens.AsNoTracking().FirstOrDefaultAsync(d => d.Id == emulation.DoanVienId.Value, cancellationToken);
+            if (origMember != null) origUnitId = origMember.MaToCongDoan;
+        }
 
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (origUnitId != orgId && !childOrgIds.Contains(origUnitId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa bản ghi thi đua này.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (origUnitId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+        // Scope validation
+        if (origUnitId != Guid.Empty && !await _scopeService.IsInScopeAsync(origUnitId, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền xóa bản ghi thi đua này.");
         }
 
         emulation.IsDeleted = true;

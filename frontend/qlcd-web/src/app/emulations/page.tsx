@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getEmulationsApi, createEmulationApi, updateEmulationApi, deleteEmulationApi, getCatalogsApi, CatalogDto, getMembers, getUnionTree, UnionUnitDto } from "@/lib/api";
+import { getEmulationsApi, createEmulationApi, updateEmulationApi, deleteEmulationApi, getCatalogsApi, CatalogDto, getMembers, getUnionTree, UnionUnitDto, getDownloadUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import EvidenceUpload from "@/components/EvidenceUpload";
 
 export default function EmulationsPage() {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ export default function EmulationsPage() {
 
   // Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     tenPhongTrao: "",
@@ -26,7 +28,8 @@ export default function EmulationsPage() {
     diemBchDuyet: 90,
     xepLoai: "",
     khenThuong: "",
-    trangThai: 1
+    trangThai: 1,
+    fileMinhChungUrl: ""
   });
 
   const showAlert = (type: "success" | "error", message: string) => {
@@ -58,7 +61,11 @@ export default function EmulationsPage() {
 
       const tree = await getUnionTree();
       if (tree) {
-        setUnits(collectUnits(tree));
+        const collected = collectUnits(tree);
+        setUnits(collected);
+        if (collected.length === 1) {
+          setFormData(prev => ({ ...prev, donViId: collected[0].id }));
+        }
       }
     } catch (err) {
       console.error(err);
@@ -74,22 +81,25 @@ export default function EmulationsPage() {
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setIsDetailView(false);
     setFormData({
       tenPhongTrao: "",
       doanVienId: "",
-      donViId: "",
+      donViId: units.length === 1 ? units[0].id : (user?.donViId || ""),
       nam: new Date().getFullYear(),
       diemTuDanhGia: 90,
       diemBchDuyet: 90,
       xepLoai: ratings[0]?.ma || "HOAN_THANH_TOT",
       khenThuong: "",
-      trangThai: 1
+      trangThai: 1,
+      fileMinhChungUrl: ""
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item: any) => {
     setEditingId(item.id);
+    setIsDetailView(false);
     setFormData({
       tenPhongTrao: item.tenPhongTrao,
       doanVienId: item.doanVienId || "",
@@ -99,7 +109,26 @@ export default function EmulationsPage() {
       diemBchDuyet: item.diemBchDuyet || 0,
       xepLoai: item.xepLoai,
       khenThuong: item.khenThuong || "",
-      trangThai: item.trangThai || 1
+      trangThai: item.trangThai || 1,
+      fileMinhChungUrl: item.fileMinhChungUrl || ""
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenDetail = (item: any) => {
+    setEditingId(item.id);
+    setIsDetailView(true);
+    setFormData({
+      tenPhongTrao: item.tenPhongTrao,
+      doanVienId: item.doanVienId || "",
+      donViId: item.donViId || "",
+      nam: item.nam || new Date().getFullYear(),
+      diemTuDanhGia: item.diemTuDanhGia || 0,
+      diemBchDuyet: item.diemBchDuyet || 0,
+      xepLoai: item.xepLoai,
+      khenThuong: item.khenThuong || "",
+      trangThai: item.trangThai || 1,
+      fileMinhChungUrl: item.fileMinhChungUrl || ""
     });
     setIsModalOpen(true);
   };
@@ -126,6 +155,7 @@ export default function EmulationsPage() {
     try {
       const payload = {
         ...formData,
+        id: editingId || undefined,
         doanVienId: formData.doanVienId === "" ? null : formData.doanVienId,
         donViId: formData.donViId === "" ? null : formData.donViId,
         nam: Number(formData.nam),
@@ -267,16 +297,31 @@ export default function EmulationsPage() {
               ) : (
                 emulations.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
-                    <td className="py-3 px-4 font-semibold text-white">{item.tenPhongTrao}</td>
                     <td className="py-3 px-4">
-                      {item.doanVienTen ? (
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-white">{item.tenPhongTrao}</span>
+                        {item.evidenceFileId && (
+                          <a
+                            href={getDownloadUrl(item.evidenceFileId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            title="Tải file minh chứng"
+                          >
+                            📄 PDF
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {item.hoTenDoanVien ? (
                         <div>
-                          <div className="font-semibold text-slate-200">{item.doanVienTen}</div>
+                          <div className="font-semibold text-slate-200">{item.hoTenDoanVien}</div>
                           <div className="text-[10px] text-slate-500">Đoàn viên</div>
                         </div>
-                      ) : item.donViTen ? (
+                      ) : item.tenDonVi ? (
                         <div>
-                          <div className="font-semibold text-emerald-400">{item.donViTen}</div>
+                          <div className="font-semibold text-emerald-400">{item.tenDonVi}</div>
                           <div className="text-[10px] text-slate-500">Tập thể</div>
                         </div>
                       ) : (
@@ -299,6 +344,12 @@ export default function EmulationsPage() {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenDetail(item)}
+                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                        >
+                          Chi tiết
+                        </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
                           className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
@@ -327,7 +378,9 @@ export default function EmulationsPage() {
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           <div className="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
             <div>
-              <h3 className="text-sm font-bold text-white">{editingId ? "Sửa kết quả thi đua" : "Khai báo kết quả thi đua"}</h3>
+              <h3 className="text-sm font-bold text-white">
+                {isDetailView ? "Chi tiết kết quả thi đua" : editingId ? "Sửa kết quả thi đua" : "Khai báo kết quả thi đua"}
+              </h3>
               <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến phong trào bình xét thi đua</p>
             </div>
 
@@ -340,7 +393,8 @@ export default function EmulationsPage() {
                   onChange={(e) => setFormData({ ...formData, tenPhongTrao: e.target.value })}
                   placeholder="e.g. Phong trào thi đua Lao động giỏi - Lao động sáng tạo"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 />
               </div>
 
@@ -350,7 +404,8 @@ export default function EmulationsPage() {
                   <select
                     value={formData.doanVienId}
                     onChange={(e) => setFormData({ ...formData, doanVienId: e.target.value, donViId: e.target.value !== "" ? "" : formData.donViId })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     <option value="">Chọn cá nhân thi đua...</option>
                     {members.map((m) => (
@@ -363,7 +418,8 @@ export default function EmulationsPage() {
                   <select
                     value={formData.donViId}
                     onChange={(e) => setFormData({ ...formData, donViId: e.target.value, doanVienId: e.target.value !== "" ? "" : formData.doanVienId })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    disabled={isDetailView || (formData.doanVienId === "" && units.length === 1)}
                   >
                     <option value="">Chọn tập thể thi đua...</option>
                     {units.map((u) => (
@@ -381,7 +437,8 @@ export default function EmulationsPage() {
                     value={formData.nam}
                     onChange={(e) => setFormData({ ...formData, nam: parseInt(e.target.value) || new Date().getFullYear() })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -392,7 +449,8 @@ export default function EmulationsPage() {
                     value={formData.diemTuDanhGia}
                     onChange={(e) => setFormData({ ...formData, diemTuDanhGia: parseFloat(e.target.value) || 0 })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -403,7 +461,8 @@ export default function EmulationsPage() {
                     value={formData.diemBchDuyet}
                     onChange={(e) => setFormData({ ...formData, diemBchDuyet: parseFloat(e.target.value) || 0 })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -414,7 +473,8 @@ export default function EmulationsPage() {
                   <select
                     value={formData.xepLoai}
                     onChange={(e) => setFormData({ ...formData, xepLoai: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     {ratings.map((r) => (
                       <option key={r.ma} value={r.ma}>{r.ten}</option>
@@ -428,22 +488,53 @@ export default function EmulationsPage() {
                     value={formData.khenThuong}
                     onChange={(e) => setFormData({ ...formData, khenThuong: e.target.value })}
                     placeholder="e.g. Bằng khen Bộ Quốc phòng, Giấy khen"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Trạng thái thi đua</label>
-                <select
-                  value={formData.trangThai}
-                  onChange={(e) => setFormData({ ...formData, trangThai: Number(e.target.value) })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
-                >
-                  <option value={1}>Mới đăng ký</option>
-                  <option value={2}>Đã đánh giá điểm</option>
-                  <option value={3}>Đã trao khen thưởng</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Trạng thái thi đua</label>
+                  <select
+                    value={formData.trangThai}
+                    onChange={(e) => setFormData({ ...formData, trangThai: Number(e.target.value) })}
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  >
+                    <option value={1}>Mới đăng ký</option>
+                    <option value={2}>Đã đánh giá điểm</option>
+                    <option value={3}>Đã trao khen thưởng</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">File minh chứng PDF</label>
+                  {isDetailView ? (
+                    formData.fileMinhChungUrl ? (
+                      <div className="mt-1">
+                        <a
+                          href={getDownloadUrl(formData.fileMinhChungUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                        >
+                          📄 Tải PDF minh chứng
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                    )
+                  ) : (
+                    <EvidenceUpload
+                      fileId={formData.fileMinhChungUrl}
+                      initialFileName={editingId ? emulations.find(e => e.id === editingId)?.evidenceFileName : undefined}
+                      onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
+                      moduleName="Emulations"
+                      organizationId={formData.donViId || members.find(m => m.id === formData.doanVienId)?.maToCongDoan || user?.donViId || ""}
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -452,14 +543,16 @@ export default function EmulationsPage() {
                   onClick={() => setIsModalOpen(false)}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
-                  Hủy
+                  {isDetailView ? "Đóng" : "Hủy"}
                 </button>
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
-                >
-                  Lưu
-                </button>
+                {!isDetailView && (
+                  <button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                  >
+                    Lưu
+                  </button>
+                )}
               </div>
             </form>
           </div>

@@ -31,45 +31,19 @@ public record CreateActivityCommand : IRequest<Guid>
 public class CreateActivityCommandHandler : IRequestHandler<CreateActivityCommand, Guid>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public CreateActivityCommandHandler(IQLCDDbContext context)
+    public CreateActivityCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<Guid> Handle(CreateActivityCommand request, CancellationToken cancellationToken)
     {
-        // Phân quyền tạo
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(request.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    // Chỉ được tạo cho đơn vị mình hoặc con trực thuộc
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (request.DonViId != orgId && !childOrgIds.Contains(request.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền tạo hoạt động ngoài phạm vi đơn vị quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (request.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền tạo hoạt động ngoài phạm vi tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Thông tin đơn vị quản lý không hợp lệ.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền tạo hoạt động ngoài phạm vi đơn vị quản lý.");
         }
 
         var activity = new HoatDongCongDoan
@@ -89,6 +63,19 @@ public class CreateActivityCommandHandler : IRequestHandler<CreateActivityComman
 
         _context.HoatDongCongDoans.Add(activity);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = activity.Id;
+                file.OrganizationId = activity.DonViId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return activity.Id;
     }
 }
@@ -117,10 +104,12 @@ public record UpdateActivityCommand : IRequest<bool>
 public class UpdateActivityCommandHandler : IRequestHandler<UpdateActivityCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public UpdateActivityCommandHandler(IQLCDDbContext context)
+    public UpdateActivityCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(UpdateActivityCommand request, CancellationToken cancellationToken)
@@ -132,40 +121,14 @@ public class UpdateActivityCommandHandler : IRequestHandler<UpdateActivityComman
             throw new ArgumentException("Hoạt động không tồn tại.");
         }
 
-        // Phân quyền sửa
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(activity.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (activity.DonViId != orgId && !childOrgIds.Contains(activity.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa hoạt động ngoài phạm vi quản lý.");
-                    }
-                    if (request.DonViId != orgId && !childOrgIds.Contains(request.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chuyển hoạt động ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (activity.DonViId != orgId || request.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa hoạt động ngoài phạm vi tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Quyền truy cập không hợp lệ.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền chỉnh sửa hoạt động ngoài phạm vi quản lý.");
+        }
+
+        if (!await _scopeService.IsInScopeAsync(request.DonViId, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chuyển hoạt động sang đơn vị ngoài phạm vi quản lý.");
         }
 
         activity.DonViId = request.DonViId;
@@ -181,6 +144,19 @@ public class UpdateActivityCommandHandler : IRequestHandler<UpdateActivityComman
         activity.FileMinhChungUrl = request.FileMinhChungUrl;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = activity.Id;
+                file.OrganizationId = activity.DonViId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return true;
     }
 }
@@ -198,10 +174,12 @@ public record DeleteActivityCommand : IRequest<bool>
 public class DeleteActivityCommandHandler : IRequestHandler<DeleteActivityCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public DeleteActivityCommandHandler(IQLCDDbContext context)
+    public DeleteActivityCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(DeleteActivityCommand request, CancellationToken cancellationToken)
@@ -213,36 +191,9 @@ public class DeleteActivityCommandHandler : IRequestHandler<DeleteActivityComman
             throw new ArgumentException("Hoạt động không tồn tại.");
         }
 
-        // Phân quyền xóa
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(activity.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (activity.DonViId != orgId && !childOrgIds.Contains(activity.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa hoạt động này.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (activity.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa hoạt động ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Quyền truy cập không hợp lệ.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền xóa hoạt động này.");
         }
 
         activity.IsDeleted = true;

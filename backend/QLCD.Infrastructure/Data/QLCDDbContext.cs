@@ -29,6 +29,7 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
     public DbSet<PhucLoiDoanVien> PhucLoiDoanViens { get; set; } = null!;
     public DbSet<SangKien> SangKiens { get; set; } = null!;
     public DbSet<ThiDuaCongDoan> ThiDuaCongDoans { get; set; } = null!;
+    public DbSet<EvidenceFile> EvidenceFiles { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -236,7 +237,18 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // 14. Cấu hình Global Query Filter cho Soft Delete (IsDeleted == false)
+        // 14. Cấu hình thực thể EvidenceFile
+        modelBuilder.Entity<EvidenceFile>(entity =>
+        {
+            entity.Property(e => e.OriginalFileName).HasMaxLength(250).IsRequired();
+            entity.Property(e => e.StoredFileName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.FileExtension).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.ContentType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.StoragePath).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ModuleName).HasMaxLength(50).IsRequired();
+        });
+
+        // 15. Cấu hình Global Query Filter cho Soft Delete (IsDeleted == false)
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))

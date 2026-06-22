@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using QLCD.Application.Features.Catalogs.Commands.CreateCatalog;
 using QLCD.Application.Features.Catalogs.Commands.UpdateCatalog;
 using QLCD.Application.Features.Catalogs.Commands.DeleteCatalog;
@@ -11,6 +12,7 @@ namespace QLCD.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/catalogs")]
+[Authorize]
 public class CatalogsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -41,6 +43,7 @@ public class CatalogsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "ADMIN")]
     public async Task<IActionResult> Create([FromBody] CreateCatalogCommand command)
     {
         try
@@ -59,6 +62,7 @@ public class CatalogsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "ADMIN")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCatalogCommand command)
     {
         try
@@ -81,6 +85,7 @@ public class CatalogsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "ADMIN")]
     public async Task<IActionResult> Delete(Guid id)
     {
         try

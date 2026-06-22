@@ -123,6 +123,20 @@ export async function deleteUnionUnit(id: string) {
   return res.data;
 }
 
+export interface KhoiChuyenMonDto {
+  id: string;
+  tenKhoi: string;
+}
+
+export async function getKhoiChuyenMonApi(): Promise<KhoiChuyenMonDto[]> {
+  try {
+    const res = await api.get('/union-units/khoi-chuyen-mon');
+    return res.data?.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ==================== Union Members (Đoàn viên) ====================
 export interface UnionMemberDto {
   id: string;
@@ -192,6 +206,7 @@ export interface TransferPayload {
   denToCongDoanId: string;
   lyDo: string;
   ngayHieuLuc: string;
+  fileMinhChungUrl?: string;
 }
 
 export async function transferMember(memberId: string, payload: TransferPayload) {
@@ -257,6 +272,11 @@ export async function updateWelfareApi(id: string, payload: any) {
   return res.data;
 }
 
+export async function deleteWelfareApi(id: string) {
+  const res = await api.delete(`/welfare/${id}`);
+  return res.data;
+}
+
 // ==================== Emulation Initiatives ====================
 export async function getInitiativesApi(params?: any) {
   const res = await api.get('/initiatives', { params });
@@ -300,6 +320,17 @@ export async function deleteEmulationApi(id: string) {
 }
 
 // ==================== Stats ====================
+export interface StatsFilter {
+  maKhoi?: string;
+  filterOrgId?: string;
+  fromDate?: string;
+  toDate?: string;
+  month?: number;
+  quarter?: number;
+  year?: number;
+  searchKeyword?: string;
+}
+
 export interface UnionStatsDto {
   tongDoanVien: number;
   doanVienNam: number;
@@ -320,6 +351,7 @@ export interface UnionStatsDto {
   doanVienTheoKhoi: { name: string; count: number }[];
   doanVienTheoGioiTinh: { name: string; count: number }[];
   doanVienTheoTrangThai: { name: string; count: number }[];
+  doanVienTheoChatLuong: { name: string; count: number }[];
   doanVienTheoChucVu: { name: string; count: number }[];
   doanVienTheoNgoaiNgu: { name: string; count: number }[];
   doanVienTheoTrinhDo: { name: string; count: number }[];
@@ -332,13 +364,75 @@ export interface UnionStatsDto {
   soLuotPhucLoi: number;
   soSangKien: number;
   soKetQuaThiDua: number;
+
+  // Biểu đồ mới
+  thuChiTheoThoiGian: { timeLabel: string; thu: number; chi: number }[];
+  hoatDongTheoThang: { timeLabel: string; count: number }[];
+  thiDuaTheoToChuc: { organizationName: string; datGiai: number; datYeuCau: number; chuaDat: number }[];
 }
 
-export async function getStats(): Promise<UnionStatsDto | null> {
+export async function getStats(filters?: StatsFilter): Promise<UnionStatsDto | null> {
   try {
-    const res = await api.get('/union-units/stats');
+    const params = new URLSearchParams();
+    if (filters) {
+      if (filters.maKhoi) params.append('maKhoi', filters.maKhoi);
+      if (filters.filterOrgId) params.append('filterOrgId', filters.filterOrgId);
+      if (filters.fromDate) params.append('fromDate', filters.fromDate);
+      if (filters.toDate) params.append('toDate', filters.toDate);
+      if (filters.month !== undefined && filters.month !== null) params.append('month', filters.month.toString());
+      if (filters.quarter !== undefined && filters.quarter !== null) params.append('quarter', filters.quarter.toString());
+      if (filters.year !== undefined && filters.year !== null) params.append('year', filters.year.toString());
+      if (filters.searchKeyword) params.append('searchKeyword', filters.searchKeyword);
+    }
+    const res = await api.get(`/union-units/stats?${params.toString()}`);
     return res.data?.data ?? null;
   } catch { return null; }
+}
+
+// ==================== Evidence Files (Minh chứng) ====================
+export interface EvidenceFileDto {
+  id: string;
+  originalFileName: string;
+  downloadUrl: string;
+}
+
+export async function uploadEvidenceFile(file: File, moduleName: string, organizationId: string): Promise<EvidenceFileDto> {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const res = await api.post(`/evidence-files/upload`, formData, {
+    params: { moduleName, organizationId },
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  return res.data?.data;
+}
+
+export async function deleteEvidenceFile(id: string): Promise<any> {
+  const res = await api.delete(`/evidence-files/${id}`);
+  return res.data;
+}
+
+export function getDownloadUrl(fileId: string): string {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('qlcd_token') : '';
+  return `http://localhost:5023/api/v1/evidence-files/download/${fileId}?access_token=${token}`;
+}
+
+export async function getFlattenedUnits(): Promise<{ id: string; tenDonVi: string }[]> {
+  const tree = await getUnionTree();
+  if (!tree) return [];
+  const list: { id: string; tenDonVi: string }[] = [];
+  function recurse(node: UnionUnitDto) {
+    list.push({ id: node.id, tenDonVi: node.tenDonVi });
+    if (node.children) {
+      for (const child of node.children) {
+        recurse(child);
+      }
+    }
+  }
+  recurse(tree);
+  return list;
 }
 
 export default api;

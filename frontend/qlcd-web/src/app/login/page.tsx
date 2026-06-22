@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 
@@ -12,11 +12,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Nếu đã đăng nhập thì chuyển về Dashboard
-  if (isAuthenticated) {
-    router.push("/");
-    return null;
-  }
+  // Nếu đã đăng nhập thì chuyển về Dashboard sử dụng useEffect
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/");
+    }
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +27,7 @@ export default function LoginPage() {
     try {
       const result = await login(username, password);
       if (result.success) {
-        router.push("/");
+        router.replace("/");
       } else {
         setError(result.error || "Đăng nhập thất bại");
       }
@@ -36,6 +37,11 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  // Tránh hiển thị form đăng nhập khi đã xác thực và đang chuyển hướng
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
@@ -49,8 +55,8 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md">
         {/* Logo & Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 shadow-2xl shadow-emerald-900/40 mb-6">
-            <span className="text-2xl font-extrabold text-white">108</span>
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-white overflow-hidden border border-slate-700/50 shadow-2xl mb-6 p-1">
+            <img src="/logo_108.png?v=3" className="w-full h-full object-contain rounded-full" alt="Logo Bệnh viện 108" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Hệ thống Công đoàn số</h1>
           <p className="text-sm text-slate-400 mt-2">Bệnh viện Trung ương Quân đội 108</p>

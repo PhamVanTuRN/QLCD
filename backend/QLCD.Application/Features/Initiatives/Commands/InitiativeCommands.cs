@@ -20,6 +20,7 @@ public record CreateInitiativeCommand : IRequest<Guid>
     public int NamThucHien { get; set; }
     public string? KetQuaNghiemThu { get; set; }
     public int TrangThai { get; set; } = 1;
+    public string? FileMinhChungUrl { get; init; }
     
     // Auth context
     public Guid? ScopeOrgId { get; init; }
@@ -29,10 +30,12 @@ public record CreateInitiativeCommand : IRequest<Guid>
 public class CreateInitiativeCommandHandler : IRequestHandler<CreateInitiativeCommand, Guid>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public CreateInitiativeCommandHandler(IQLCDDbContext context)
+    public CreateInitiativeCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<Guid> Handle(CreateInitiativeCommand request, CancellationToken cancellationToken)
@@ -47,35 +50,9 @@ public class CreateInitiativeCommandHandler : IRequestHandler<CreateInitiativeCo
         var donViId = member.MaToCongDoan;
 
         // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(donViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (donViId != orgId && !childOrgIds.Contains(donViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền đăng ký đề tài cho đoàn viên ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (donViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền đăng ký đề tài ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền đăng ký đề tài cho đoàn viên ngoài phạm vi quản lý.");
         }
 
         var initiative = new SangKien
@@ -94,6 +71,19 @@ public class CreateInitiativeCommandHandler : IRequestHandler<CreateInitiativeCo
 
         _context.SangKiens.Add(initiative);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = initiative.Id;
+                file.OrganizationId = initiative.DonViId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return initiative.Id;
     }
 }
@@ -111,6 +101,7 @@ public record UpdateInitiativeCommand : IRequest<bool>
     public int NamThucHien { get; set; }
     public string? KetQuaNghiemThu { get; set; }
     public int TrangThai { get; set; }
+    public string? FileMinhChungUrl { get; init; }
     
     // Auth context
     public Guid? ScopeOrgId { get; init; }
@@ -120,10 +111,12 @@ public record UpdateInitiativeCommand : IRequest<bool>
 public class UpdateInitiativeCommandHandler : IRequestHandler<UpdateInitiativeCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public UpdateInitiativeCommandHandler(IQLCDDbContext context)
+    public UpdateInitiativeCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(UpdateInitiativeCommand request, CancellationToken cancellationToken)
@@ -145,39 +138,14 @@ public class UpdateInitiativeCommandHandler : IRequestHandler<UpdateInitiativeCo
         var donViId = member.MaToCongDoan;
 
         // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(initiative.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (initiative.DonViId != orgId && !childOrgIds.Contains(initiative.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa đề tài này.");
-                    }
-                    if (donViId != orgId && !childOrgIds.Contains(donViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chuyển đề tài này cho đoàn viên ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (initiative.DonViId != orgId || donViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa đề tài ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền chỉnh sửa đề tài này.");
+        }
+
+        if (!await _scopeService.IsInScopeAsync(donViId, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chuyển đề tài này cho đoàn viên ngoài phạm vi quản lý.");
         }
 
         initiative.DoanVienId = request.DoanVienId;
@@ -192,6 +160,19 @@ public class UpdateInitiativeCommandHandler : IRequestHandler<UpdateInitiativeCo
         initiative.TrangThai = request.TrangThai;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = initiative.Id;
+                file.OrganizationId = initiative.DonViId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return true;
     }
 }
@@ -209,10 +190,12 @@ public record DeleteInitiativeCommand : IRequest<bool>
 public class DeleteInitiativeCommandHandler : IRequestHandler<DeleteInitiativeCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public DeleteInitiativeCommandHandler(IQLCDDbContext context)
+    public DeleteInitiativeCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(DeleteInitiativeCommand request, CancellationToken cancellationToken)
@@ -225,35 +208,9 @@ public class DeleteInitiativeCommandHandler : IRequestHandler<DeleteInitiativeCo
         }
 
         // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(initiative.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (initiative.DonViId != orgId && !childOrgIds.Contains(initiative.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa đề tài này.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (initiative.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa đề tài ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền xóa đề tài này.");
         }
 
         initiative.IsDeleted = true;

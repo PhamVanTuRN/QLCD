@@ -53,15 +53,24 @@ public class GetUnionMembersResult
 public class GetUnionMembersQueryHandler : IRequestHandler<GetUnionMembersQuery, GetUnionMembersResult>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetUnionMembersQueryHandler(IQLCDDbContext context)
+    public GetUnionMembersQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<GetUnionMembersResult> Handle(GetUnionMembersQuery request, CancellationToken cancellationToken)
     {
         var query = _context.DoanViens.AsQueryable();
+
+        // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
+        {
+            query = query.Where(d => allowedOrgIds.Contains(d.MaToCongDoan));
+        }
 
         // Filter by search term
         if (!string.IsNullOrWhiteSpace(request.Search))

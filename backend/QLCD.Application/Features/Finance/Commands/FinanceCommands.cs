@@ -19,6 +19,7 @@ public record CreateFinanceCommand : IRequest<Guid>
     public Guid? DoanVienId { get; init; }
     public string? ThangNam { get; init; }
     public string? GhiChu { get; init; }
+    public string? FileMinhChungUrl { get; init; }
     
     // Auth context
     public Guid? ScopeOrgId { get; init; }
@@ -28,43 +29,20 @@ public record CreateFinanceCommand : IRequest<Guid>
 public class CreateFinanceCommandHandler : IRequestHandler<CreateFinanceCommand, Guid>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public CreateFinanceCommandHandler(IQLCDDbContext context)
+    public CreateFinanceCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<Guid> Handle(CreateFinanceCommand request, CancellationToken cancellationToken)
     {
         // Scope Validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(request.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    if (request.DonViId != orgId && !childOrgIds.Contains(request.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền ghi nhận giao dịch ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (request.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền ghi nhận giao dịch ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền ghi nhận giao dịch ngoài phạm vi quản lý.");
         }
 
         var transaction = new TaiChinhCongDoan
@@ -81,6 +59,19 @@ public class CreateFinanceCommandHandler : IRequestHandler<CreateFinanceCommand,
 
         _context.TaiChinhCongDoans.Add(transaction);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = transaction.Id;
+                file.OrganizationId = transaction.DonViId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return transaction.Id;
     }
 }
@@ -97,6 +88,7 @@ public record UpdateFinanceCommand : IRequest<bool>
     public Guid? DoanVienId { get; init; }
     public string? ThangNam { get; init; }
     public string? GhiChu { get; init; }
+    public string? FileMinhChungUrl { get; init; }
     
     // Auth context
     public Guid? ScopeOrgId { get; init; }
@@ -106,10 +98,12 @@ public record UpdateFinanceCommand : IRequest<bool>
 public class UpdateFinanceCommandHandler : IRequestHandler<UpdateFinanceCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public UpdateFinanceCommandHandler(IQLCDDbContext context)
+    public UpdateFinanceCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(UpdateFinanceCommand request, CancellationToken cancellationToken)
@@ -122,39 +116,14 @@ public class UpdateFinanceCommandHandler : IRequestHandler<UpdateFinanceCommand,
         }
 
         // Scope Validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(trans.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (trans.DonViId != orgId && !childOrgIds.Contains(trans.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa giao dịch này.");
-                    }
-                    if (request.DonViId != orgId && !childOrgIds.Contains(request.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa giao dịch ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (trans.DonViId != orgId || request.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa giao dịch ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền chỉnh sửa giao dịch ngoài phạm vi quản lý.");
+        }
+
+        if (!await _scopeService.IsInScopeAsync(request.DonViId, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chuyển giao dịch sang đơn vị ngoài phạm vi quản lý.");
         }
 
         trans.DonViId = request.DonViId;
@@ -167,6 +136,19 @@ public class UpdateFinanceCommandHandler : IRequestHandler<UpdateFinanceCommand,
         trans.GhiChu = request.GhiChu;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Link uploaded file
+        if (Guid.TryParse(request.FileMinhChungUrl, out Guid fileId))
+        {
+            var file = await _context.EvidenceFiles.FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted, cancellationToken);
+            if (file != null)
+            {
+                file.RelatedEntityId = trans.Id;
+                file.OrganizationId = trans.DonViId;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return true;
     }
 }
@@ -184,10 +166,12 @@ public record DeleteFinanceCommand : IRequest<bool>
 public class DeleteFinanceCommandHandler : IRequestHandler<DeleteFinanceCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public DeleteFinanceCommandHandler(IQLCDDbContext context)
+    public DeleteFinanceCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(DeleteFinanceCommand request, CancellationToken cancellationToken)
@@ -200,35 +184,9 @@ public class DeleteFinanceCommandHandler : IRequestHandler<DeleteFinanceCommand,
         }
 
         // Scope Validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(trans.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (trans.DonViId != orgId && !childOrgIds.Contains(trans.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa giao dịch này.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (trans.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa giao dịch ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền xóa giao dịch này.");
         }
 
         trans.IsDeleted = true;

@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 using QLCD.Application.Features.Activities.Commands;
 using QLCD.Application.Features.Activities.Queries.GetActivities;
 
+using QLCD.Application.Features.Activities.Queries.GetActivityDetail;
+
 namespace QLCD.Api.Controllers;
 
 [ApiController]
@@ -52,6 +54,29 @@ public class ActivitiesController : ControllerBase
         }
     }
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        try
+        {
+            var query = new GetActivityDetailQuery { Id = id };
+            var result = await _mediator.Send(query);
+            if (result == null)
+            {
+                return NotFound(new { success = false, message = "Không tìm thấy hoạt động." });
+            }
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateActivityCommand command)
     {
@@ -84,12 +109,9 @@ public class ActivitiesController : ControllerBase
     {
         try
         {
-            if (id != command.Id)
-            {
-                return BadRequest(new { success = false, message = "ID không trùng khớp." });
-            }
             var finalCommand = command with
             {
+                Id = id,
                 ScopeOrgId = GetScopeOrgId(),
                 UserRole = GetUserRole()
             };

@@ -23,6 +23,7 @@ public interface IQLCDDbContext
     DbSet<PhucLoiDoanVien> PhucLoiDoanViens { get; }
     DbSet<SangKien> SangKiens { get; }
     DbSet<ThiDuaCongDoan> ThiDuaCongDoans { get; }
+    DbSet<EvidenceFile> EvidenceFiles { get; }
     
     DatabaseFacade Database { get; }
 

@@ -160,6 +160,30 @@ public static class DbInitializer
             catalogs.Add(new() { Loai = "LoaiSangKien", Ma = "CAP_VIEN", Ten = "Đề tài cấp Bệnh viện", ThuTu = 2 });
             catalogs.Add(new() { Loai = "LoaiSangKien", Ma = "CAP_BO", Ten = "Đề tài cấp Bộ", ThuTu = 3 });
 
+            // Chức vụ chính quyền/chuyên môn
+            catalogs.Add(new() { Loai = "ChucVu", Ma = "TRUONG_KHOA", Ten = "Trưởng khoa", ThuTu = 1 });
+            catalogs.Add(new() { Loai = "ChucVu", Ma = "PHO_KHOA", Ten = "Phó khoa", ThuTu = 2 });
+            catalogs.Add(new() { Loai = "ChucVu", Ma = "BS_DIEU_TRI", Ten = "Bác sĩ điều trị", ThuTu = 3 });
+            catalogs.Add(new() { Loai = "ChucVu", Ma = "DD_TRUONG", Ten = "Điều dưỡng trưởng", ThuTu = 4 });
+            catalogs.Add(new() { Loai = "ChucVu", Ma = "KTV_TRUONG", Ten = "Kỹ thuật viên trưởng", ThuTu = 5 });
+            catalogs.Add(new() { Loai = "ChucVu", Ma = "NHAN_VIEN", Ten = "Nhân viên", ThuTu = 6 });
+
+            // Đơn vị công tác chuyên môn
+            catalogs.Add(new() { Loai = "DonViCongTac", Ma = "KHOA_TIEU_HOA", Ten = "Khoa Tiêu hóa", ThuTu = 1 });
+            catalogs.Add(new() { Loai = "DonViCongTac", Ma = "KHOA_TIM_MACH", Ten = "Khoa Tim mạch", ThuTu = 2 });
+            catalogs.Add(new() { Loai = "DonViCongTac", Ma = "KHOA_DUOC", Ten = "Khoa Dược", ThuTu = 3 });
+            catalogs.Add(new() { Loai = "DonViCongTac", Ma = "KHOA_KHOP", Ten = "Khoa Khớp", ThuTu = 4 });
+            catalogs.Add(new() { Loai = "DonViCongTac", Ma = "BAN_GIAM_DOC", Ten = "Ban Giám đốc", ThuTu = 5 });
+            catalogs.Add(new() { Loai = "DonViCongTac", Ma = "KHOA_CAP_CUU", Ten = "Khoa Cấp cứu", ThuTu = 6 });
+
+            // Chuyên môn nghiệp vụ
+            catalogs.Add(new() { Loai = "ChuyenMon", Ma = "BAC_SI", Ten = "Bác sĩ", ThuTu = 1 });
+            catalogs.Add(new() { Loai = "ChuyenMon", Ma = "DUOC_SI", Ten = "Dược sĩ", ThuTu = 2 });
+            catalogs.Add(new() { Loai = "ChuyenMon", Ma = "DIEU_DUONG", Ten = "Điều dưỡng", ThuTu = 3 });
+            catalogs.Add(new() { Loai = "ChuyenMon", Ma = "KY_THUAT_VIEN", Ten = "Kỹ thuật viên", ThuTu = 4 });
+            catalogs.Add(new() { Loai = "ChuyenMon", Ma = "CU_NHAN", Ten = "Cử nhân", ThuTu = 5 });
+            catalogs.Add(new() { Loai = "ChuyenMon", Ma = "KHAC", Ten = "Khác", ThuTu = 6 });
+
             // Cấp thi đua
             catalogs.Add(new() { Loai = "CapThiDua", Ma = "CAP_TO", Ten = "Cấp Tổ công đoàn", ThuTu = 1 });
             catalogs.Add(new() { Loai = "CapThiDua", Ma = "CAP_KHOI", Ten = "Cấp Khối", ThuTu = 2 });

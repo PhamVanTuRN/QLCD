@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using QLCD.Application.Features.UnionMembers.Commands.CreateUnionMember;
 using QLCD.Application.Features.UnionMembers.Commands.UpdateUnionMember;
 using QLCD.Application.Features.UnionMembers.Commands.DeleteUnionMember;
@@ -14,6 +15,7 @@ namespace QLCD.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/union-members")]
+[Authorize]
 public class UnionMembersController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -45,6 +47,10 @@ public class UnionMembersController : ControllerBase
             });
             return Ok(new { success = true, data = result });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
+        }
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
@@ -63,6 +69,10 @@ public class UnionMembersController : ControllerBase
             }
             return Ok(new { success = true, data = result });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
+        }
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
@@ -76,6 +86,10 @@ public class UnionMembersController : ControllerBase
         {
             var id = await _mediator.Send(command);
             return Ok(new { success = true, data = id });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -99,6 +113,10 @@ public class UnionMembersController : ControllerBase
             var result = await _mediator.Send(command);
             return Ok(new { success = true, data = result });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { success = false, message = ex.Message });
@@ -116,6 +134,10 @@ public class UnionMembersController : ControllerBase
         {
             var result = await _mediator.Send(new DeleteUnionMemberCommand(id));
             return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -143,6 +165,10 @@ public class UnionMembersController : ControllerBase
 
             var result = await _mediator.Send(command);
             return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
         }
         catch (ArgumentException ex)
         {

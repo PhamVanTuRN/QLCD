@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Infrastructure.Data;
 using QLCD.Infrastructure.Interceptors;
+using QLCD.Infrastructure.Services;
 
 namespace QLCD.Infrastructure;
 
@@ -20,9 +21,11 @@ public static class DependencyInjection
             var auditInterceptor = sp.GetRequiredService<AuditLogInterceptor>();
             
             var connectionString = configuration.GetConnectionString("DefaultConnection");
+            bool isDesignTime = AppDomain.CurrentDomain.GetAssemblies()
+                .Any(a => a.FullName?.StartsWith("Microsoft.EntityFrameworkCore.Design") == true);
             bool useInMemory = string.IsNullOrEmpty(connectionString);
             
-            if (!useInMemory)
+            if (!useInMemory && !isDesignTime)
             {
                 try
                 {
@@ -55,6 +58,11 @@ public static class DependencyInjection
 
         // Đăng ký interface IQLCDDbContext để Application có thể sử dụng
         services.AddScoped<IQLCDDbContext>(provider => provider.GetRequiredService<QLCDDbContext>());
+
+        // Đăng ký các dịch vụ phân quyền & phạm vi
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IOrganizationScopeService, OrganizationScopeService>();
 
         return services;
     }

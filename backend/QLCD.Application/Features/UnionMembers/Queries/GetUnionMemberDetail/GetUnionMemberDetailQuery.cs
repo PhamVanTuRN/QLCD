@@ -63,10 +63,12 @@ public class MemberLanguageDetailDto
 public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDetailQuery, UnionMemberDetailDto?>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetUnionMemberDetailQueryHandler(IQLCDDbContext context)
+    public GetUnionMemberDetailQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<UnionMemberDetailDto?> Handle(GetUnionMemberDetailQuery request, CancellationToken cancellationToken)
@@ -77,6 +79,12 @@ public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDe
             .FirstOrDefaultAsync(d => d.Id == request.Id, cancellationToken);
 
         if (member == null) return null;
+
+        // Scope validation
+        if (!await _scopeService.IsInScopeAsync(member.MaToCongDoan, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền xem chi tiết đoàn viên ngoài phạm vi quản lý.");
+        }
 
         return new UnionMemberDetailDto
         {

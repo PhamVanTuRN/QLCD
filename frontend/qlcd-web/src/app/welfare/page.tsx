@@ -1,20 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getWelfareApi, createWelfareApi, updateWelfareApi, getCatalogsApi, CatalogDto, getMembers } from "@/lib/api";
+import { getWelfareApi, createWelfareApi, updateWelfareApi, deleteWelfareApi, getCatalogsApi, CatalogDto, getMembers, getFlattenedUnits, getDownloadUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import EvidenceUpload from "@/components/EvidenceUpload";
 
 export default function WelfarePage() {
   const { user } = useAuth();
   const [welfares, setWelfares] = useState<any[]>([]);
   const [types, setTypes] = useState<CatalogDto[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [units, setUnits] = useState<{ id: string; tenDonVi: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     doanVienId: "",
@@ -23,7 +26,8 @@ export default function WelfarePage() {
     ngayHoTro: "",
     lyDo: "",
     trangThai: 1,
-    fileMinhChungUrl: ""
+    fileMinhChungUrl: "",
+    donViId: ""
   });
 
   const showAlert = (type: "success" | "error", message: string) => {
@@ -44,6 +48,9 @@ export default function WelfarePage() {
       if (memList && memList.items) {
         setMembers(memList.items);
       }
+
+      const unitList = await getFlattenedUnits();
+      setUnits(unitList);
     } catch (err) {
       console.error(err);
       showAlert("error", "Lỗi tải danh sách phúc lợi");
@@ -58,6 +65,7 @@ export default function WelfarePage() {
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setIsDetailView(false);
     setFormData({
       doanVienId: members[0]?.id || "",
       loaiPhucLoi: types[0]?.ma || "OM_DAU",
@@ -65,13 +73,15 @@ export default function WelfarePage() {
       ngayHoTro: new Date().toISOString().split("T")[0],
       lyDo: "",
       trangThai: 1,
-      fileMinhChungUrl: ""
+      fileMinhChungUrl: "",
+      donViId: units.length === 1 ? units[0].id : (user?.donViId || "")
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item: any) => {
     setEditingId(item.id);
+    setIsDetailView(false);
     setFormData({
       doanVienId: item.doanVienId,
       loaiPhucLoi: item.loaiPhucLoi,
@@ -79,9 +89,38 @@ export default function WelfarePage() {
       ngayHoTro: item.ngayHoTro ? item.ngayHoTro.split("T")[0] : "",
       lyDo: item.lyDo || "",
       trangThai: item.trangThai || 1,
-      fileMinhChungUrl: item.fileMinhChungUrl || ""
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
     });
     setIsModalOpen(true);
+  };
+
+  const handleOpenDetail = (item: any) => {
+    setEditingId(item.id);
+    setIsDetailView(true);
+    setFormData({
+      doanVienId: item.doanVienId,
+      loaiPhucLoi: item.loaiPhucLoi,
+      kinhPhiHoTro: item.kinhPhiHoTro || 0,
+      ngayHoTro: item.ngayHoTro ? item.ngayHoTro.split("T")[0] : "",
+      lyDo: item.lyDo || "",
+      trangThai: item.trangThai || 1,
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa hồ sơ phúc lợi này?")) return;
+    try {
+      await deleteWelfareApi(id);
+      showAlert("success", "Xóa hồ sơ phúc lợi thành công");
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showAlert("error", err.response?.data?.message || "Lỗi xóa hồ sơ phúc lợi");
+    }
   };
 
   const handleApprove = async (id: string, newStatus: number) => {
@@ -89,13 +128,15 @@ export default function WelfarePage() {
       const item = welfares.find((w) => w.id === id);
       if (!item) return;
       const payload = {
+        id: item.id,
         doanVienId: item.doanVienId,
         loaiPhucLoi: item.loaiPhucLoi,
         kinhPhiHoTro: item.kinhPhiHoTro,
         ngayHoTro: item.ngayHoTro,
         lyDo: item.lyDo,
         trangThai: newStatus,
-        fileMinhChungUrl: item.fileMinhChungUrl
+        fileMinhChungUrl: item.fileMinhChungUrl,
+        donViId: item.donViId
       };
       await updateWelfareApi(id, payload);
       showAlert("success", newStatus === 2 ? "Duyệt cấp phúc lợi thành công" : "Từ chối cấp phúc lợi thành công");
@@ -116,7 +157,8 @@ export default function WelfarePage() {
     try {
       const payload = {
         ...formData,
-        donViId: user?.donViId || "00000000-0000-0000-0000-000000000000",
+        id: editingId || undefined,
+        donViId: formData.donViId || user?.donViId || "00000000-0000-0000-0000-000000000000",
         trangThai: Number(formData.trangThai)
       };
 
@@ -257,8 +299,21 @@ export default function WelfarePage() {
                 welfares.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-white">{item.doanVienTen || "Chưa có liên kết"}</div>
-                      <div className="text-[10px] text-slate-500">Mã NV: {item.maNhanVien || "—"}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-white">{item.hoTenDoanVien || "Chưa có liên kết"}</div>
+                        {item.evidenceFileId && (
+                          <a
+                            href={getDownloadUrl(item.evidenceFileId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            title="Tải file minh chứng"
+                          >
+                            📄 PDF
+                          </a>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500">Mã NV: {item.maNhanVien || "—"} {item.tenDonVi && `• ${item.tenDonVi}`}</div>
                     </td>
                     <td className="py-3 px-4">
                       <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
@@ -279,6 +334,12 @@ export default function WelfarePage() {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenDetail(item)}
+                          className="bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                        >
+                          Chi tiết
+                        </button>
                         {item.trangThai === 1 ? (
                           <>
                             <button
@@ -299,9 +360,15 @@ export default function WelfarePage() {
                             onClick={() => handleOpenEdit(item)}
                             className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-2.5 py-1 rounded text-[10px] font-bold transition-all"
                           >
-                            Chi tiết / Sửa
+                            Sửa
                           </button>
                         )}
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="bg-red-600/20 hover:bg-red-600/30 border border-red-500/20 text-red-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                        >
+                          Xóa
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -319,19 +386,38 @@ export default function WelfarePage() {
           <div className="relative z-10 w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
             <div>
               <h3 className="text-sm font-bold text-white">
-                {editingId ? "Sửa thông tin phúc lợi" : "Lập đề xuất cấp phúc lợi/trợ cấp"}
+                {isDetailView ? "Chi tiết thông tin phúc lợi" : editingId ? "Sửa thông tin phúc lợi" : "Lập đề xuất cấp phúc lợi/trợ cấp"}
               </h3>
               <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến đợt trợ cấp khó khăn</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Đơn vị *
+                </label>
+                <select
+                  value={formData.donViId}
+                  onChange={(e) => setFormData({ ...formData, donViId: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  required
+                  disabled={isDetailView || units.length === 1}
+                >
+                  <option value="">-- Chọn đơn vị --</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.tenDonVi}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Đoàn viên nhận hỗ trợ *</label>
                 <select
                   value={formData.doanVienId}
                   onChange={(e) => setFormData({ ...formData, doanVienId: e.target.value })}
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 >
                   <option value="">Chọn đoàn viên nhận...</option>
                   {members.map((m) => (
@@ -346,7 +432,8 @@ export default function WelfarePage() {
                   <select
                     value={formData.loaiPhucLoi}
                     onChange={(e) => setFormData({ ...formData, loaiPhucLoi: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     {types.map((t) => (
                       <option key={t.ma} value={t.ma}>{t.ten}</option>
@@ -360,7 +447,8 @@ export default function WelfarePage() {
                     value={formData.kinhPhiHoTro}
                     onChange={(e) => setFormData({ ...formData, kinhPhiHoTro: parseInt(e.target.value) || 0 })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -373,7 +461,8 @@ export default function WelfarePage() {
                     value={formData.ngayHoTro}
                     onChange={(e) => setFormData({ ...formData, ngayHoTro: e.target.value })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -381,7 +470,8 @@ export default function WelfarePage() {
                   <select
                     value={formData.trangThai}
                     onChange={(e) => setFormData({ ...formData, trangThai: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     <option value={1}>Chờ duyệt</option>
                     <option value={2}>Đã duyệt cấp</option>
@@ -398,19 +488,37 @@ export default function WelfarePage() {
                   placeholder="e.g. Bản thân đoàn viên ốm đau nằm viện dài ngày"
                   required
                   rows={3}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none disabled:opacity-50"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Link file đính kèm/minh chứng</label>
-                <input
-                  type="text"
-                  value={formData.fileMinhChungUrl}
-                  onChange={(e) => setFormData({ ...formData, fileMinhChungUrl: e.target.value })}
-                  placeholder="e.g. https://drive.google.com/..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                />
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">File minh chứng PDF</label>
+                {isDetailView ? (
+                  formData.fileMinhChungUrl ? (
+                    <div className="mt-1">
+                      <a
+                        href={getDownloadUrl(formData.fileMinhChungUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                      >
+                        📄 Tải tập tin minh chứng PDF
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                  )
+                ) : (
+                  <EvidenceUpload
+                    fileId={formData.fileMinhChungUrl}
+                    initialFileName={editingId ? welfares.find(w => w.id === editingId)?.evidenceFileName : undefined}
+                    onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
+                    moduleName="Welfare"
+                    organizationId={formData.donViId || user?.donViId || ""}
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -419,14 +527,16 @@ export default function WelfarePage() {
                   onClick={() => setIsModalOpen(false)}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
-                  Hủy
+                  {isDetailView ? "Đóng" : "Hủy"}
                 </button>
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
-                >
-                  Lưu
-                </button>
+                {!isDetailView && (
+                  <button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                  >
+                    Lưu
+                  </button>
+                )}
               </div>
             </form>
           </div>

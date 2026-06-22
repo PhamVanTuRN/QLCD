@@ -59,10 +59,12 @@ public class UpdateMemberLanguageDto
 public class UpdateUnionMemberCommandHandler : IRequestHandler<UpdateUnionMemberCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public UpdateUnionMemberCommandHandler(IQLCDDbContext context)
+    public UpdateUnionMemberCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<bool> Handle(UpdateUnionMemberCommand request, CancellationToken cancellationToken)
@@ -73,6 +75,18 @@ public class UpdateUnionMemberCommandHandler : IRequestHandler<UpdateUnionMember
         if (member == null)
         {
             throw new ArgumentException("Đoàn viên không tồn tại.");
+        }
+
+        // Scope validation - original unit
+        if (!await _scopeService.IsInScopeAsync(member.MaToCongDoan, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chỉnh sửa đoàn viên ngoài phạm vi quản lý.");
+        }
+
+        // Scope validation - target unit
+        if (!await _scopeService.IsInScopeAsync(request.MaToCongDoan, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chuyển đoàn viên sang đơn vị ngoài phạm vi quản lý.");
         }
 
         // Kiểm tra trùng CCCD

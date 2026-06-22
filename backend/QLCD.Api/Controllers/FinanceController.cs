@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 using QLCD.Application.Features.Finance.Commands;
 using QLCD.Application.Features.Finance.Queries.GetFinance;
 
+using QLCD.Application.Features.Finance.Queries.GetFinanceDetail;
+
 namespace QLCD.Api.Controllers;
 
 [ApiController]
@@ -51,6 +53,29 @@ public class FinanceController : ControllerBase
         }
     }
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        try
+        {
+            var query = new GetFinanceDetailQuery { Id = id };
+            var result = await _mediator.Send(query);
+            if (result == null)
+            {
+                return NotFound(new { success = false, message = "Không tìm thấy giao dịch tài chính." });
+            }
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateFinanceCommand command)
     {
@@ -83,12 +108,9 @@ public class FinanceController : ControllerBase
     {
         try
         {
-            if (id != command.Id)
-            {
-                return BadRequest(new { success = false, message = "ID không trùng khớp." });
-            }
             var finalCommand = command with
             {
+                Id = id,
                 ScopeOrgId = GetScopeOrgId(),
                 UserRole = GetUserRole()
             };

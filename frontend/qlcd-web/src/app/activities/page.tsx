@@ -1,19 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getActivitiesApi, createActivityApi, updateActivityApi, deleteActivityApi, getCatalogsApi, CatalogDto } from "@/lib/api";
+import { getActivitiesApi, createActivityApi, updateActivityApi, deleteActivityApi, getCatalogsApi, CatalogDto, getFlattenedUnits, getDownloadUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import EvidenceUpload from "@/components/EvidenceUpload";
 
 export default function ActivitiesPage() {
   const { user } = useAuth();
   const [activities, setActivities] = useState<any[]>([]);
   const [types, setTypes] = useState<CatalogDto[]>([]);
+  const [units, setUnits] = useState<{ id: string; tenDonVi: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailView, setIsDetailView] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     tenHoatDong: "",
@@ -24,7 +27,8 @@ export default function ActivitiesPage() {
     kinhPhi: 0,
     moTa: "",
     ketQua: "",
-    fileMinhChungUrl: ""
+    fileMinhChungUrl: "",
+    donViId: ""
   });
 
   const showAlert = (type: "success" | "error", message: string) => {
@@ -40,6 +44,12 @@ export default function ActivitiesPage() {
       
       const cats = await getCatalogsApi({ loai: "LoaiHoatDong", activeOnly: true });
       setTypes(cats);
+
+      const unitList = await getFlattenedUnits();
+      setUnits(unitList);
+      if (unitList.length === 1) {
+        setFormData(prev => ({ ...prev, donViId: unitList[0].id }));
+      }
     } catch (err) {
       console.error(err);
       showAlert("error", "Lỗi tải danh sách hoạt động");
@@ -54,6 +64,7 @@ export default function ActivitiesPage() {
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setIsDetailView(false);
     setFormData({
       tenHoatDong: "",
       loaiHoatDong: types[0]?.ma || "PHONG_TRAO",
@@ -63,13 +74,15 @@ export default function ActivitiesPage() {
       kinhPhi: 0,
       moTa: "",
       ketQua: "",
-      fileMinhChungUrl: ""
+      fileMinhChungUrl: "",
+      donViId: units.length === 1 ? units[0].id : (user?.donViId || "")
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item: any) => {
     setEditingId(item.id);
+    setIsDetailView(false);
     setFormData({
       tenHoatDong: item.tenHoatDong,
       loaiHoatDong: item.loaiHoatDong,
@@ -79,7 +92,26 @@ export default function ActivitiesPage() {
       kinhPhi: item.kinhPhi || 0,
       moTa: item.moTa || "",
       ketQua: item.ketQua || "",
-      fileMinhChungUrl: item.fileMinhChungUrl || ""
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenDetail = (item: any) => {
+    setEditingId(item.id);
+    setIsDetailView(true);
+    setFormData({
+      tenHoatDong: item.tenHoatDong,
+      loaiHoatDong: item.loaiHoatDong,
+      tuNgay: item.tuNgay ? item.tuNgay.split("T")[0] : "",
+      denNgay: item.denNgay ? item.denNgay.split("T")[0] : "",
+      diaDiem: item.diaDiem,
+      kinhPhi: item.kinhPhi || 0,
+      moTa: item.moTa || "",
+      ketQua: item.ketQua || "",
+      fileMinhChungUrl: item.fileMinhChungUrl || "",
+      donViId: item.donViId || ""
     });
     setIsModalOpen(true);
   };
@@ -106,7 +138,8 @@ export default function ActivitiesPage() {
     try {
       const payload = {
         ...formData,
-        donViId: user?.donViId || "00000000-0000-0000-0000-000000000000"
+        id: editingId || undefined,
+        donViId: formData.donViId || user?.donViId || "00000000-0000-0000-0000-000000000000"
       };
 
       if (editingId) {
@@ -207,7 +240,20 @@ export default function ActivitiesPage() {
                 activities.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-white">{item.tenHoatDong}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-white">{item.tenHoatDong}</div>
+                        {item.evidenceFileId && (
+                          <a
+                            href={getDownloadUrl(item.evidenceFileId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            title="Tải file minh chứng"
+                          >
+                            📄 PDF
+                          </a>
+                        )}
+                      </div>
                       {item.moTa && <div className="text-[10px] text-slate-500 truncate max-w-[200px]">{item.moTa}</div>}
                     </td>
                     <td className="py-3 px-4">
@@ -222,9 +268,15 @@ export default function ActivitiesPage() {
                     <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
                       {(item.kinhPhi || 0).toLocaleString()} đ
                     </td>
-                    <td className="py-3 px-4 text-slate-400">{item.donViTen || "—"}</td>
+                    <td className="py-3 px-4 text-slate-400">{item.tenDonVi || "—"}</td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenDetail(item)}
+                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                        >
+                          Chi tiết
+                        </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
                           className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
@@ -253,11 +305,31 @@ export default function ActivitiesPage() {
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           <div className="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
             <div>
-              <h3 className="text-sm font-bold text-white">{editingId ? "Cập nhật hoạt động" : "Thêm hoạt động mới"}</h3>
+              <h3 className="text-sm font-bold text-white">
+                {isDetailView ? "Chi tiết hoạt động" : editingId ? "Cập nhật hoạt động" : "Thêm hoạt động mới"}
+              </h3>
               <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến hoạt động Công đoàn</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Đơn vị tổ chức *
+                </label>
+                <select
+                  value={formData.donViId}
+                  onChange={(e) => setFormData({ ...formData, donViId: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  required
+                  disabled={isDetailView || units.length === 1}
+                >
+                  <option value="">-- Chọn đơn vị --</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.tenDonVi}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   Tên hoạt động *
@@ -268,7 +340,8 @@ export default function ActivitiesPage() {
                   onChange={(e) => setFormData({ ...formData, tenHoatDong: e.target.value })}
                   placeholder="e.g. Hội thao chào mừng 22/12"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 />
               </div>
 
@@ -278,7 +351,8 @@ export default function ActivitiesPage() {
                   <select
                     value={formData.loaiHoatDong}
                     onChange={(e) => setFormData({ ...formData, loaiHoatDong: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   >
                     {types.map((t) => (
                       <option key={t.ma} value={t.ma}>{t.ten}</option>
@@ -291,7 +365,8 @@ export default function ActivitiesPage() {
                     type="number"
                     value={formData.kinhPhi}
                     onChange={(e) => setFormData({ ...formData, kinhPhi: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -304,7 +379,8 @@ export default function ActivitiesPage() {
                     value={formData.tuNgay}
                     onChange={(e) => setFormData({ ...formData, tuNgay: e.target.value })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -314,7 +390,8 @@ export default function ActivitiesPage() {
                     value={formData.denNgay}
                     onChange={(e) => setFormData({ ...formData, denNgay: e.target.value })}
                     required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -327,7 +404,8 @@ export default function ActivitiesPage() {
                   onChange={(e) => setFormData({ ...formData, diaDiem: e.target.value })}
                   placeholder="e.g. Sân vận động Bệnh viện"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 />
               </div>
 
@@ -337,7 +415,8 @@ export default function ActivitiesPage() {
                   value={formData.moTa}
                   onChange={(e) => setFormData({ ...formData, moTa: e.target.value })}
                   rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none"
+                  disabled={isDetailView}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none disabled:opacity-50"
                 />
               </div>
 
@@ -349,18 +428,36 @@ export default function ActivitiesPage() {
                     value={formData.ketQua}
                     onChange={(e) => setFormData({ ...formData, ketQua: e.target.value })}
                     placeholder="e.g. Thành công tốt đẹp, 20 giải thưởng"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                    disabled={isDetailView}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Link file minh chứng</label>
-                  <input
-                    type="text"
-                    value={formData.fileMinhChungUrl}
-                    onChange={(e) => setFormData({ ...formData, fileMinhChungUrl: e.target.value })}
-                    placeholder="e.g. https://drive.google.com/..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                  />
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">File minh chứng PDF</label>
+                  {isDetailView ? (
+                    formData.fileMinhChungUrl ? (
+                      <div className="mt-1">
+                        <a
+                          href={getDownloadUrl(formData.fileMinhChungUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                        >
+                          📄 Tải PDF minh chứng
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                    )
+                  ) : (
+                    <EvidenceUpload
+                      fileId={formData.fileMinhChungUrl}
+                      initialFileName={editingId ? activities.find(a => a.id === editingId)?.evidenceFileName : undefined}
+                      onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
+                      moduleName="Activities"
+                      organizationId={formData.donViId || user?.donViId || ""}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -370,14 +467,16 @@ export default function ActivitiesPage() {
                   onClick={() => setIsModalOpen(false)}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
-                  Hủy
+                  {isDetailView ? "Đóng" : "Hủy"}
                 </button>
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
-                >
-                  Lưu
-                </button>
+                {!isDetailView && (
+                  <button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                  >
+                    Lưu
+                  </button>
+                )}
               </div>
             </form>
           </div>

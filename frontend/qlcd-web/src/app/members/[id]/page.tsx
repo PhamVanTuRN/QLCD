@@ -85,6 +85,9 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [languagesList, setLanguagesList] = useState<CatalogDto[]>([]);
   const [levelsList, setLevelsList] = useState<CatalogDto[]>([]);
+  const [chucVus, setChucVus] = useState<CatalogDto[]>([]);
+  const [donViCongTacs, setDonViCongTacs] = useState<CatalogDto[]>([]);
+  const [chuyenMons, setChuyenMons] = useState<CatalogDto[]>([]);
 
   // Edit form state
   const [formData, setFormData] = useState<any>({
@@ -196,6 +199,15 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
 
       const levels = await getCatalogsApi({ loai: "TrinhDoNgoaiNgu", activeOnly: true });
       setLevelsList(levels);
+
+      const cv = await getCatalogsApi({ loai: "ChucVu", activeOnly: true });
+      setChucVus(cv);
+
+      const dv = await getCatalogsApi({ loai: "DonViCongTac", activeOnly: true });
+      setDonViCongTacs(dv);
+
+      const cm = await getCatalogsApi({ loai: "ChuyenMon", activeOnly: true });
+      setChuyenMons(cm);
 
     } catch (err) {
       console.error(err);
@@ -592,19 +604,18 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
               <input
                 type="text"
                 value={formData.soCCCD}
-                onChange={(e) => setFormData({ ...formData, soCCCD: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, soCCCD: e.target.value, maNhanVien: e.target.value })}
                 required
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Mã nhân viên *</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Mã nhân viên (CCCD) *</label>
               <input
                 type="text"
-                value={formData.maNhanVien}
-                onChange={(e) => setFormData({ ...formData, maNhanVien: e.target.value })}
-                required
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                value={formData.soCCCD}
+                disabled
+                className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-500 cursor-not-allowed focus:outline-none"
               />
             </div>
             <div>
@@ -684,30 +695,42 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
             {/* Professional Info */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Chức vụ chính quyền</label>
-              <input
-                type="text"
+              <select
                 value={formData.chucVu}
                 onChange={(e) => setFormData({ ...formData, chucVu: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
-              />
+              >
+                <option value="">Chọn Chức vụ...</option>
+                {chucVus.map((c) => (
+                  <option key={c.id} value={c.ten}>{c.ten}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Chức danh chuyên môn</label>
-              <input
-                type="text"
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Chức danh chuyên môn (Chuyên môn)</label>
+              <select
                 value={formData.chucDanhChuyenMon}
                 onChange={(e) => setFormData({ ...formData, chucDanhChuyenMon: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
-              />
+              >
+                <option value="">Chọn Chuyên môn...</option>
+                {chuyenMons.map((c) => (
+                  <option key={c.id} value={c.ten}>{c.ten}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Khoa/Phòng công tác</label>
-              <input
-                type="text"
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Khoa/Phòng công tác (Đơn vị công tác)</label>
+              <select
                 value={formData.donViCongTac}
                 onChange={(e) => setFormData({ ...formData, donViCongTac: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
-              />
+              >
+                <option value="">Chọn Đơn vị công tác...</option>
+                {donViCongTacs.map((c) => (
+                  <option key={c.id} value={c.ten}>{c.ten}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Loại cán bộ</label>

@@ -37,15 +37,22 @@ public class InitiativeDto
     public int NamThucHien { get; set; }
     public string? KetQuaNghiemThu { get; set; }
     public int TrangThai { get; set; }
+    public string? FileMinhChungUrl { get; set; }
+    public Guid? EvidenceFileId { get; set; }
+    public string? EvidenceFileName { get; set; }
+    public long? EvidenceFileSize { get; set; }
+    public string? DownloadUrl { get; set; }
 }
 
 public class GetInitiativesQueryHandler : IRequestHandler<GetInitiativesQuery, List<InitiativeDto>>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetInitiativesQueryHandler(IQLCDDbContext context)
+    public GetInitiativesQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<List<InitiativeDto>> Handle(GetInitiativesQuery request, CancellationToken cancellationToken)
@@ -56,29 +63,10 @@ public class GetInitiativesQueryHandler : IRequestHandler<GetInitiativesQuery, L
             .AsNoTracking();
 
         // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    query = query.Where(i => i.DonViId == orgId || childOrgIds.Contains(i.DonViId));
-                }
-                else // TOCD
-                {
-                    query = query.Where(i => i.DonViId == orgId);
-                }
-            }
-            else
-            {
-                return new List<InitiativeDto>();
-            }
+            query = query.Where(i => allowedOrgIds.Contains(i.DonViId));
         }
 
         // 2. Lọc & Tìm kiếm
@@ -109,7 +97,23 @@ public class GetInitiativesQueryHandler : IRequestHandler<GetInitiativesQuery, L
 
         var list = await query
             .OrderByDescending(i => i.NamThucHien)
-            .Select(i => new InitiativeDto
+            .Select(i => new
+            {
+                Initiative = i,
+                File = _context.EvidenceFiles
+                    .Where(f => f.RelatedEntityId == i.Id && !f.IsDeleted)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        var dtoList = new List<InitiativeDto>();
+        foreach (var item in list)
+        {
+            var i = item.Initiative;
+            var f = item.File;
+            
+            var dto = new InitiativeDto
             {
                 Id = i.Id,
                 DoanVienId = i.DoanVienId,
@@ -120,27 +124,21 @@ public class GetInitiativesQueryHandler : IRequestHandler<GetInitiativesQuery, L
                 TenDeTai = i.TenDeTai,
                 LinhVuc = i.LinhVuc,
                 CapDeTai = i.CapDeTai,
-                TenCapDeTai = "",
+                TenCapDeTai = catalogs.TryGetValue(i.CapDeTai, out var name) ? name : i.CapDeTai,
                 HieuQuaKinhTe = i.HieuQuaKinhTe,
                 NgayNghiemThu = i.NgayNghiemThu,
                 NamThucHien = i.NamThucHien,
                 KetQuaNghiemThu = i.KetQuaNghiemThu,
-                TrangThai = i.TrangThai
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var item in list)
-        {
-            if (catalogs.TryGetValue(item.CapDeTai, out var name))
-            {
-                item.TenCapDeTai = name;
-            }
-            else
-            {
-                item.TenCapDeTai = item.CapDeTai;
-            }
+                TrangThai = i.TrangThai,
+                FileMinhChungUrl = f != null ? f.Id.ToString() : null,
+                EvidenceFileId = f?.Id,
+                EvidenceFileName = f?.OriginalFileName,
+                EvidenceFileSize = f?.FileSize,
+                DownloadUrl = f != null ? $"/api/v1/evidence-files/download/{f.Id}" : null
+            };
+            dtoList.Add(dto);
         }
 
-        return list;
+        return dtoList;
     }
 }

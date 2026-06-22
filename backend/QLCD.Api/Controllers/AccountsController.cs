@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Application.Features.Accounts.Queries.GetAccounts;
@@ -12,6 +13,7 @@ namespace QLCD.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/accounts")]
+[Authorize(Roles = "ADMIN")]
 public class AccountsController : ControllerBase
 {
     private readonly IMediator _mediator;

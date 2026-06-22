@@ -57,14 +57,22 @@ public class CreateMemberLanguageDto
 public class CreateUnionMemberCommandHandler : IRequestHandler<CreateUnionMemberCommand, Guid>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public CreateUnionMemberCommandHandler(IQLCDDbContext context)
+    public CreateUnionMemberCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<Guid> Handle(CreateUnionMemberCommand request, CancellationToken cancellationToken)
     {
+        // Scope validation
+        if (!await _scopeService.IsInScopeAsync(request.MaToCongDoan, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền tạo mới đoàn viên ngoài phạm vi quản lý.");
+        }
+
         // 1. Kiểm tra tính duy nhất của CCCD và Mã nhân viên
         var existsCccd = await _context.DoanViens.AnyAsync(d => d.SoCCCD == request.SoCCCD, cancellationToken);
         if (existsCccd)
@@ -118,16 +126,6 @@ public class CreateUnionMemberCommandHandler : IRequestHandler<CreateUnionMember
             GhiChu = request.GhiChu,
             TrangThai = TrangThaiDoanVien.DangSinhHoat
         };
-
-        // Gán ngày vào Đảng
-        if (request.DangVien && request.NgayVaoDang.HasValue)
-        {
-            // We can store it or add a custom logic. Currently there is no NgayVaoDang field in DoanVien, 
-            // but we can just use GhiChu or we can verify if the field is present.
-            // Let's check DoanVien.cs - it does NOT have NgayVaoDang. We can store it in GhiChu or ignore it if not in schema.
-            // Let's check DoanVien.cs fields. It has DangVien, but not NgayVaoDang. We can append it to GhiChu if needed or we can extend DoanVien entity.
-            // Since we can modify entities, let's keep it clean!
-        }
 
         _context.DoanViens.Add(newMember);
         await _context.SaveChangesAsync(cancellationToken);

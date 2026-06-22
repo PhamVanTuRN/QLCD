@@ -37,15 +37,21 @@ public class ActivityDto
     public decimal KinhPhi { get; set; }
     public string? KetQua { get; set; }
     public string? FileMinhChungUrl { get; set; }
+    public Guid? EvidenceFileId { get; set; }
+    public string? EvidenceFileName { get; set; }
+    public long? EvidenceFileSize { get; set; }
+    public string? DownloadUrl { get; set; }
 }
 
 public class GetActivitiesQueryHandler : IRequestHandler<GetActivitiesQuery, List<ActivityDto>>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetActivitiesQueryHandler(IQLCDDbContext context)
+    public GetActivitiesQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<List<ActivityDto>> Handle(GetActivitiesQuery request, CancellationToken cancellationToken)
@@ -55,32 +61,10 @@ public class GetActivitiesQueryHandler : IRequestHandler<GetActivitiesQuery, Lis
             .AsNoTracking();
 
         // 1. Áp dụng Phân quyền Phạm vi dữ liệu (Scope Filtering)
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    // Được xem CĐBP và các tổ trực thuộc
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    query = query.Where(h => h.DonViId == orgId || childOrgIds.Contains(h.DonViId));
-                }
-                else // TOCD
-                {
-                    // Chỉ được xem tổ của mình
-                    query = query.Where(h => h.DonViId == orgId);
-                }
-            }
-            else
-            {
-                // Không có orgId mà không phải admin -> Trả về danh sách trống
-                return new List<ActivityDto>();
-            }
+            query = query.Where(h => allowedOrgIds.Contains(h.DonViId));
         }
 
         // 2. Tìm kiếm & Lọc
@@ -112,7 +96,23 @@ public class GetActivitiesQueryHandler : IRequestHandler<GetActivitiesQuery, Lis
 
         var list = await query
             .OrderByDescending(h => h.TuNgay)
-            .Select(h => new ActivityDto
+            .Select(h => new
+            {
+                Activity = h,
+                File = _context.EvidenceFiles
+                    .Where(f => f.RelatedEntityId == h.Id && !f.IsDeleted)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        var dtoList = new List<ActivityDto>();
+        foreach (var item in list)
+        {
+            var h = item.Activity;
+            var f = item.File;
+            
+            var dto = new ActivityDto
             {
                 Id = h.Id,
                 DonViId = h.DonViId,
@@ -120,29 +120,22 @@ public class GetActivitiesQueryHandler : IRequestHandler<GetActivitiesQuery, Lis
                 TenHoatDong = h.TenHoatDong,
                 MoTa = h.MoTa,
                 LoaiHoatDong = h.LoaiHoatDong,
-                TenLoaiHoatDong = "", // Sẽ gán sau
+                TenLoaiHoatDong = catalogs.TryGetValue(h.LoaiHoatDong, out var name) ? name : h.LoaiHoatDong,
                 TuNgay = h.TuNgay,
                 DenNgay = h.DenNgay,
                 DiaDiem = h.DiaDiem,
                 MaQRCode = h.MaQRCode,
                 KinhPhi = h.KinhPhi,
                 KetQua = h.KetQua,
-                FileMinhChungUrl = h.FileMinhChungUrl
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var item in list)
-        {
-            if (catalogs.TryGetValue(item.LoaiHoatDong, out var name))
-            {
-                item.TenLoaiHoatDong = name;
-            }
-            else
-            {
-                item.TenLoaiHoatDong = item.LoaiHoatDong;
-            }
+                FileMinhChungUrl = h.FileMinhChungUrl,
+                EvidenceFileId = f?.Id,
+                EvidenceFileName = f?.OriginalFileName,
+                EvidenceFileSize = f?.FileSize,
+                DownloadUrl = f != null ? $"/api/v1/evidence-files/download/{f.Id}" : null
+            };
+            dtoList.Add(dto);
         }
 
-        return list;
+        return dtoList;
     }
 }

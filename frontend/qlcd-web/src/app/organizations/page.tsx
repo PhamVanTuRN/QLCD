@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, UnionUnitDto } from "@/lib/api";
+import { getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, UnionUnitDto, getKhoiChuyenMonApi, KhoiChuyenMonDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 // Mock data nếu API trả rỗng
@@ -46,6 +46,9 @@ export default function OrganizationTree() {
   const [editError, setEditError] = useState("");
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
+  const [khoiList, setKhoiList] = useState<KhoiChuyenMonDto[]>([]);
+  const [addKhoi, setAddKhoi] = useState("");
+
   const loadTree = useCallback(async () => {
     const data = await getUnionTree();
     if (data) {
@@ -62,6 +65,14 @@ export default function OrganizationTree() {
   }, []);
 
   useEffect(() => { loadTree(); }, [loadTree]);
+
+  useEffect(() => {
+    const loadKhoiList = async () => {
+      const data = await getKhoiChuyenMonApi();
+      setKhoiList(data);
+    };
+    loadKhoiList();
+  }, []);
 
   const openEditModal = (node: UnionUnitDto) => {
     setEditName(node.tenDonVi);
@@ -136,10 +147,12 @@ export default function OrganizationTree() {
       await createUnionUnit({
         tenDonVi: addName.trim(),
         loaiToChuc: loaiMap[addType],
-        maParent: selectedNode.id
+        maParent: selectedNode.id,
+        maKhoi: addKhoi || undefined
       });
       setShowAddModal(false);
       setAddName("");
+      setAddKhoi("");
       await loadTree();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -152,6 +165,7 @@ export default function OrganizationTree() {
   const openAddModal = (type: "CDBP" | "TOCD_TRUC_THUOC" | "TOCD_CDBP") => {
     setAddType(type);
     setAddName("");
+    setAddKhoi("");
     setAddError("");
     setShowAddModal(true);
   };
@@ -267,6 +281,13 @@ export default function OrganizationTree() {
                 </div>
 
                 <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between text-xs">
+                  <span className="text-slate-400">Khối chuyên môn:</span>
+                  <span className="font-semibold text-emerald-400">
+                    {khoiList.find(k => k.id === selectedNode.maKhoi)?.tenKhoi || "—"}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between text-xs">
                   <span className="text-slate-400">Đơn vị con:</span>
                   <span className="font-semibold text-slate-200">{selectedNode.children?.length || 0} đơn vị</span>
                 </div>
@@ -365,6 +386,19 @@ export default function OrganizationTree() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
                 />
               </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Khối chuyên môn (Hành chính)</label>
+                <select
+                  value={addKhoi}
+                  onChange={(e) => setAddKhoi(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                >
+                  <option value="">Chọn Khối chuyên môn...</option>
+                  {khoiList.map((k) => (
+                    <option key={k.id} value={k.id}>{k.tenKhoi}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {addError && (
@@ -414,6 +448,19 @@ export default function OrganizationTree() {
                   placeholder="Nhập tên đơn vị..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
                 />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Khối chuyên môn (Hành chính)</label>
+                <select
+                  value={editKhoi}
+                  onChange={(e) => setEditKhoi(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                >
+                  <option value="">Chọn Khối chuyên môn...</option>
+                  {khoiList.map((k) => (
+                    <option key={k.id} value={k.id}>{k.tenKhoi}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
