@@ -1,15 +1,44 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getEmulationsApi, createEmulationApi, updateEmulationApi, deleteEmulationApi, getCatalogsApi, CatalogDto, getMembers, getUnionTree, UnionUnitDto, getDownloadUrl } from "@/lib/api";
+import { getEmulationsApi, createEmulationApi, updateEmulationApi, deleteEmulationApi, getCatalogsApi, CatalogDto, getMembers, getUnionTree, UnionUnitDto, getDownloadUrl, UnionMemberDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import EvidenceUpload from "@/components/EvidenceUpload";
+import { PageHeader, StatCard } from "@/components/ui-components";
+import { Plus, Search, Trophy, Award, Trash2, Edit3, Eye } from "lucide-react";
+
+interface EmulationItem {
+  id: string;
+  tenPhongTrao: string;
+  doanVienId?: string | null;
+  hoTenDoanVien?: string | null;
+  maNhanVien?: string | null;
+  donViId?: string | null;
+  tenDonVi?: string | null;
+  nam: number;
+  diemTuDanhGia: number;
+  diemBchDuyet: number;
+  xepLoai: string;
+  khenThuong?: string | null;
+  trangThai: number;
+  fileMinhChungUrl?: string | null;
+  evidenceFileId?: string | null;
+  evidenceFileName?: string | null;
+}
+
+interface ApiError {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
 
 export default function EmulationsPage() {
   const { user } = useAuth();
-  const [emulations, setEmulations] = useState<any[]>([]);
+  const [emulations, setEmulations] = useState<EmulationItem[]>([]);
   const [ratings, setRatings] = useState<CatalogDto[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<UnionMemberDto[]>([]);
   const [units, setUnits] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -48,7 +77,7 @@ export default function EmulationsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const list = await getEmulationsApi({ search: search || undefined });
+      const list = await getEmulationsApi({ search: search || undefined }) as EmulationItem[];
       setEmulations(list);
       
       const cats = await getCatalogsApi({ loai: "ChatLuongDoanVien", activeOnly: true });
@@ -76,7 +105,11 @@ export default function EmulationsPage() {
   };
 
   useEffect(() => {
-    loadData();
+    const timer = setTimeout(() => {
+      loadData();
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const handleOpenCreate = () => {
@@ -97,7 +130,7 @@ export default function EmulationsPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (item: any) => {
+  const handleOpenEdit = (item: EmulationItem) => {
     setEditingId(item.id);
     setIsDetailView(false);
     setFormData({
@@ -115,7 +148,7 @@ export default function EmulationsPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenDetail = (item: any) => {
+  const handleOpenDetail = (item: EmulationItem) => {
     setEditingId(item.id);
     setIsDetailView(true);
     setFormData({
@@ -139,9 +172,10 @@ export default function EmulationsPage() {
       await deleteEmulationApi(id);
       showAlert("success", "Xóa kết quả thi đua thành công");
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Lỗi xóa thi đua");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Lỗi xóa thi đua");
     }
   };
 
@@ -173,9 +207,10 @@ export default function EmulationsPage() {
       }
       setIsModalOpen(false);
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
     }
   };
 
@@ -192,120 +227,127 @@ export default function EmulationsPage() {
     }
   };
 
-  const getStatusBadge = (status: number) => {
+  const getStatusBadgeClass = (status: number) => {
     switch (status) {
-      case 1: return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-      case 2: return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-      case 3: return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-      default: return "bg-slate-800 text-slate-400 border-slate-700";
+      case 1: return "bg-blue-50 text-blue-700 border-blue-200/60";
+      case 2: return "bg-amber-50 text-amber-700 border-amber-200/60";
+      case 3: return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
+      default: return "bg-slate-55 text-slate-700 border-slate-200/60";
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Alert */}
       {alert && (
         <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-bounce ${
+          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-in slide-in-from-top duration-300 ${
             alert.type === "success"
-              ? "bg-emerald-950 border-emerald-800 text-emerald-400"
-              : "bg-red-950 border-red-900 text-red-400"
+              ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+              : "bg-red-50 border-red-250 text-red-800"
           }`}
         >
-          <span>{alert.type === "success" ? "✅" : "⚠️"}</span>
-          <span className="text-sm font-semibold">{alert.message}</span>
+          <span className="text-base">{alert.type === "success" ? "✅" : "⚠️"}</span>
+          <span className="text-xs font-bold">{alert.message}</span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Phong trào Thi đua & Đánh giá phân loại</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Đăng ký tham gia phong trào, tự đánh giá chấm điểm và bình xét khen thưởng trực tuyến
-          </p>
-        </div>
+      <PageHeader 
+        title="Phong trào Thi đua & Đánh giá phân loại" 
+        description="Đăng ký tham gia phong trào, tự đánh giá chấm điểm và bình xét khen thưởng trực tuyến"
+      >
         <button
           onClick={handleOpenCreate}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-2 active:scale-95"
+          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2 active:scale-98"
         >
-          ➕ Khai báo Thi đua
+          <Plus className="w-4 h-4 shrink-0" /> Khai báo Thi đua
         </button>
-      </div>
+      </PageHeader>
 
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tổng số lượt đăng ký thi đua</span>
-          <div className="text-2xl font-extrabold text-white mt-2">{emulations.length} hồ sơ</div>
-          <p className="text-[10px] text-slate-400 mt-1">Gồm thi đua cá nhân và tập thể đơn vị</p>
-        </div>
-        <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Lượt được Khen thưởng</span>
-          <div className="text-2xl font-extrabold text-emerald-400 mt-2">
-            {emulations.filter((e) => e.trangThai === 3).length} chiến sĩ thi đua
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">Đã được BCH duyệt và cấp bằng khen/giấy khen</p>
-        </div>
+        <StatCard
+          title="Tổng số lượt đăng ký thi đua"
+          value={`${emulations.length} hồ sơ`}
+          subtitle="Gồm thi đua cá nhân và tập thể đơn vị"
+          icon={Trophy}
+          color="blue"
+        />
+        <StatCard
+          title="Lượt được Khen thưởng"
+          value={`${emulations.filter((e) => e.trangThai === 3).length} chiến sĩ thi đua`}
+          subtitle="Đã được BCH duyệt và cấp bằng khen/giấy khen"
+          icon={Award}
+          color="emerald"
+        />
       </div>
 
       {/* Filter panel */}
-      <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <input
-          type="text"
-          placeholder="Tìm kiếm theo tên phong trào, khen thưởng..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
-        />
-        <div className="text-xs text-slate-400">
-          Tổng số: <span className="text-emerald-400 font-bold">{emulations.length}</span>
+      <div className="bg-white border border-slate-150 p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:max-w-md">
+          <input
+            type="text"
+            placeholder="Tìm kiếm theo tên phong trào, khen thưởng..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+          />
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 shrink-0" />
+        </div>
+        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+          Tổng số: <span className="text-blue-600">{emulations.length}</span>
         </div>
       </div>
 
       {/* Table list */}
-      <div className="bg-slate-950/20 border border-slate-800 rounded-2xl p-6">
+      <div className="bg-white border border-slate-150 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full border-collapse text-left text-xs table-modern">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold">
-                <th className="py-3 px-4">Tên phong trào thi đua</th>
-                <th className="py-3 px-4">Đối tượng</th>
-                <th className="py-3 px-4 text-center">Năm</th>
-                <th className="py-3 px-4 text-center">Điểm tự chấm</th>
-                <th className="py-3 px-4 text-center">Điểm duyệt</th>
-                <th className="py-3 px-4">Xếp loại</th>
-                <th className="py-3 px-4">Hình thức khen thưởng</th>
-                <th className="py-3 px-4 text-center">Trạng thái</th>
-                <th className="py-3 px-4 text-right">Thao tác</th>
+              <tr className="bg-slate-50/50 text-slate-500 font-semibold border-b border-slate-100 uppercase tracking-wider">
+                <th className="px-6 py-3.5">Tên phong trào thi đua</th>
+                <th className="px-6 py-3.5">Đối tượng</th>
+                <th className="px-6 py-3.5 text-center">Năm</th>
+                <th className="px-6 py-3.5 text-center">Điểm tự chấm</th>
+                <th className="px-6 py-3.5 text-center">Điểm duyệt</th>
+                <th className="px-6 py-3.5">Xếp loại</th>
+                <th className="px-6 py-3.5">Hình thức khen thưởng</th>
+                <th className="px-6 py-3.5 text-center">Trạng thái</th>
+                <th className="px-6 py-3.5 text-center w-40">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-500">
-                    <span className="inline-block w-4 h-4 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin mr-2" />
-                    Đang tải danh sách thi đua...
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <span className="inline-block w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-slate-400">Đang tải danh sách thi đua...</span>
+                    </div>
                   </td>
                 </tr>
               ) : emulations.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-500">
-                    Chưa có đăng ký thi đua nào được khai báo.
+                  <td colSpan={9} className="py-12 text-center text-slate-400 italic">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <span className="text-lg">📂</span>
+                      <span>Chưa có đăng ký thi đua nào được khai báo.</span>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 emulations.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
-                    <td className="py-3 px-4">
+                  <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white">{item.tenPhongTrao}</span>
+                        <span className="font-bold text-slate-800">{item.tenPhongTrao}</span>
                         {item.evidenceFileId && (
                           <a
                             href={getDownloadUrl(item.evidenceFileId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            className="inline-flex items-center gap-1 text-[9px] text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded transition-all"
                             title="Tải file minh chứng"
                           >
                             📄 PDF
@@ -313,54 +355,54 @@ export default function EmulationsPage() {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="px-6 py-4">
                       {item.hoTenDoanVien ? (
                         <div>
-                          <div className="font-semibold text-slate-200">{item.hoTenDoanVien}</div>
-                          <div className="text-[10px] text-slate-500">Đoàn viên</div>
+                          <div className="font-bold text-slate-800">{item.hoTenDoanVien}</div>
+                          <div className="text-[10px] text-slate-400 font-semibold mt-0.5">Đoàn viên</div>
                         </div>
                       ) : item.tenDonVi ? (
                         <div>
-                          <div className="font-semibold text-emerald-400">{item.tenDonVi}</div>
-                          <div className="text-[10px] text-slate-500">Tập thể</div>
+                          <div className="font-bold text-emerald-600">{item.tenDonVi}</div>
+                          <div className="text-[10px] text-slate-400 font-semibold mt-0.5">Tập thể</div>
                         </div>
                       ) : (
-                        <span className="text-slate-500">—</span>
+                        <span className="text-slate-400 font-medium">—</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-center font-mono">{item.nam}</td>
-                    <td className="py-3 px-4 text-center font-mono text-slate-400">{item.diemTuDanhGia}</td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-emerald-400">{item.diemBchDuyet}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
+                    <td className="px-6 py-4 text-center font-mono font-medium text-slate-500">{item.nam}</td>
+                    <td className="px-6 py-4 text-center font-mono font-medium text-slate-400">{item.diemTuDanhGia}</td>
+                    <td className="px-6 py-4 text-center font-mono font-bold text-emerald-650">{item.diemBchDuyet}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100/80 text-slate-600 border border-slate-200/50 text-[10px] font-semibold">
                         {getRatingName(item.xepLoai)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-emerald-400 font-semibold">{item.khenThuong || "Chưa bình xét"}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusBadge(item.trangThai)}`}>
+                    <td className="px-6 py-4 text-blue-600 font-bold">{item.khenThuong || "Chưa bình xét"}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadgeClass(item.trangThai)}`}>
                         {getStatusName(item.trangThai)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleOpenDetail(item)}
-                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Chi tiết
+                          <Eye className="w-3.5 h-3.5 shrink-0" /> Xem
                         </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
-                          className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-blue-55 hover:bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Sửa
+                          <Edit3 className="w-3.5 h-3.5 shrink-0" /> Sửa
                         </button>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-red-50 hover:bg-red-100 text-red-750 border border-red-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Xóa
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" /> Xóa
                         </button>
                       </div>
                     </td>
@@ -374,14 +416,14 @@ export default function EmulationsPage() {
 
       {/* Modal Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={() => setIsModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg bg-white border border-slate-150 rounded-2xl shadow-xl p-6 space-y-5 animate-in scale-in duration-200">
             <div>
-              <h3 className="text-sm font-bold text-white">
+              <h3 className="text-sm font-bold text-slate-800">
                 {isDetailView ? "Chi tiết kết quả thi đua" : editingId ? "Sửa kết quả thi đua" : "Khai báo kết quả thi đua"}
               </h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến phong trào bình xét thi đua</p>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-bold uppercase tracking-wider">Nhập các chi tiết liên quan đến phong trào bình xét thi đua</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -394,7 +436,7 @@ export default function EmulationsPage() {
                   placeholder="e.g. Phong trào thi đua Lao động giỏi - Lao động sáng tạo"
                   required
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                 />
               </div>
 
@@ -405,7 +447,7 @@ export default function EmulationsPage() {
                     value={formData.doanVienId}
                     onChange={(e) => setFormData({ ...formData, doanVienId: e.target.value, donViId: e.target.value !== "" ? "" : formData.donViId })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all cursor-pointer"
                   >
                     <option value="">Chọn cá nhân thi đua...</option>
                     {members.map((m) => (
@@ -418,7 +460,7 @@ export default function EmulationsPage() {
                   <select
                     value={formData.donViId}
                     onChange={(e) => setFormData({ ...formData, donViId: e.target.value, doanVienId: e.target.value !== "" ? "" : formData.doanVienId })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all cursor-pointer"
                     disabled={isDetailView || (formData.doanVienId === "" && units.length === 1)}
                   >
                     <option value="">Chọn tập thể thi đua...</option>
@@ -438,7 +480,7 @@ export default function EmulationsPage() {
                     onChange={(e) => setFormData({ ...formData, nam: parseInt(e.target.value) || new Date().getFullYear() })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                   />
                 </div>
                 <div>
@@ -450,7 +492,7 @@ export default function EmulationsPage() {
                     onChange={(e) => setFormData({ ...formData, diemTuDanhGia: parseFloat(e.target.value) || 0 })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                   />
                 </div>
                 <div>
@@ -462,7 +504,7 @@ export default function EmulationsPage() {
                     onChange={(e) => setFormData({ ...formData, diemBchDuyet: parseFloat(e.target.value) || 0 })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                   />
                 </div>
               </div>
@@ -474,7 +516,7 @@ export default function EmulationsPage() {
                     value={formData.xepLoai}
                     onChange={(e) => setFormData({ ...formData, xepLoai: e.target.value })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all cursor-pointer"
                   >
                     {ratings.map((r) => (
                       <option key={r.ma} value={r.ma}>{r.ten}</option>
@@ -489,7 +531,7 @@ export default function EmulationsPage() {
                     onChange={(e) => setFormData({ ...formData, khenThuong: e.target.value })}
                     placeholder="e.g. Bằng khen Bộ Quốc phòng, Giấy khen"
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
               </div>
@@ -501,7 +543,7 @@ export default function EmulationsPage() {
                     value={formData.trangThai}
                     onChange={(e) => setFormData({ ...formData, trangThai: Number(e.target.value) })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all cursor-pointer"
                   >
                     <option value={1}>Mới đăng ký</option>
                     <option value={2}>Đã đánh giá điểm</option>
@@ -517,21 +559,21 @@ export default function EmulationsPage() {
                           href={getDownloadUrl(formData.fileMinhChungUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                          className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-3 py-2 rounded-xl transition-all"
                         >
                           📄 Tải PDF minh chứng
                         </a>
                       </div>
                     ) : (
-                      <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                      <div className="text-slate-450 italic mt-1 font-semibold">Không có file minh chứng đính kèm</div>
                     )
                   ) : (
                     <EvidenceUpload
                       fileId={formData.fileMinhChungUrl}
-                      initialFileName={editingId ? emulations.find(e => e.id === editingId)?.evidenceFileName : undefined}
+                      initialFileName={(editingId ? emulations.find(e => e.id === editingId)?.evidenceFileName : undefined) || undefined}
                       onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
                       moduleName="Emulations"
-                      organizationId={formData.donViId || members.find(m => m.id === formData.doanVienId)?.maToCongDoan || user?.donViId || ""}
+                      organizationId={formData.donViId || (formData.doanVienId && members.find(m => m.id === formData.doanVienId)?.maToCongDoan) || user?.donViId || ""}
                     />
                   )}
                 </div>
@@ -541,14 +583,14 @@ export default function EmulationsPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
                   {isDetailView ? "Đóng" : "Hủy"}
                 </button>
                 {!isDetailView && (
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-xs transition-all active:scale-98"
                   >
                     Lưu
                   </button>

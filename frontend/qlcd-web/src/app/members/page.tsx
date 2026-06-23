@@ -5,6 +5,7 @@ import { getMembers, createMember, transferMember, deleteMemberApi, getUnionTree
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import EvidenceUpload from "@/components/EvidenceUpload";
+import { PageHeader, ActionButton } from "@/components/ui-components";
 
 // Mock data khi API trả rỗng
 const mockMembers: UnionMemberDto[] = [
@@ -62,6 +63,39 @@ function collectGroups(node: UnionUnitDto): { id: string; name: string }[] {
   return result;
 }
 
+interface MemberLanguageItem {
+  id?: string;
+  ngoaiNgu: string;
+  trinhDo: string;
+  diemSo: number;
+  ngayCap: string;
+  donViCap: string;
+  fileChungChiUrl: string;
+}
+
+interface AddMemberFormState {
+  hoTen: string;
+  ngaySinh: string;
+  gioiTinh: number;
+  soCCCD: string;
+  maNhanVien: string;
+  maToCongDoan: string;
+  ngayVaoCongDoan: string;
+  vaiTro: number;
+  loaiCanBo: number;
+  chucVu: string;
+  donViCongTac: string;
+  chucDanhChuyenMon: string;
+  trinhDoHocVan: string;
+  dangVien: boolean;
+  dienThoai: string;
+  email: string;
+  danToc: string;
+  tonGiao: string;
+  queQuan: string;
+  ngoaiNgus: MemberLanguageItem[];
+}
+
 export default function MembersList() {
   const { user } = useAuth();
   const [members, setMembers] = useState<UnionMemberDto[]>([]);
@@ -81,7 +115,7 @@ export default function MembersList() {
 
   // Add member modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState<any>({
+  const [addForm, setAddForm] = useState<AddMemberFormState>({
     hoTen: "", ngaySinh: "", gioiTinh: 1, soCCCD: "", maNhanVien: "", maToCongDoan: "",
     ngayVaoCongDoan: "", vaiTro: 1, loaiCanBo: 1, chucVu: "", donViCongTac: "",
     chucDanhChuyenMon: "", trinhDoHocVan: "", dangVien: false, dienThoai: "", email: "",
@@ -164,7 +198,7 @@ export default function MembersList() {
       const defaultId = user?.donViId && collected.some(g => g.id === user.donViId)
         ? user.donViId
         : collected[0]?.id || "";
-      setAddForm((prev: any) => ({
+      setAddForm((prev) => ({
         ...prev,
         maToCongDoan: defaultId
       }));
@@ -196,11 +230,21 @@ export default function MembersList() {
     }
   }, []);
 
-  useEffect(() => { loadMembers(); }, [loadMembers]);
-  useEffect(() => { loadGroups(); loadCatalogs(); }, [loadGroups, loadCatalogs]);
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      loadMembers();
+    });
+  }, [loadMembers]);
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      loadGroups();
+      loadCatalogs();
+    });
+  }, [loadGroups, loadCatalogs]);
 
   const handleAddLanguageRow = () => {
-    setAddForm((prev: any) => ({
+    setAddForm((prev) => ({
       ...prev,
       ngoaiNgus: [
         ...prev.ngoaiNgus,
@@ -217,16 +261,16 @@ export default function MembersList() {
   };
 
   const handleRemoveLanguageRow = (index: number) => {
-    setAddForm((prev: any) => ({
+    setAddForm((prev) => ({
       ...prev,
-      ngoaiNgus: prev.ngoaiNgus.filter((_: any, idx: number) => idx !== index)
+      ngoaiNgus: prev.ngoaiNgus.filter((_, idx: number) => idx !== index)
     }));
   };
 
-  const handleLanguageFieldChange = (index: number, field: string, val: any) => {
-    setAddForm((prev: any) => {
+  const handleLanguageFieldChange = (index: number, field: keyof MemberLanguageItem, val: string | number) => {
+    setAddForm((prev) => {
       const updated = [...prev.ngoaiNgus];
-      updated[index] = { ...updated[index], [field]: val };
+      updated[index] = { ...updated[index], [field]: val } as MemberLanguageItem;
       return { ...prev, ngoaiNgus: updated };
     });
   };
@@ -275,8 +319,9 @@ export default function MembersList() {
       setTransferReason("");
       setTransferFileMinhChungUrl("");
       await loadMembers();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Lỗi khi chuyển sinh hoạt");
+    } catch (err) {
+      const errorMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Lỗi khi chuyển sinh hoạt";
+      alert(errorMsg);
     }
   };
 
@@ -286,60 +331,56 @@ export default function MembersList() {
       await deleteMemberApi(id);
       alert("Xóa đoàn viên thành công!");
       await loadMembers();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Lỗi khi xóa đoàn viên");
+    } catch (err) {
+      const errorMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Lỗi khi xóa đoàn viên";
+      alert(errorMsg);
     }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Hồ sơ & Biến động Đoàn viên</h2>
-          <p className="text-xs text-slate-400 font-medium">
-            Quản lý, tra cứu và xử lý điều động sinh hoạt — <span className="text-emerald-400 font-semibold">{user?.vaiTro}</span>
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-950/20 active:scale-95"
-          >
-            ➕ Thêm Đoàn viên mới
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+      <PageHeader
+        title="Hồ sơ & Biến động Đoàn viên"
+        description={`Quản lý, tra cứu và xử lý điều động sinh hoạt — vai trò: ${user?.vaiTro}`}
+      >
+        <ActionButton
+          type="primary"
+          onClick={() => setShowAddModal(true)}
+        >
+          ➕ Thêm Đoàn viên mới
+        </ActionButton>
+      </PageHeader>
 
       {/* Filter panel */}
-      <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="bg-white border border-slate-150 p-5 rounded-2xl shadow-xs grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Tìm kiếm nhanh</label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Tìm kiếm nhanh</label>
           <input
             type="text" placeholder="Họ tên, mã NV, số CCCD..."
             value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all placeholder:text-slate-600"
+            className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-850 focus:outline-none focus:border-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Đơn vị Công đoàn</label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Đơn vị Công đoàn</label>
           <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+            className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
             <option value="">Tất cả Đơn vị</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Vai trò công đoàn</label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Vai trò công đoàn</label>
           <select value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+            className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
             <option value="">Tất cả vai trò</option>
             {Object.entries(vaiTroLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Trạng thái</label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Trạng thái</label>
           <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+            className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
             <option value="">Tất cả trạng thái</option>
             {Object.entries(trangThaiLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
@@ -347,15 +388,15 @@ export default function MembersList() {
       </div>
 
       {/* Members table */}
-      <div className="bg-slate-950/40 border border-slate-800 rounded-2xl backdrop-blur-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-800/80 flex justify-between items-center">
-          <span className="text-xs font-bold text-white uppercase tracking-wider">Danh sách kết quả ({totalCount})</span>
-          <span className="text-[10px] text-slate-500">Mẹo: Bấm vào tên để xem chi tiết / sửa chứng chỉ ngoại ngữ</span>
+      <div className="bg-white border border-slate-150 rounded-2xl shadow-xs overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/20">
+          <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Danh sách kết quả ({totalCount})</span>
+          <span className="text-[10px] text-slate-450 font-medium">Mẹo: Bấm vào tên để xem chi tiết / sửa chứng chỉ ngoại ngữ</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs">
+          <table className="w-full border-collapse text-left text-xs table-modern">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-medium">
+              <tr className="border-b border-slate-100 text-slate-500 font-semibold bg-slate-50/50">
                 <th className="px-6 py-3.5">Họ và Tên</th>
                 <th className="px-6 py-3.5">Mã NV / CCCD</th>
                 <th className="px-6 py-3.5">Tổ Công đoàn</th>
@@ -365,37 +406,37 @@ export default function MembersList() {
                 <th className="px-6 py-3.5 text-right">Tác vụ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {members.map(m => (
-                <tr key={m.id} className="hover:bg-slate-900/40 transition-all">
+                <tr key={m.id} className="hover:bg-slate-50/50 transition-all">
                   <td className="px-6 py-4">
-                    <Link href={`/members/${m.id}`} className="font-semibold text-emerald-400 hover:text-emerald-300 hover:underline">
+                    <Link href={`/members/detail?id=${m.id}`} className="font-semibold text-blue-600 hover:text-blue-700 hover:underline">
                       {m.hoTen}
                     </Link>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      {m.dangVien && <span className="text-red-400 mr-2">★ Đảng viên</span>}
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {m.dangVien && <span className="text-red-500 font-semibold mr-2">★ Đảng viên</span>}
                       {m.gioiTinh === 0 ? "Nữ" : "Nam"}
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div>{m.maNhanVien}</div>
-                    <div className="text-[10px] text-slate-500">{m.soCCCD}</div>
+                    <div className="font-medium text-slate-800">{m.maNhanVien}</div>
+                    <div className="text-[10px] text-slate-400">{m.soCCCD}</div>
                   </td>
-                  <td className="px-6 py-4 text-slate-400 font-semibold">{m.tenToCongDoan}</td>
+                  <td className="px-6 py-4 text-slate-500 font-semibold">{m.tenToCongDoan}</td>
                   <td className="px-6 py-4">
-                    <div>{m.chucVu || "—"}</div>
-                    <div className="text-[10px] text-slate-500">{m.donViCongTac || ""}</div>
+                    <div className="text-slate-800 font-medium">{m.chucVu || "—"}</div>
+                    <div className="text-[10px] text-slate-400">{m.donViCongTac || ""}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                    <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-medium">
                       {vaiTroLabels[m.vaiTro] || m.vaiTro}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
                       m.trangThai === "DangSinhHoat"
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                        : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                        : "bg-amber-50 text-amber-700 border-amber-100"
                     }`}>
                       {trangThaiLabels[m.trangThai] || m.trangThai}
                     </span>
@@ -403,22 +444,22 @@ export default function MembersList() {
                   <td className="px-6 py-4 text-right">
                     <div className="flex gap-2 justify-end">
                       <Link
-                        href={`/members/${m.id}?edit=true`}
-                        className="bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center"
+                        href={`/members/detail?id=${m.id}&edit=true`}
+                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-blue-100/50 transition-all flex items-center"
                       >
                         ✏️ Sửa
                       </Link>
                       {user?.phamVi !== "TOCD" && (
                         <button
                           onClick={() => { setActiveMember(m); setShowTransferModal(true); }}
-                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-slate-700 transition-all"
+                          className="bg-slate-50 hover:bg-slate-100 text-slate-700 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-slate-200 transition-all cursor-pointer"
                         >
                           🔄 Điều động
                         </button>
                       )}
                       <button
                         onClick={() => handleDeleteMember(m.id, m.hoTen)}
-                        className="bg-red-600/10 hover:bg-red-600/20 text-red-400 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-red-500/20 transition-all"
+                        className="bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-red-100/50 transition-all cursor-pointer"
                       >
                         🗑️ Xóa
                       </button>
@@ -427,7 +468,7 @@ export default function MembersList() {
                 </tr>
               ))}
               {members.length === 0 && (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-500">Không có dữ liệu đoàn viên</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">Không có dữ liệu đoàn viên</td></tr>
               )}
             </tbody>
           </table>
@@ -436,61 +477,61 @@ export default function MembersList() {
 
       {/* Add Member Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-6">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="bg-white border border-slate-150 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-6 shadow-2xl">
             <div>
-              <h3 className="text-base font-bold text-white">Thêm Đoàn viên công đoàn mới</h3>
-              <p className="text-xs text-slate-400 mt-1">Điền đầy đủ thông tin cá nhân và tổ chức công đoàn</p>
+              <h3 className="text-base font-bold text-slate-800">Thêm Đoàn viên công đoàn mới</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Điền đầy đủ thông tin cá nhân và tổ chức công đoàn</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Họ và tên *</label>
                 <input type="text" value={addForm.hoTen} onChange={e => setAddForm({ ...addForm, hoTen: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="Nguyễn Văn A" />
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="Nguyễn Văn A" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Ngày sinh *</label>
                 <input type="date" value={addForm.ngaySinh} onChange={e => setAddForm({ ...addForm, ngaySinh: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" />
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Giới tính</label>
                 <select value={addForm.gioiTinh} onChange={e => setAddForm({ ...addForm, gioiTinh: Number(e.target.value) })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value={1}>Nam</option><option value={0}>Nữ</option>
                 </select>
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Số CCCD *</label>
                 <input type="text" value={addForm.soCCCD} onChange={e => setAddForm({ ...addForm, soCCCD: e.target.value, maNhanVien: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="001095001234" required />
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="001095001234" required />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Mã nhân viên (CCCD) *</label>
                 <input type="text" value={addForm.soCCCD} disabled
-                  className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-500 cursor-not-allowed transition-all" placeholder="Tự động đồng bộ theo CCCD" />
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-400 cursor-not-allowed transition-all" placeholder="Tự động đồng bộ theo CCCD" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Đơn vị Công đoàn *</label>
                 <select value={addForm.maToCongDoan} onChange={e => setAddForm({ ...addForm, maToCongDoan: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value="">Chọn Đơn vị...</option>
                   {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                 </select>
-                <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                <p className="text-[9px] text-slate-400 mt-1 leading-relaxed">
                   * Cho phép chọn Tổ công đoàn hoặc Công đoàn bộ phận (CĐBP) / Công đoàn cơ sở (CĐCS) trực tiếp.
                 </p>
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Ngày vào CĐ *</label>
                 <input type="date" value={addForm.ngayVaoCongDoan} onChange={e => setAddForm({ ...addForm, ngayVaoCongDoan: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" />
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Vai trò CĐ</label>
                 <select value={addForm.vaiTro} onChange={e => setAddForm({ ...addForm, vaiTro: Number(e.target.value) })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value={1}>Đoàn viên</option><option value={2}>Tổ trưởng</option>
                   <option value={3}>CT CĐBP</option><option value={7}>UV BCH</option>
                 </select>
@@ -498,7 +539,7 @@ export default function MembersList() {
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Chức vụ</label>
                 <select value={addForm.chucVu} onChange={e => setAddForm({ ...addForm, chucVu: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value="">Chọn Chức vụ...</option>
                   {chucVus.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
                 </select>
@@ -506,7 +547,7 @@ export default function MembersList() {
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Đơn vị công tác</label>
                 <select value={addForm.donViCongTac} onChange={e => setAddForm({ ...addForm, donViCongTac: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value="">Chọn Đơn vị công tác...</option>
                   {donViCongTacs.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
                 </select>
@@ -514,7 +555,7 @@ export default function MembersList() {
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Chuyên môn</label>
                 <select value={addForm.chucDanhChuyenMon} onChange={e => setAddForm({ ...addForm, chucDanhChuyenMon: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value="">Chọn Chuyên môn...</option>
                   {chuyenMons.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
                 </select>
@@ -522,7 +563,7 @@ export default function MembersList() {
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Trình độ học vấn</label>
                 <select value={addForm.trinhDoHocVan} onChange={e => setAddForm({ ...addForm, trinhDoHocVan: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value="">Chọn...</option>
                   <option value="Trung cấp">Trung cấp</option><option value="Cao đẳng">Cao đẳng</option>
                   <option value="Đại học">Đại học</option><option value="Thạc sĩ">Thạc sĩ</option><option value="Tiến sĩ">Tiến sĩ</option>
@@ -531,44 +572,44 @@ export default function MembersList() {
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Điện thoại</label>
                 <input type="text" value={addForm.dienThoai} onChange={e => setAddForm({ ...addForm, dienThoai: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="0912345678" />
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="0912345678" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Email</label>
                 <input type="email" value={addForm.email} onChange={e => setAddForm({ ...addForm, email: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all" placeholder="email@bv108.vn" />
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="email@bv108.vn" />
               </div>
               <div className="flex items-end gap-4 col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" checked={addForm.dangVien} onChange={e => setAddForm({ ...addForm, dangVien: e.target.checked })}
-                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500" />
-                  <span className="text-xs text-slate-300">Là Đảng viên</span>
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20" />
+                  <span className="text-xs text-slate-600 font-medium">Là Đảng viên</span>
                 </label>
               </div>
             </div>
 
             {/* LANGUAGES SECTION */}
-            <div className="border-t border-slate-800 pt-4 space-y-3">
+            <div className="border-t border-slate-150 pt-4 space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chứng chỉ ngoại ngữ</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Chứng chỉ ngoại ngữ</label>
                 <button
                   type="button"
                   onClick={handleAddLanguageRow}
-                  className="bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                  className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100/50 px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer"
                 >
                   ➕ Thêm ngoại ngữ
                 </button>
               </div>
 
               <div className="space-y-3">
-                {addForm.ngoaiNgus.map((lang: any, index: number) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 bg-slate-950/40 p-3 rounded-lg relative border border-slate-800">
+                {addForm.ngoaiNgus.map((lang, index: number) => (
+                  <div key={index} className="grid grid-cols-3 gap-2 bg-slate-50/50 p-3 rounded-lg relative border border-slate-200/60">
                     <div>
-                      <span className="text-[9px] text-slate-500 block mb-0.5">Ngoại ngữ</span>
+                      <span className="text-[9px] text-slate-500 block mb-0.5 font-medium">Ngoại ngữ</span>
                       <select
                         value={lang.ngoaiNgu}
                         onChange={(e) => handleLanguageFieldChange(index, "ngoaiNgu", e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-300"
+                        className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-700 cursor-pointer"
                       >
                         {languagesList.map((l) => (
                           <option key={l.ma} value={l.ma}>{l.ten}</option>
@@ -577,11 +618,11 @@ export default function MembersList() {
                       </select>
                     </div>
                     <div>
-                      <span className="text-[9px] text-slate-500 block mb-0.5">Trình độ</span>
+                      <span className="text-[9px] text-slate-500 block mb-0.5 font-medium">Trình độ</span>
                       <select
                         value={lang.trinhDo}
                         onChange={(e) => handleLanguageFieldChange(index, "trinhDo", e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-300"
+                        className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-700 cursor-pointer"
                       >
                         {levelsList.map((l) => (
                           <option key={l.ma} value={l.ma}>{l.ten}</option>
@@ -591,19 +632,19 @@ export default function MembersList() {
                     </div>
                     <div className="flex gap-1 items-end">
                       <div className="flex-1">
-                        <span className="text-[9px] text-slate-500 block mb-0.5">Điểm số</span>
+                        <span className="text-[9px] text-slate-500 block mb-0.5 font-medium">Điểm số</span>
                         <input
                           type="number"
                           step="0.1"
                           value={lang.diemSo}
                           onChange={(e) => handleLanguageFieldChange(index, "diemSo", parseFloat(e.target.value) || 0)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-300"
+                          className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-700"
                         />
                       </div>
                       <button
                         type="button"
                         onClick={() => handleRemoveLanguageRow(index)}
-                        className="bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 p-1 rounded text-xs"
+                        className="bg-red-50 hover:bg-red-100 text-red-650 border border-red-100/60 p-1.5 rounded text-xs transition-all cursor-pointer"
                       >
                         🗑️
                       </button>
@@ -614,16 +655,16 @@ export default function MembersList() {
             </div>
 
             {addError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">⚠️ {addError}</div>
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">⚠️ {addError}</div>
             )}
 
-            <div className="flex gap-3 justify-end pt-2 border-t border-slate-800">
-              <button onClick={() => setShowAddModal(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-700 transition-all">Hủy bỏ</button>
+            <div className="flex gap-3 justify-end pt-3 border-t border-slate-150">
+              <button onClick={() => setShowAddModal(false)} className="bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl border border-slate-200 transition-all cursor-pointer">Hủy bỏ</button>
               <button onClick={handleAddMember} disabled={isAddSubmitting || !addForm.hoTen || !addForm.soCCCD || !addForm.maNhanVien}
-                className={`text-xs font-semibold px-5 py-2 rounded-xl transition-all ${
+                className={`text-xs font-bold px-5 py-2 rounded-xl transition-all cursor-pointer ${
                   addForm.hoTen && addForm.soCCCD && addForm.maNhanVien && !isAddSubmitting
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/20"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                 }`}>
                 {isAddSubmitting ? "Đang lưu..." : "Xác nhận thêm đoàn viên"}
               </button>
@@ -634,17 +675,17 @@ export default function MembersList() {
 
       {/* Transfer Modal */}
       {showTransferModal && activeMember && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-6">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="bg-white border border-slate-150 p-6 rounded-2xl w-full max-w-md space-y-6 shadow-2xl animate-in scale-in duration-200">
             <div>
-              <h3 className="text-base font-bold text-white">Chuyển sinh hoạt công đoàn</h3>
-              <p className="text-xs text-slate-400 mt-1">Điều động đoàn viên <span className="text-emerald-400 font-semibold">{activeMember.hoTen}</span> sang tổ CĐ mới.</p>
+              <h3 className="text-base font-bold text-slate-800">Chuyển sinh hoạt công đoàn</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Điều động đoàn viên <span className="text-blue-600 font-semibold">{activeMember.hoTen}</span> sang tổ CĐ mới.</p>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Tổ CĐ đích</label>
                 <select value={targetGroup} onChange={(e) => setTargetGroup(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all">
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
                   <option value="">Chọn tổ CĐ đích...</option>
                   {groups.filter(g => g.id !== activeMember.maToCongDoan).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                 </select>
@@ -652,7 +693,7 @@ export default function MembersList() {
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Lý do điều động</label>
                 <textarea rows={3} value={transferReason} onChange={(e) => setTransferReason(e.target.value)} placeholder="Nhập lý do điều động..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all resize-none" />
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all resize-none" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Quyết định/Minh chứng điều chuyển (PDF)</label>
@@ -666,10 +707,10 @@ export default function MembersList() {
             </div>
             <div className="flex gap-3 justify-end">
               <button onClick={() => { setShowTransferModal(false); setActiveMember(null); setTransferFileMinhChungUrl(""); }}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-700 transition-all">Hủy bỏ</button>
+                className="bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl border border-slate-200 transition-all cursor-pointer">Hủy bỏ</button>
               <button onClick={handleTransfer} disabled={!targetGroup || !transferReason}
-                className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
-                  targetGroup && transferReason ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/20" : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50"
+                className={`text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  targetGroup && transferReason ? "bg-blue-600 hover:bg-blue-700 text-white shadow-xs" : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                 }`}>Xác nhận chuyển</button>
             </div>
           </div>

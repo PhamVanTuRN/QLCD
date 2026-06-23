@@ -13,8 +13,10 @@ import {
 import { useAuth, UserProfile } from "@/lib/auth-context";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
+  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line
 } from "recharts";
+import { StatCard } from "@/components/ui-components";
+import { Users, DollarSign, Calendar, Heart, Lightbulb, Award } from "lucide-react";
 
 const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
 const THI_DUA_COLORS = ["#10B981", "#3B82F6", "#EF4444"]; // DatGiai, DatYeuCau, ChuaDat
@@ -168,7 +170,9 @@ export default function Dashboard() {
 
   // Refetch when filters change
   useEffect(() => {
-    fetchDashboardData();
+    Promise.resolve().then(() => {
+      fetchDashboardData();
+    });
   }, [fetchDashboardData]);
 
   // Generate Year Array
@@ -187,18 +191,18 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard Chỉ đạo & Thống kê</h2>
-          <p className="text-xs text-slate-400">
-            Xin chào <span className="text-emerald-400 font-semibold">{user?.hoTen}</span> — {user?.vaiTro} 
+          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Dashboard Chỉ đạo & Thống kê</h2>
+          <p className="text-xs text-slate-550 mt-1 font-medium">
+            Xin chào <span className="text-blue-600 font-semibold">{user?.hoTen}</span> — {user?.vaiTro} 
             {user?.donViTen ? ` • ${user.donViTen}` : ""} • Hệ thống thông tin thời gian thực
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button 
             onClick={fetchDashboardData}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-md shadow-emerald-950/20"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
           >
             Làm mới dữ liệu
           </button>
@@ -206,29 +210,29 @@ export default function Dashboard() {
       </div>
 
       {/* Modern Advanced Filter Bar */}
-      <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl backdrop-blur-md space-y-4">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Bộ lọc & Tìm kiếm Thống kê</h3>
+      <div className="bg-white border border-slate-150 p-5 rounded-2xl shadow-xs space-y-4">
+        <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Bộ lọc & Tìm kiếm Thống kê</h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Quick Search */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400">Tìm kiếm nhanh</label>
+            <label className="text-[11px] font-semibold text-slate-500">Tìm kiếm nhanh</label>
             <input
               type="text"
               placeholder="Tên tổ chức, mã, khối..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              className="bg-slate-950 border border-slate-800 focus:border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none w-full"
+              className="bg-slate-50/50 border border-slate-200 focus:border-blue-600 focus:bg-white rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none w-full transition-all"
             />
           </div>
 
           {/* Block Filter */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400">Khối chuyên môn</label>
+            <label className="text-[11px] font-semibold text-slate-500">Khối chuyên môn</label>
             <select
               value={selectedKhoi}
               onChange={(e) => setSelectedKhoi(e.target.value)}
-              className="bg-slate-950 border border-slate-800 focus:border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none w-full cursor-pointer"
+              className="bg-slate-50/50 border border-slate-200 focus:border-blue-600 focus:bg-white rounded-xl px-3 py-2 text-xs text-slate-850 outline-none w-full cursor-pointer transition-all"
             >
               <option value="">Tất cả các khối</option>
               {khoiList.map(k => (
@@ -239,11 +243,11 @@ export default function Dashboard() {
 
           {/* Organization Filter */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400">Tổ chức công đoàn</label>
+            <label className="text-[11px] font-semibold text-slate-500">Tổ chức công đoàn</label>
             <select
               value={selectedOrg}
               onChange={(e) => setSelectedOrg(e.target.value)}
-              className="bg-slate-950 border border-slate-800 focus:border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none w-full cursor-pointer"
+              className="bg-slate-50/50 border border-slate-200 focus:border-blue-600 focus:bg-white rounded-xl px-3 py-2 text-xs text-slate-850 outline-none w-full cursor-pointer transition-all"
             >
               {user?.phamVi !== "TOCD" && <option value="">Toàn hệ thống được quyền</option>}
               {selectableOrgs.map(org => (
@@ -256,11 +260,11 @@ export default function Dashboard() {
 
           {/* Time Filter Mode */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400">Chế độ lọc thời gian</label>
+            <label className="text-[11px] font-semibold text-slate-500">Chế độ lọc thời gian</label>
             <select
               value={timeMode}
-              onChange={(e) => setTimeMode(e.target.value as any)}
-              className="bg-slate-950 border border-slate-800 focus:border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none w-full cursor-pointer"
+              onChange={(e) => setTimeMode(e.target.value as "YEAR" | "QUARTER" | "MONTH" | "RANGE")}
+              className="bg-slate-50/50 border border-slate-200 focus:border-blue-600 focus:bg-white rounded-xl px-3 py-2 text-xs text-slate-850 outline-none w-full cursor-pointer transition-all"
             >
               <option value="YEAR">Theo Năm</option>
               <option value="QUARTER">Theo Quý</option>
@@ -271,14 +275,14 @@ export default function Dashboard() {
         </div>
 
         {/* Sub-Time Selectors depending on TimeMode */}
-        <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-800/60">
+        <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-100">
           {(timeMode === "YEAR" || timeMode === "QUARTER" || timeMode === "MONTH") && (
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-500">Năm:</span>
+              <span className="text-[11px] text-slate-400">Năm:</span>
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-700 outline-none cursor-pointer focus:border-blue-600 transition-all"
               >
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -287,11 +291,11 @@ export default function Dashboard() {
 
           {timeMode === "QUARTER" && (
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-500">Quý:</span>
+              <span className="text-[11px] text-slate-400">Quý:</span>
               <select
                 value={selectedQuarter}
                 onChange={(e) => setSelectedQuarter(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-700 outline-none cursor-pointer focus:border-blue-600 transition-all"
               >
                 <option value="1">Quý I</option>
                 <option value="2">Quý II</option>
@@ -303,11 +307,11 @@ export default function Dashboard() {
 
           {timeMode === "MONTH" && (
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-500">Tháng:</span>
+              <span className="text-[11px] text-slate-400">Tháng:</span>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-700 outline-none cursor-pointer focus:border-blue-600 transition-all"
               >
                 {Array.from({ length: 12 }, (_, i) => (i + 1).toString()).map(m => (
                   <option key={m} value={m}>Tháng {m}</option>
@@ -319,21 +323,21 @@ export default function Dashboard() {
           {timeMode === "RANGE" && (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-500">Từ ngày:</span>
+                <span className="text-[11px] text-slate-400">Từ ngày:</span>
                 <input
                   type="date"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 outline-none cursor-pointer focus:border-blue-600 transition-all"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-500">Đến ngày:</span>
+                <span className="text-[11px] text-slate-400">Đến ngày:</span>
                 <input
                   type="date"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 outline-none cursor-pointer focus:border-blue-600 transition-all"
                 />
               </div>
             </div>
@@ -343,60 +347,76 @@ export default function Dashboard() {
 
       {/* KPI Cards Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, idx) => (
-            <div key={idx} className="bg-slate-950/40 border border-slate-800/80 p-5 rounded-2xl h-28 animate-pulse flex items-center justify-center">
-              <span className="text-slate-600 text-xs font-semibold">Đang tải...</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="bg-white border border-slate-100 p-5 rounded-2xl h-24 animate-pulse flex items-center justify-center">
+              <span className="text-slate-400 text-xs font-semibold">Đang tải...</span>
             </div>
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {/* Đoàn viên */}
-          <div className="bg-slate-950/40 border border-slate-800/80 p-4.5 rounded-2xl backdrop-blur-md hover:border-slate-700/80 transition-all shadow-md">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Đoàn viên</span>
-            <div className="text-2xl font-extrabold text-white mt-1.5">{stats.tongDoanVien.toLocaleString()}</div>
-            <p className="text-[10px] text-slate-400 mt-1">
-              Nam: <span className="text-blue-400 font-semibold">{stats.doanVienNam}</span> • Nữ: <span className="text-pink-400 font-semibold">{stats.doanVienNu}</span>
-            </p>
-          </div>
+          <StatCard
+            title="Đoàn viên"
+            value={stats.tongDoanVien.toLocaleString()}
+            subtitle={
+              <span>
+                Nam: <span className="text-blue-600 font-semibold">{stats.doanVienNam}</span> • Nữ: <span className="text-pink-600 font-semibold">{stats.doanVienNu}</span>
+              </span>
+            }
+            icon={Users}
+            color="blue"
+          />
 
           {/* Tài chính */}
-          <div className="bg-slate-950/40 border border-slate-800/80 p-4.5 rounded-2xl backdrop-blur-md hover:border-slate-700/80 transition-all shadow-md">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tồn quỹ</span>
-            <div className="text-xl font-extrabold text-emerald-400 mt-2 truncate">{(stats.tonQuy || 0).toLocaleString()} đ</div>
-            <p className="text-[9px] text-slate-400 mt-1 truncate">
-              Thu: <span className="text-emerald-500">{(stats.tongThuDoanPhi || 0).toLocaleString()}</span> • Chi: <span className="text-red-400">{(stats.tongChi || 0).toLocaleString()}</span>
-            </p>
-          </div>
+          <StatCard
+            title="Tồn quỹ"
+            value={`${(stats.tonQuy || 0).toLocaleString()} đ`}
+            subtitle={
+              <span className="truncate block">
+                Thu: <span className="text-emerald-600">{(stats.tongThuDoanPhi || 0).toLocaleString()}</span> • Chi: <span className="text-red-500">{(stats.tongChi || 0).toLocaleString()}</span>
+              </span>
+            }
+            icon={DollarSign}
+            color="emerald"
+          />
 
           {/* Hoạt động */}
-          <div className="bg-slate-950/40 border border-slate-800/80 p-4.5 rounded-2xl backdrop-blur-md hover:border-slate-700/80 transition-all shadow-md">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Hoạt động CĐ</span>
-            <div className="text-2xl font-extrabold text-white mt-1.5">{stats.soHoatDong}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Sự kiện, phong trào</p>
-          </div>
+          <StatCard
+            title="Hoạt động CĐ"
+            value={stats.soHoatDong}
+            subtitle="Sự kiện, phong trào"
+            icon={Calendar}
+            color="amber"
+          />
 
           {/* Phúc lợi */}
-          <div className="bg-slate-950/40 border border-slate-800/80 p-4.5 rounded-2xl backdrop-blur-md hover:border-slate-700/80 transition-all shadow-md">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Phúc lợi & Cứu trợ</span>
-            <div className="text-2xl font-extrabold text-amber-500 mt-1.5">{stats.soLuotPhucLoi}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Lượt đoàn viên nhận hỗ trợ</p>
-          </div>
+          <StatCard
+            title="Phúc lợi & Cứu trợ"
+            value={stats.soLuotPhucLoi}
+            subtitle="Lượt đoàn viên nhận hỗ trợ"
+            icon={Heart}
+            color="pink"
+          />
 
           {/* Sáng kiến */}
-          <div className="bg-slate-950/40 border border-slate-800/80 p-4.5 rounded-2xl backdrop-blur-md hover:border-slate-700/80 transition-all shadow-md">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Sáng kiến & Đề tài</span>
-            <div className="text-2xl font-extrabold text-blue-400 mt-1.5">{stats.soSangKien}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Đề tài nghiệm thu đạt</p>
-          </div>
+          <StatCard
+            title="Sáng kiến & Đề tài"
+            value={stats.soSangKien}
+            subtitle="Đề tài nghiệm thu đạt"
+            icon={Lightbulb}
+            color="sky"
+          />
 
           {/* Thi đua */}
-          <div className="bg-slate-950/40 border border-slate-800/80 p-4.5 rounded-2xl backdrop-blur-md hover:border-slate-700/80 transition-all shadow-md">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Thi đua trực tuyến</span>
-            <div className="text-2xl font-extrabold text-purple-400 mt-1.5">{stats.soKetQuaThiDua}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Kết quả khen thưởng đánh giá</p>
-          </div>
+          <StatCard
+            title="Thi đua trực tuyến"
+            value={stats.soKetQuaThiDua}
+            subtitle="Kết quả khen thưởng đánh giá"
+            icon={Award}
+            color="purple"
+          />
         </div>
       )}
 
@@ -406,20 +426,20 @@ export default function Dashboard() {
           {/* Row 1: Organisation allocation (Bar) & Block allocation (Pie) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Chart 1: Members by organisation */}
-            <div className="lg:col-span-2 bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md">
-              <h3 className="text-xs font-bold text-white mb-6 uppercase tracking-wider">Đoàn viên theo Tổ chức Công đoàn</h3>
+            <div className="lg:col-span-2 bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
+              <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Đoàn viên theo Tổ chức Công đoàn</h3>
               <div className="h-80 flex items-center justify-center">
                 {stats.doanVienTheoCdbp.length === 0 && stats.doanVienTheoToCd.length === 0 ? (
-                  <span className="text-xs text-slate-500 italic">Không có dữ liệu đơn vị công đoàn</span>
+                  <span className="text-xs text-slate-400 italic">Không có dữ liệu đơn vị công đoàn</span>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.doanVienTheoCdbp.length > 0 ? stats.doanVienTheoCdbp.map(d => ({ name: d.name, doanVien: d.count })) : stats.doanVienTheoToCd.map(d => ({ name: d.name, doanVien: d.count }))}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                      <XAxis dataKey="name" stroke="#64748B" fontSize={10} />
-                      <YAxis stroke="#64748B" fontSize={10} />
-                      <Tooltip contentStyle={{ backgroundColor: "#0F172A", borderColor: "#334155", fontSize: 11 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                      <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
+                      <YAxis stroke="#94A3B8" fontSize={10} />
+                      <Tooltip contentStyle={{ backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: "12px", color: "#0F172A", fontSize: 11, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)" }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="doanVien" name="Đoàn viên" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="doanVien" name="Đoàn viên" fill="#2563EB" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -427,11 +447,11 @@ export default function Dashboard() {
             </div>
 
             {/* Chart 2: Members by block */}
-            <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md flex flex-col">
-              <h3 className="text-xs font-bold text-white mb-6 uppercase tracking-wider">Đoàn viên theo Khối chuyên môn</h3>
+            <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs flex flex-col">
+              <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Đoàn viên theo Khối chuyên môn</h3>
               <div className="flex-1 h-60 min-h-[240px] flex items-center justify-center">
                 {stats.doanVienTheoKhoi.length === 0 ? (
-                  <span className="text-xs text-slate-500 italic">Không có dữ liệu khối chuyên môn</span>
+                  <span className="text-xs text-slate-400 italic">Không có dữ liệu khối chuyên môn</span>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -447,7 +467,7 @@ export default function Dashboard() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => `${(value as number).toLocaleString()} đoàn viên`} />
+                      <Tooltip formatter={(value) => `${(value as number).toLocaleString()} đoàn viên`} contentStyle={{ backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: "12px", color: "#0F172A", fontSize: 11 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -457,9 +477,9 @@ export default function Dashboard() {
                   <div key={entry.name} className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      <span className="text-slate-400">{entry.name}</span>
+                      <span className="text-slate-500">{entry.name}</span>
                     </div>
-                    <span className="font-semibold text-white">{entry.count.toLocaleString()}</span>
+                    <span className="font-semibold text-slate-800">{entry.count.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -469,18 +489,18 @@ export default function Dashboard() {
           {/* Row 2: Finances over time (Double Line) & Activities by month (Bar) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Chart 3: Revenue & Expense timeline */}
-            <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md">
-              <h3 className="text-xs font-bold text-white mb-6 uppercase tracking-wider">Biến động Thu - Chi Tài chính</h3>
+            <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
+              <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Biến động Thu - Chi Tài chính</h3>
               <div className="h-80 flex items-center justify-center">
                 {stats.thuChiTheoThoiGian.length === 0 ? (
-                  <span className="text-xs text-slate-500 italic">Không có dữ liệu biến động thu chi</span>
+                  <span className="text-xs text-slate-400 italic">Không có dữ liệu biến động thu chi</span>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={stats.thuChiTheoThoiGian}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                      <XAxis dataKey="timeLabel" stroke="#64748B" fontSize={10} />
-                      <YAxis stroke="#64748B" fontSize={10} />
-                      <Tooltip formatter={(value) => `${(value as number).toLocaleString()} đ`} contentStyle={{ backgroundColor: "#0F172A", borderColor: "#334155", fontSize: 11 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                      <XAxis dataKey="timeLabel" stroke="#94A3B8" fontSize={10} />
+                      <YAxis stroke="#94A3B8" fontSize={10} />
+                      <Tooltip formatter={(value) => `${(value as number).toLocaleString()} đ`} contentStyle={{ backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: "12px", color: "#0F172A", fontSize: 11, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)" }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Line type="monotone" dataKey="thu" name="Tổng Thu" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="chi" name="Tổng Chi" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
@@ -491,18 +511,18 @@ export default function Dashboard() {
             </div>
 
             {/* Chart 4: Activities by month */}
-            <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md">
-              <h3 className="text-xs font-bold text-white mb-6 uppercase tracking-wider">Hoạt động Công đoàn theo Tháng</h3>
+            <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
+              <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Hoạt động Công đoàn theo Tháng</h3>
               <div className="h-80 flex items-center justify-center">
                 {stats.hoatDongTheoThang.length === 0 ? (
-                  <span className="text-xs text-slate-500 italic">Không có dữ liệu hoạt động công đoàn</span>
+                  <span className="text-xs text-slate-400 italic">Không có dữ liệu hoạt động công đoàn</span>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.hoatDongTheoThang}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                      <XAxis dataKey="timeLabel" stroke="#64748B" fontSize={10} />
-                      <YAxis stroke="#64748B" fontSize={10} />
-                      <Tooltip contentStyle={{ backgroundColor: "#0F172A", borderColor: "#334155", fontSize: 11 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                      <XAxis dataKey="timeLabel" stroke="#94A3B8" fontSize={10} />
+                      <YAxis stroke="#94A3B8" fontSize={10} />
+                      <Tooltip contentStyle={{ backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: "12px", color: "#0F172A", fontSize: 11, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)" }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="count" name="Số hoạt động" fill="#F59E0B" radius={[4, 4, 0, 0]} />
                     </BarChart>
@@ -513,18 +533,18 @@ export default function Dashboard() {
           </div>
 
           {/* Row 3: Emulation Stacked Bar */}
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md">
-            <h3 className="text-xs font-bold text-white mb-6 uppercase tracking-wider">Kết quả Thi đua khen thưởng theo Đơn vị</h3>
+          <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
+            <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Kết quả Thi đua khen thưởng theo Đơn vị</h3>
             <div className="h-80 flex items-center justify-center">
               {stats.thiDuaTheoToChuc.length === 0 ? (
-                <span className="text-xs text-slate-500 italic">Không có dữ liệu thi đua khen thưởng</span>
+                <span className="text-xs text-slate-400 italic">Không có dữ liệu thi đua khen thưởng</span>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.thiDuaTheoToChuc}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                    <XAxis dataKey="organizationName" stroke="#64748B" fontSize={10} />
-                    <YAxis stroke="#64748B" fontSize={10} />
-                    <Tooltip contentStyle={{ backgroundColor: "#0F172A", borderColor: "#334155", fontSize: 11 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                    <XAxis dataKey="organizationName" stroke="#94A3B8" fontSize={10} />
+                    <YAxis stroke="#94A3B8" fontSize={10} />
+                    <Tooltip contentStyle={{ backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: "12px", color: "#0F172A", fontSize: 11, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="datGiai" name="Khen thưởng / Xuất sắc" stackId="a" fill={THI_DUA_COLORS[0]} />
                     <Bar dataKey="datYeuCau" name="Đạt yêu cầu / Khá" stackId="a" fill={THI_DUA_COLORS[1]} />
@@ -539,77 +559,77 @@ export default function Dashboard() {
 
       {/* Detailed Member Structure & Criteria Statistics */}
       {!loading && (
-        <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-6">
+        <div className="bg-white border border-slate-150 p-6 rounded-2xl shadow-xs space-y-6">
           <div>
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Phân tích Chi tiết Cơ cấu Đoàn viên</h3>
-            <p className="text-[11px] text-slate-400 mt-1">Các tiêu chí phân tích hồ sơ đoàn viên áp dụng theo điều kiện lọc hiện tại</p>
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Phân tích Chi tiết Cơ cấu Đoàn viên</h3>
+            <p className="text-[11px] text-slate-500 mt-1 font-medium">Các tiêu chí phân tích hồ sơ đoàn viên áp dụng theo điều kiện lọc hiện tại</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Chất lượng đoàn viên */}
-            <div className="p-4 bg-slate-900/40 border border-slate-850 rounded-xl space-y-3 shadow-inner">
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Chất lượng đánh giá</span>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                 {stats.doanVienTheoChatLuong.length > 0 ? (
                   stats.doanVienTheoChatLuong.map(item => (
                     <div key={item.name} className="flex justify-between text-xs">
-                      <span className="text-slate-400 truncate max-w-[150px]">{item.name}:</span>
-                      <span className="font-semibold text-emerald-400">{item.count}</span>
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-emerald-650">{item.count}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-600 text-[10px] italic">Không có dữ liệu đánh giá xếp loại</div>
+                  <div className="text-slate-400 text-[10px] italic">Không có dữ liệu đánh giá xếp loại</div>
                 )}
               </div>
             </div>
 
             {/* Trình độ chuyên môn */}
-            <div className="p-4 bg-slate-900/40 border border-slate-850 rounded-xl space-y-3 shadow-inner">
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Học vấn & Học hàm học vị</span>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                 {stats.doanVienTheoTrinhDo.length > 0 ? (
                   stats.doanVienTheoTrinhDo.map(item => (
                     <div key={item.name} className="flex justify-between text-xs">
-                      <span className="text-slate-400 truncate max-w-[150px]">{item.name}:</span>
-                      <span className="font-semibold text-purple-400">{item.count}</span>
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-purple-650">{item.count}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-600 text-[10px] italic">Không có dữ liệu trình độ</div>
+                  <div className="text-slate-400 text-[10px] italic">Không có dữ liệu trình độ</div>
                 )}
               </div>
             </div>
 
             {/* Ngoại ngữ */}
-            <div className="p-4 bg-slate-900/40 border border-slate-850 rounded-xl space-y-3 shadow-inner">
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Kỹ năng ngoại ngữ</span>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                 {stats.doanVienTheoNgoaiNgu.length > 0 ? (
                   stats.doanVienTheoNgoaiNgu.map(item => (
                     <div key={item.name} className="flex justify-between text-xs">
-                      <span className="text-slate-400 truncate max-w-[150px]">{item.name}:</span>
-                      <span className="font-semibold text-sky-400">{item.count}</span>
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-sky-655">{item.count}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-600 text-[10px] italic">Không có chứng chỉ ghi nhận</div>
+                  <div className="text-slate-400 text-[10px] italic">Không có chứng chỉ ghi nhận</div>
                 )}
               </div>
             </div>
 
             {/* Chức danh / Vai trò */}
-            <div className="p-4 bg-slate-900/40 border border-slate-850 rounded-xl space-y-3 shadow-inner">
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Chức vụ trong Công đoàn</span>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                 {stats.doanVienTheoChucVu.length > 0 ? (
                   stats.doanVienTheoChucVu.map(item => (
                     <div key={item.name} className="flex justify-between text-xs">
-                      <span className="text-slate-400 truncate max-w-[150px]">{item.name}:</span>
-                      <span className="font-semibold text-amber-500">{item.count}</span>
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-amber-600">{item.count}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-600 text-[10px] italic">Không có chức danh ghi nhận</div>
+                  <div className="text-slate-400 text-[10px] italic">Không có chức danh ghi nhận</div>
                 )}
               </div>
             </div>

@@ -1,7 +1,18 @@
 import axios from 'axios';
 
+const getBaseURL = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    return `http://${host}:5023/api/v1`;
+  }
+  return 'http://localhost:5023/api/v1';
+};
+
 const api = axios.create({
-  baseURL: 'http://localhost:5023/api/v1',
+  baseURL: getBaseURL(),
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' }
 });
@@ -20,7 +31,7 @@ api.interceptors.request.use((config) => {
 });
 
 // ==================== Authentication ====================
-export async function loginApi(payload: any) {
+export async function loginApi(payload: Record<string, unknown>) {
   const res = await api.post('/auth/login', payload);
   return res.data?.data;
 }
@@ -36,7 +47,7 @@ export async function toggleAccountApi(id: string) {
   return res.data;
 }
 
-export async function resetAccountPasswordApi(id: string, payload: any) {
+export async function resetAccountPasswordApi(id: string, payload: Record<string, unknown>) {
   const res = await api.post(`/accounts/${id}/reset-password`, payload);
   return res.data;
 }
@@ -61,12 +72,12 @@ export async function getCatalogsApi(params?: { loai?: string; search?: string; 
   }
 }
 
-export async function createCatalogApi(payload: any) {
+export async function createCatalogApi(payload: Record<string, unknown>) {
   const res = await api.post('/catalogs', payload);
   return res.data;
 }
 
-export async function updateCatalogApi(id: string, payload: any) {
+export async function updateCatalogApi(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/catalogs/${id}`, payload);
   return res.data;
 }
@@ -113,7 +124,7 @@ export async function createUnionUnit(payload: CreateUnionUnitPayload) {
   return res.data;
 }
 
-export async function updateUnionUnit(id: string, payload: any) {
+export async function updateUnionUnit(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/union-units/${id}`, payload);
   return res.data;
 }
@@ -187,12 +198,12 @@ export async function getMemberDetailApi(id: string) {
   return res.data?.data ?? null;
 }
 
-export async function createMember(payload: any) {
+export async function createMember(payload: Record<string, unknown>) {
   const res = await api.post('/union-members', payload);
   return res.data;
 }
 
-export async function updateMemberApi(id: string, payload: any) {
+export async function updateMemberApi(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/union-members/${id}`, payload);
   return res.data;
 }
@@ -215,17 +226,17 @@ export async function transferMember(memberId: string, payload: TransferPayload)
 }
 
 // ==================== Union Activities ====================
-export async function getActivitiesApi(params?: any) {
+export async function getActivitiesApi(params?: Record<string, unknown>) {
   const res = await api.get('/activities', { params });
   return res.data?.data ?? [];
 }
 
-export async function createActivityApi(payload: any) {
+export async function createActivityApi(payload: Record<string, unknown>) {
   const res = await api.post('/activities', payload);
   return res.data;
 }
 
-export async function updateActivityApi(id: string, payload: any) {
+export async function updateActivityApi(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/activities/${id}`, payload);
   return res.data;
 }
@@ -236,17 +247,17 @@ export async function deleteActivityApi(id: string) {
 }
 
 // ==================== Union Finance ====================
-export async function getFinanceApi(params?: any) {
+export async function getFinanceApi(params?: Record<string, unknown>) {
   const res = await api.get('/finance', { params });
   return res.data?.data ?? [];
 }
 
-export async function createFinanceApi(payload: any) {
+export async function createFinanceApi(payload: Record<string, unknown>) {
   const res = await api.post('/finance', payload);
   return res.data;
 }
 
-export async function updateFinanceApi(id: string, payload: any) {
+export async function updateFinanceApi(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/finance/${id}`, payload);
   return res.data;
 }
@@ -257,17 +268,17 @@ export async function deleteFinanceApi(id: string) {
 }
 
 // ==================== Union Welfare ====================
-export async function getWelfareApi(params?: any) {
+export async function getWelfareApi(params?: Record<string, unknown>) {
   const res = await api.get('/welfare', { params });
   return res.data?.data ?? [];
 }
 
-export async function createWelfareApi(payload: any) {
+export async function createWelfareApi(payload: Record<string, unknown>) {
   const res = await api.post('/welfare', payload);
   return res.data;
 }
 
-export async function updateWelfareApi(id: string, payload: any) {
+export async function updateWelfareApi(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/welfare/${id}`, payload);
   return res.data;
 }
@@ -278,17 +289,17 @@ export async function deleteWelfareApi(id: string) {
 }
 
 // ==================== Emulation Initiatives ====================
-export async function getInitiativesApi(params?: any) {
+export async function getInitiativesApi(params?: Record<string, unknown>) {
   const res = await api.get('/initiatives', { params });
   return res.data?.data ?? [];
 }
 
-export async function createInitiativeApi(payload: any) {
+export async function createInitiativeApi(payload: Record<string, unknown>) {
   const res = await api.post('/initiatives', payload);
   return res.data;
 }
 
-export async function updateInitiativeApi(id: string, payload: any) {
+export async function updateInitiativeApi(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/initiatives/${id}`, payload);
   return res.data;
 }
@@ -299,17 +310,17 @@ export async function deleteInitiativeApi(id: string) {
 }
 
 // ==================== Union Emulations ====================
-export async function getEmulationsApi(params?: any) {
+export async function getEmulationsApi(params?: Record<string, unknown>) {
   const res = await api.get('/emulations', { params });
   return res.data?.data ?? [];
 }
 
-export async function createEmulationApi(payload: any) {
+export async function createEmulationApi(payload: Record<string, unknown>) {
   const res = await api.post('/emulations', payload);
   return res.data;
 }
 
-export async function updateEmulationApi(id: string, payload: any) {
+export async function updateEmulationApi(id: string, payload: Record<string, unknown>) {
   const res = await api.put(`/emulations/${id}`, payload);
   return res.data;
 }
@@ -409,14 +420,15 @@ export async function uploadEvidenceFile(file: File, moduleName: string, organiz
   return res.data?.data;
 }
 
-export async function deleteEvidenceFile(id: string): Promise<any> {
+export async function deleteEvidenceFile(id: string): Promise<unknown> {
   const res = await api.delete(`/evidence-files/${id}`);
   return res.data;
 }
 
 export function getDownloadUrl(fileId: string): string {
   const token = typeof window !== 'undefined' ? localStorage.getItem('qlcd_token') : '';
-  return `http://localhost:5023/api/v1/evidence-files/download/${fileId}?access_token=${token}`;
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5023/api/v1';
+  return `${baseUrl}/evidence-files/download/${fileId}?access_token=${token}`;
 }
 
 export async function getFlattenedUnits(): Promise<{ id: string; tenDonVi: string }[]> {

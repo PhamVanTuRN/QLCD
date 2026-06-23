@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { uploadEvidenceFile, deleteEvidenceFile } from "@/lib/api";
+import { uploadEvidenceFile, deleteEvidenceFile, getDownloadUrl } from "@/lib/api";
 
 interface EvidenceUploadProps {
   fileId?: string;
@@ -50,9 +50,10 @@ export default function EvidenceUpload({
       } else {
         setError("Tải lên thất bại. Không nhận được phản hồi hợp lệ.");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.response?.data?.message || "Lỗi tải lên tập tin.");
+      const errorMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Lỗi tải lên tập tin.";
+      setError(errorMsg);
     } finally {
       setUploading(false);
     }
@@ -66,7 +67,7 @@ export default function EvidenceUpload({
     if (fileId) {
       try {
         await deleteEvidenceFile(fileId);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Lỗi xóa file trên server:", err);
       }
     }
@@ -108,9 +109,10 @@ export default function EvidenceUpload({
       } else {
         setError("Tải lên thất bại.");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.response?.data?.message || "Lỗi tải lên tập tin.");
+      const errorMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Lỗi tải lên tập tin.";
+      setError(errorMsg);
     } finally {
       setUploading(false);
     }
@@ -120,18 +122,18 @@ export default function EvidenceUpload({
     <div className="space-y-2">
       {fileId ? (
         // File uploaded state
-        <div className="flex items-center justify-between p-3 bg-slate-950/40 border border-emerald-500/30 rounded-xl">
+        <div className="flex items-center justify-between p-3 bg-emerald-50/50 border border-emerald-200/60 rounded-xl">
           <div className="flex items-center gap-3 overflow-hidden">
             <span className="text-xl">📄</span>
             <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-slate-200 truncate" title={fileName || "Minh chứng.pdf"}>
+              <p className="text-xs font-bold text-slate-700 truncate" title={fileName || "Minh chứng.pdf"}>
                 {fileName || "Minh chứng.pdf"}
               </p>
               <a
-                href={`http://localhost:5023/api/v1/evidence-files/download/${fileId}`}
+                href={getDownloadUrl(fileId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold hover:underline transition-all"
+                className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold hover:underline transition-all"
               >
                 Tải xuống minh chứng
               </a>
@@ -140,7 +142,7 @@ export default function EvidenceUpload({
           <button
             type="button"
             onClick={handleRemove}
-            className="text-[10px] text-red-400 hover:text-red-300 font-bold px-2 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded transition-all shrink-0"
+            className="text-[10px] text-red-600 hover:text-red-700 font-bold px-2 py-1 bg-red-50 hover:bg-red-100/80 border border-red-200/60 rounded transition-all shrink-0"
           >
             Xóa
           </button>
@@ -151,7 +153,7 @@ export default function EvidenceUpload({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-slate-800 hover:border-slate-700 hover:bg-slate-950/20 rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1"
+          className="border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/20 bg-slate-50/50 rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1"
         >
           <input
             type="file"
@@ -162,21 +164,21 @@ export default function EvidenceUpload({
           />
           {uploading ? (
             <>
-              <span className="inline-block w-5 h-5 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin"></span>
-              <p className="text-[10px] text-slate-400 font-medium mt-1">Đang tải lên tập tin PDF...</p>
+              <span className="inline-block w-5 h-5 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin"></span>
+              <p className="text-[10px] text-slate-400 font-bold mt-1">Đang tải lên tập tin PDF...</p>
             </>
           ) : (
             <>
-              <span className="text-2xl">📤</span>
-              <p className="text-xs text-slate-300 font-semibold">Tải lên file minh chứng PDF</p>
-              <p className="text-[10px] text-slate-500">Kéo thả file PDF hoặc click để chọn (tối đa 20MB)</p>
+              <span className="text-xl">📤</span>
+              <p className="text-xs text-slate-655 font-bold">Tải lên file minh chứng PDF</p>
+              <p className="text-[10px] text-slate-400 font-semibold">Kéo thả file PDF hoặc click để chọn (tối đa 20MB)</p>
             </>
           )}
         </div>
       )}
 
       {error && (
-        <p className="text-[10px] text-red-400 font-bold flex items-center gap-1">
+        <p className="text-[10px] text-red-600 font-bold flex items-center gap-1">
           <span>⚠️</span> {error}
         </p>
       )}

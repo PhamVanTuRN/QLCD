@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, UnionUnitDto, getKhoiChuyenMonApi, KhoiChuyenMonDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { PageHeader } from "@/components/ui-components";
 
 // Mock data nếu API trả rỗng
 const mockTree: UnionUnitDto = {
@@ -64,7 +65,11 @@ export default function OrganizationTree() {
     }
   }, []);
 
-  useEffect(() => { loadTree(); }, [loadTree]);
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      loadTree();
+    });
+  }, [loadTree]);
 
   useEffect(() => {
     const loadKhoiList = async () => {
@@ -98,8 +103,9 @@ export default function OrganizationTree() {
       const updatedNode = { ...selectedNode, tenDonVi: editName.trim(), maKhoi: editKhoi || null, trangThai: Number(editStatus) };
       setSelectedNode(updatedNode);
       await loadTree();
-    } catch (err: any) {
-      setEditError(err.response?.data?.message || "Lỗi khi cập nhật tổ chức");
+    } catch (err) {
+      const errorMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Lỗi khi cập nhật tổ chức";
+      setEditError(errorMsg);
     } finally {
       setIsEditSubmitting(false);
     }
@@ -112,8 +118,9 @@ export default function OrganizationTree() {
       await deleteUnionUnit(selectedNode.id);
       setSelectedNode(null);
       await loadTree();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Lỗi khi xóa tổ chức");
+    } catch (err) {
+      const errorMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Lỗi khi xóa tổ chức";
+      alert(errorMsg);
     }
   };
 
@@ -123,10 +130,10 @@ export default function OrganizationTree() {
 
   const getBadgeColor = (type: string) => {
     switch (type) {
-      case "CDCS": return "bg-red-500/10 text-red-400 border-red-500/20";
-      case "CDBP": return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-      case "TO_CD_TRUC_THUOC_CDCS": return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-      default: return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+      case "CDCS": return "bg-red-50 text-red-600 border-red-100/60";
+      case "CDBP": return "bg-blue-50 text-blue-600 border-blue-100/60";
+      case "TO_CD_TRUC_THUOC_CDCS": return "bg-amber-50 text-amber-600 border-amber-100/60";
+      default: return "bg-emerald-50 text-emerald-600 border-emerald-100/60";
     }
   };
 
@@ -176,32 +183,32 @@ export default function OrganizationTree() {
     const isSelected = selectedNode?.id === node.id;
 
     return (
-      <div key={node.id} className="ml-6 border-l border-slate-800/80 pl-4 py-1.5 space-y-1.5">
+      <div key={node.id} className="ml-6 border-l border-slate-200 pl-4 py-1.5 space-y-1.5">
         <div
           onClick={() => setSelectedNode(node)}
           className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
             isSelected
-              ? "bg-slate-800/80 border-emerald-500 shadow-md shadow-emerald-950/20"
-              : "bg-slate-950/20 border-slate-800/60 hover:bg-slate-900 hover:border-slate-700"
+              ? "bg-blue-50 border-blue-300 shadow-xs"
+              : "bg-white border-slate-150 hover:bg-slate-50 hover:border-slate-350"
           }`}
         >
           <div className="flex items-center gap-3">
             {hasChildren && (
               <button
                 onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
-                className="w-5 h-5 rounded-md hover:bg-slate-800 text-slate-400 flex items-center justify-center text-xs"
+                className="w-5 h-5 rounded-md hover:bg-slate-100 text-slate-550 flex items-center justify-center text-xs transition-all cursor-pointer"
               >
                 {isExpanded ? "▼" : "▶"}
               </button>
             )}
             {!hasChildren && <span className="w-5" />}
-            <span className="font-semibold text-sm text-slate-100">{node.tenDonVi}</span>
+            <span className={`font-semibold text-sm ${isSelected ? "text-blue-600" : "text-slate-800"}`}>{node.tenDonVi}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getBadgeColor(node.loaiToChuc)}`}>
               Lv.{node.level} • {loaiToChucMap[node.loaiToChuc] || node.loaiToChuc}
             </span>
-            <span className="text-xs text-slate-400 font-medium">({node.soDoanVien} ĐV)</span>
+            <span className="text-xs text-slate-500 font-semibold">({node.soDoanVien} ĐV)</span>
           </div>
         </div>
         {hasChildren && isExpanded && (
@@ -213,140 +220,138 @@ export default function OrganizationTree() {
     );
   };
 
-  if (!tree) return <div className="text-slate-400 text-sm p-8">Đang tải cây tổ chức...</div>;
+  if (!tree) return <div className="text-slate-500 text-xs p-8 font-medium">Đang tải cây tổ chức...</div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Sơ đồ Cây Tổ chức Công đoàn</h2>
-          <p className="text-xs text-slate-400">Quản lý và thiết lập phân cấp 3 cấp theo quy chế BV TWQĐ 108 — Đăng nhập: <span className="text-emerald-400">{user?.vaiTro}</span></p>
-        </div>
-      </div>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+      <PageHeader
+        title="Sơ đồ Cây Tổ chức Công đoàn"
+        description={`Quản lý và thiết lập phân cấp 3 cấp theo quy chế BV TWQĐ 108 — vai trò: ${user?.vaiTro}`}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Tree */}
-        <div className="lg:col-span-2 bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800/60">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Cấu trúc phân cấp</span>
+        <div className="lg:col-span-2 bg-white border border-slate-150 p-6 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Cấu trúc phân cấp</span>
             <div className="flex gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 my-auto" />
-              <span className="text-[10px] text-slate-400">Tổ CĐ luôn là cấp cuối cùng</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600 my-auto" />
+              <span className="text-[10px] text-slate-500 font-semibold">Tổ CĐ luôn là cấp cuối cùng</span>
             </div>
           </div>
           <div className="-ml-6">{renderNode(tree)}</div>
         </div>
 
         {/* Right Detail Panel */}
-        <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-6">
-          {selectedNode && (
+        <div className="bg-white border border-slate-150 p-6 rounded-2xl shadow-xs space-y-6">
+          {selectedNode ? (
             <>
               <div>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Chi tiết Đơn vị được chọn</span>
-                <h3 className="text-lg font-bold text-white mt-1">{selectedNode.tenDonVi}</h3>
-                <p className="text-xs text-slate-400 mt-1">Cấp: Level {selectedNode.level} — {loaiToChucMap[selectedNode.loaiToChuc]}</p>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Chi tiết Đơn vị được chọn</span>
+                <h3 className="text-base font-bold text-slate-800 mt-1">{selectedNode.tenDonVi}</h3>
+                <p className="text-xs text-slate-500 mt-1 font-medium">Cấp: Level {selectedNode.level} — {loaiToChucMap[selectedNode.loaiToChuc]}</p>
               </div>
 
               <div className="space-y-3">
-                <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between text-xs">
-                  <span className="text-slate-400">Số lượng đoàn viên:</span>
-                  <span className="font-semibold text-emerald-400">{selectedNode.soDoanVien} (Đếm tự động)</span>
+                <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-150 flex justify-between text-xs items-center">
+                  <span className="text-slate-500 font-medium">Số lượng đoàn viên:</span>
+                  <span className="font-semibold text-blue-600">{selectedNode.soDoanVien} (Đếm tự động)</span>
                 </div>
                 
                 {/* Thống kê chi tiết đoàn viên */}
-                <div className="p-3.5 bg-slate-950/40 rounded-xl border border-slate-800 text-xs space-y-2.5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Cơ cấu đoàn viên (Đệ quy)</span>
+                <div className="p-3.5 bg-slate-50/20 rounded-xl border border-slate-150 text-xs space-y-2.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cơ cấu đoàn viên (Đệ quy)</span>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
-                    <div className="flex justify-between border-r border-slate-800/80 pr-3">
-                      <span className="text-slate-400">Nam:</span>
-                      <span className="font-semibold text-blue-400">{selectedNode.soDoanVienNam ?? 0}</span>
+                    <div className="flex justify-between border-r border-slate-150 pr-3">
+                      <span className="text-slate-500">Nam:</span>
+                      <span className="font-semibold text-blue-600">{selectedNode.soDoanVienNam ?? 0}</span>
                     </div>
                     <div className="flex justify-between pl-1">
-                      <span className="text-slate-400">Nữ:</span>
-                      <span className="font-semibold text-pink-400">{selectedNode.soDoanVienNu ?? 0}</span>
+                      <span className="text-slate-500">Nữ:</span>
+                      <span className="font-semibold text-pink-600">{selectedNode.soDoanVienNu ?? 0}</span>
                     </div>
-                    <div className="flex justify-between border-r border-slate-800/80 pr-3">
-                      <span className="text-slate-400">Đảng viên:</span>
-                      <span className="font-semibold text-red-400">★ {selectedNode.soDoanVienDangVien ?? 0}</span>
+                    <div className="flex justify-between border-r border-slate-150 pr-3">
+                      <span className="text-slate-500">Đảng viên:</span>
+                      <span className="font-semibold text-red-500">★ {selectedNode.soDoanVienDangVien ?? 0}</span>
                     </div>
                     <div className="flex justify-between pl-1">
-                      <span className="text-slate-400">Ngoại ngữ:</span>
-                      <span className="font-semibold text-emerald-400">🌐 {selectedNode.soCoNgoaiNgu ?? 0}</span>
+                      <span className="text-slate-500">Ngoại ngữ:</span>
+                      <span className="font-semibold text-teal-600">🌐 {selectedNode.soCoNgoaiNgu ?? 0}</span>
                     </div>
-                    <div className="col-span-2 flex justify-between pt-1.5 border-t border-slate-800/80">
-                      <span className="text-slate-400">Đại học trở lên:</span>
-                      <span className="font-semibold text-purple-400">{selectedNode.soTrinhDoDaiHoc ?? 0}</span>
+                    <div className="col-span-2 flex justify-between pt-1.5 border-t border-slate-150">
+                      <span className="text-slate-500">Đại học trở lên:</span>
+                      <span className="font-semibold text-purple-650">{selectedNode.soTrinhDoDaiHoc ?? 0}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between text-xs">
-                  <span className="text-slate-400">Khối chuyên môn:</span>
-                  <span className="font-semibold text-emerald-400">
+                <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-150 flex justify-between text-xs items-center">
+                  <span className="text-slate-500 font-medium">Khối chuyên môn:</span>
+                  <span className="font-semibold text-blue-650">
                     {khoiList.find(k => k.id === selectedNode.maKhoi)?.tenKhoi || "—"}
                   </span>
                 </div>
 
-                <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between text-xs">
-                  <span className="text-slate-400">Đơn vị con:</span>
-                  <span className="font-semibold text-slate-200">{selectedNode.children?.length || 0} đơn vị</span>
+                <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-150 flex justify-between text-xs items-center">
+                  <span className="text-slate-500 font-medium">Đơn vị con:</span>
+                  <span className="font-semibold text-slate-700">{selectedNode.children?.length || 0} đơn vị</span>
                 </div>
               </div>
 
               {/* Add child actions */}
-              <div className="pt-4 border-t border-slate-800">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-3">Tác vụ Quản lý con</span>
+              <div className="pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Tác vụ Quản lý con</span>
 
                 {isLeafNode(selectedNode.loaiToChuc) ? (
                   <div className="space-y-3">
-                    <button disabled className="w-full bg-slate-800 text-slate-500 cursor-not-allowed py-2.5 rounded-xl text-xs font-semibold border border-slate-700/50">
+                    <button disabled className="w-full bg-slate-50 text-slate-400 cursor-not-allowed py-2.5 rounded-xl text-xs font-bold border border-slate-150">
                       🔒 Thêm Tổ chức con (Đã khóa)
                     </button>
-                    <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-lg text-[10px] text-red-400 leading-relaxed">
+                    <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-650 leading-relaxed font-semibold">
                       ⚠️ Tổ CĐ là đơn vị cuối cùng. Không cho phép tạo cấp con dưới Tổ CĐ.
                     </div>
                   </div>
                 ) : selectedNode.loaiToChuc === "CDCS" ? (
                   <div className="space-y-2">
-                    <button onClick={() => openAddModal("CDBP")} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-semibold transition-all">
+                    <button onClick={() => openAddModal("CDBP")} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
                       ➕ Thêm Công đoàn Bộ phận (Level 2)
                     </button>
-                    <button onClick={() => openAddModal("TOCD_TRUC_THUOC")} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-xl text-xs font-semibold transition-all border border-slate-700">
+                    <button onClick={() => openAddModal("TOCD_TRUC_THUOC")} className="w-full bg-white hover:bg-slate-50 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200 shadow-xs cursor-pointer">
                       ➕ Thêm Tổ CĐ trực thuộc (Level 2)
                     </button>
                   </div>
                 ) : selectedNode.loaiToChuc === "CDBP" ? (
-                  <button onClick={() => openAddModal("TOCD_CDBP")} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-semibold transition-all">
+                  <button onClick={() => openAddModal("TOCD_CDBP")} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
                     ➕ Thêm Tổ CĐ thuộc CĐBP (Level 3)
                   </button>
                 ) : null}
               </div>
 
               {/* Status */}
-              <div className="pt-4 border-t border-slate-800/80">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Trạng thái</span>
-                <span className="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
+              <div className="pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Trạng thái</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-250">
                   Đang hoạt động
                 </span>
               </div>
 
               {/* Unit Actions */}
-              <div className="pt-4 border-t border-slate-800">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-3">Tác vụ Đơn vị</span>
+              <div className="pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Tác vụ Đơn vị</span>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => openEditModal(selectedNode)}
-                    className="bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 py-2.5 rounded-xl text-xs font-semibold transition-all text-center"
+                    className="bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-600 py-2.5 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
                   >
                     ✏️ Sửa Đơn vị
                   </button>
                   <button
                     onClick={handleDeleteUnit}
                     disabled={selectedNode.loaiToChuc === "CDCS"}
-                    className={`py-2.5 rounded-xl text-xs font-semibold border transition-all text-center ${
+                    className={`py-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
                       selectedNode.loaiToChuc === "CDCS"
-                        ? "bg-slate-800 text-slate-500 border-slate-700/50 cursor-not-allowed"
-                        : "bg-red-600/10 hover:bg-red-600/20 border-red-500/20 text-red-400"
+                        ? "bg-slate-50 text-slate-400 border-slate-150 cursor-not-allowed"
+                        : "bg-red-50 hover:bg-red-100 border-red-100 text-red-600"
                     }`}
                   >
                     🗑️ Xóa Đơn vị
@@ -354,25 +359,27 @@ export default function OrganizationTree() {
                 </div>
               </div>
             </>
+          ) : (
+            <div className="text-center py-8 text-slate-450 italic font-medium">Bấm chọn một đơn vị để xem chi tiết</div>
           )}
         </div>
       </div>
 
       {/* Add Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-6">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="bg-white border border-slate-150 p-6 rounded-2xl w-full max-w-md space-y-6 shadow-2xl animate-in scale-in duration-200">
             <div>
-              <h3 className="text-base font-bold text-white">Thêm tổ chức công đoàn mới</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Tạo {addType === "CDBP" ? "Công đoàn Bộ phận" : "Tổ Công đoàn"} trực thuộc <span className="text-emerald-400">{selectedNode?.tenDonVi}</span>
+              <h3 className="text-base font-bold text-slate-800">Thêm tổ chức công đoàn mới</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tạo {addType === "CDBP" ? "Công đoàn Bộ phận" : "Tổ Công đoàn"} trực thuộc <span className="text-blue-600 font-semibold">{selectedNode?.tenDonVi}</span>
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Loại tổ chức</label>
-                <div className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-emerald-400 font-medium">
+                <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-xs text-blue-600 font-bold">
                   {addType === "CDBP" ? "Công đoàn Bộ phận (CĐBP)" : addType === "TOCD_TRUC_THUOC" ? "Tổ CĐ trực thuộc CĐCS" : "Tổ CĐ thuộc CĐBP"}
                 </div>
               </div>
@@ -383,7 +390,7 @@ export default function OrganizationTree() {
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
                   placeholder="VD: Công đoàn bộ phận Khối Gây mê Hồi sức"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600/20 transition-all"
                 />
               </div>
               <div>
@@ -391,7 +398,7 @@ export default function OrganizationTree() {
                 <select
                   value={addKhoi}
                   onChange={(e) => setAddKhoi(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
                 >
                   <option value="">Chọn Khối chuyên môn...</option>
                   {khoiList.map((k) => (
@@ -402,22 +409,22 @@ export default function OrganizationTree() {
             </div>
 
             {addError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">
                 ⚠️ {addError}
               </div>
             )}
 
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowAddModal(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-700 transition-all">
+              <button onClick={() => setShowAddModal(false)} className="bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl border border-slate-200 transition-all cursor-pointer">
                 Hủy bỏ
               </button>
               <button
                 onClick={handleAddChild}
                 disabled={!addName.trim() || isSubmitting}
-                className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
+                className={`text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
                   addName.trim() && !isSubmitting
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/20"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                 }`}
               >
                 {isSubmitting ? "Đang tạo..." : "Xác nhận tạo"}
@@ -429,12 +436,12 @@ export default function OrganizationTree() {
 
       {/* Edit Modal */}
       {showEditModal && selectedNode && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-6">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="bg-white border border-slate-150 p-6 rounded-2xl w-full max-w-md space-y-6 shadow-2xl animate-in scale-in duration-200">
             <div>
-              <h3 className="text-base font-bold text-white">Chỉnh sửa thông tin tổ chức</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Cập nhật thông tin cho đơn vị <span className="text-emerald-400 font-semibold">{selectedNode.tenDonVi}</span>
+              <h3 className="text-base font-bold text-slate-850">Chỉnh sửa thông tin tổ chức</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Cập nhật thông tin cho đơn vị <span className="text-blue-600 font-semibold">{selectedNode.tenDonVi}</span>
               </p>
             </div>
 
@@ -446,7 +453,7 @@ export default function OrganizationTree() {
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="Nhập tên đơn vị..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600/20 transition-all"
                 />
               </div>
               <div>
@@ -454,7 +461,7 @@ export default function OrganizationTree() {
                 <select
                   value={editKhoi}
                   onChange={(e) => setEditKhoi(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
                 >
                   <option value="">Chọn Khối chuyên môn...</option>
                   {khoiList.map((k) => (
@@ -468,7 +475,7 @@ export default function OrganizationTree() {
                 <select
                   value={editStatus}
                   onChange={(e) => setEditStatus(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
                 >
                   <option value={1}>Đang hoạt động</option>
                   <option value={0}>Ngừng hoạt động</option>
@@ -477,7 +484,7 @@ export default function OrganizationTree() {
             </div>
 
             {editError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">
                 ⚠️ {editError}
               </div>
             )}
@@ -485,17 +492,17 @@ export default function OrganizationTree() {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowEditModal(false)}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-700 transition-all"
+                className="bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl border border-slate-200 transition-all cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 onClick={handleEditUnit}
                 disabled={!editName.trim() || isEditSubmitting}
-                className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
+                className={`text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
                   editName.trim() && !isEditSubmitting
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/20"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                 }`}
               >
                 {isEditSubmitting ? "Đang lưu..." : "Xác nhận lưu"}

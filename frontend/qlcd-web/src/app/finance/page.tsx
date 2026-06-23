@@ -1,15 +1,43 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getFinanceApi, createFinanceApi, updateFinanceApi, deleteFinanceApi, getCatalogsApi, CatalogDto, getMembers, getFlattenedUnits, getDownloadUrl } from "@/lib/api";
+import { getFinanceApi, createFinanceApi, updateFinanceApi, deleteFinanceApi, getCatalogsApi, CatalogDto, getMembers, getFlattenedUnits, getDownloadUrl, UnionMemberDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import EvidenceUpload from "@/components/EvidenceUpload";
+import { PageHeader, StatCard } from "@/components/ui-components";
+import { Plus, Search, Wallet, ArrowDownRight, ArrowUpRight, Trash2, Edit3, Eye } from "lucide-react";
+
+interface TransactionItem {
+  id: string;
+  loaiGiaoDich: string;
+  soTien: number;
+  ngayGiaoDich: string;
+  nguoiGiaoDich: string;
+  doanVienId?: string | null;
+  hoTenDoanVien?: string | null;
+  maNhanVien?: string | null;
+  thangNam?: string | null;
+  ghiChu?: string | null;
+  fileMinhChungUrl?: string | null;
+  evidenceFileId?: string | null;
+  evidenceFileName?: string | null;
+  donViId: string;
+  tenDonVi?: string | null;
+}
+
+interface ApiError {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
 
 export default function FinancePage() {
   const { user } = useAuth();
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [types, setTypes] = useState<CatalogDto[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<UnionMemberDto[]>([]);
   const [units, setUnits] = useState<{ id: string; tenDonVi: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -39,7 +67,7 @@ export default function FinancePage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const list = await getFinanceApi({ search: search || undefined });
+      const list = await getFinanceApi({ search: search || undefined }) as TransactionItem[];
       setTransactions(list);
       
       const cats = await getCatalogsApi({ loai: "LoaiThuChi", activeOnly: true });
@@ -64,7 +92,11 @@ export default function FinancePage() {
   };
 
   useEffect(() => {
-    loadData();
+    const timer = setTimeout(() => {
+      loadData();
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const handleOpenCreate = () => {
@@ -84,7 +116,7 @@ export default function FinancePage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (item: any) => {
+  const handleOpenEdit = (item: TransactionItem) => {
     setEditingId(item.id);
     setIsDetailView(false);
     setFormData({
@@ -101,7 +133,7 @@ export default function FinancePage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenDetail = (item: any) => {
+  const handleOpenDetail = (item: TransactionItem) => {
     setEditingId(item.id);
     setIsDetailView(true);
     setFormData({
@@ -124,9 +156,10 @@ export default function FinancePage() {
       await deleteFinanceApi(id);
       showAlert("success", "Xóa giao dịch thành công");
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Lỗi xóa giao dịch");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Lỗi xóa giao dịch");
     }
   };
 
@@ -154,9 +187,10 @@ export default function FinancePage() {
       }
       setIsModalOpen(false);
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
     }
   };
 
@@ -180,163 +214,174 @@ export default function FinancePage() {
   const balance = totalReceipt - totalExpense;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Alert */}
       {alert && (
         <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-bounce ${
+          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-in slide-in-from-top duration-300 ${
             alert.type === "success"
-              ? "bg-emerald-950 border-emerald-800 text-emerald-400"
-              : "bg-red-950 border-red-900 text-red-400"
+              ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+              : "bg-red-50 border-red-250 text-red-800"
           }`}
         >
-          <span>{alert.type === "success" ? "✅" : "⚠️"}</span>
-          <span className="text-sm font-semibold">{alert.message}</span>
+          <span className="text-base">{alert.type === "success" ? "✅" : "⚠️"}</span>
+          <span className="text-xs font-bold">{alert.message}</span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Tài chính & Thu nộp Đoàn phí</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Theo dõi dòng tiền thu chi, quản lý nộp đoàn phí định kỳ của đoàn viên công đoàn
-          </p>
-        </div>
+      <PageHeader 
+        title="Tài chính & Thu nộp Đoàn phí" 
+        description="Theo dõi dòng tiền thu chi, quản lý nộp đoàn phí định kỳ của đoàn viên công đoàn"
+      >
         <button
           onClick={handleOpenCreate}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-2 active:scale-95"
+          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2 active:scale-98"
         >
-          ➕ Ghi nhận Giao dịch
+          <Plus className="w-4 h-4 shrink-0" /> Ghi nhận Giao dịch
         </button>
-      </div>
+      </PageHeader>
 
       {/* Financial Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tổng Thu quỹ</span>
-          <div className="text-2xl font-extrabold text-emerald-400 mt-2">{totalReceipt.toLocaleString()} đ</div>
-          <p className="text-[10px] text-slate-400 mt-1">Đoàn phí & Kinh phí cấp</p>
-        </div>
-        <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tổng Chi quỹ</span>
-          <div className="text-2xl font-extrabold text-red-400 mt-2">{totalExpense.toLocaleString()} đ</div>
-          <p className="text-[10px] text-slate-400 mt-1">Chi hoạt động phong trào & phúc lợi</p>
-        </div>
-        <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tồn quỹ hiện tại</span>
-          <div className="text-2xl font-extrabold text-white mt-2">{balance.toLocaleString()} đ</div>
-          <p className="text-[10px] text-slate-400 mt-1">Số dư hoạt động khả dụng</p>
-        </div>
+        <StatCard
+          title="Tổng Thu quỹ"
+          value={`${totalReceipt.toLocaleString()} đ`}
+          subtitle="Đoàn phí & Kinh phí cấp"
+          icon={ArrowDownRight}
+          color="emerald"
+        />
+        <StatCard
+          title="Tổng Chi quỹ"
+          value={`${totalExpense.toLocaleString()} đ`}
+          subtitle="Chi hoạt động phong trào & phúc lợi"
+          icon={ArrowUpRight}
+          color="red"
+        />
+        <StatCard
+          title="Tồn quỹ hiện tại"
+          value={`${balance.toLocaleString()} đ`}
+          subtitle="Số dư hoạt động khả dụng"
+          icon={Wallet}
+          color="blue"
+        />
       </div>
 
       {/* Filter bar */}
-      <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <input
-          type="text"
-          placeholder="Tìm kiếm giao dịch, người nộp..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
-        />
-        <div className="text-xs text-slate-400">
-          Tổng số giao dịch: <span className="text-emerald-400 font-bold">{transactions.length}</span>
+      <div className="bg-white border border-slate-150 p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:max-w-md">
+          <input
+            type="text"
+            placeholder="Tìm kiếm giao dịch, người nộp..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+          />
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 shrink-0" />
+        </div>
+        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+          Tổng số giao dịch: <span className="text-blue-600">{transactions.length}</span>
         </div>
       </div>
 
       {/* Transaction table */}
-      <div className="bg-slate-950/20 border border-slate-800 rounded-2xl p-6">
+      <div className="bg-white border border-slate-150 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full border-collapse text-left text-xs table-modern">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold">
-                <th className="py-3 px-4">Loại giao dịch</th>
-                <th className="py-3 px-4">Ngày giao dịch</th>
-                <th className="py-3 px-4">Người giao dịch / Đoàn viên</th>
-                <th className="py-3 px-4 text-center">Tháng/Năm</th>
-                <th className="py-3 px-4 text-right">Số tiền</th>
-                <th className="py-3 px-4">Ghi chú</th>
-                <th className="py-3 px-4">Đơn vị quản lý</th>
-                <th className="py-3 px-4 text-right">Thao tác</th>
+              <tr className="bg-slate-50/50 text-slate-500 font-semibold border-b border-slate-100 uppercase tracking-wider">
+                <th className="px-6 py-3.5">Loại giao dịch</th>
+                <th className="px-6 py-3.5">Ngày giao dịch</th>
+                <th className="px-6 py-3.5">Người giao dịch / Đoàn viên</th>
+                <th className="px-6 py-3.5 text-center">Tháng/Năm</th>
+                <th className="px-6 py-3.5 text-right">Số tiền</th>
+                <th className="px-6 py-3.5">Ghi chú</th>
+                <th className="px-6 py-3.5">Đơn vị quản lý</th>
+                <th className="px-6 py-3.5 text-center w-40">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500">
-                    <span className="inline-block w-4 h-4 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin mr-2" />
-                    Đang tải danh sách tài chính...
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <span className="inline-block w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-slate-400">Đang tải danh sách tài chính...</span>
+                    </div>
                   </td>
                 </tr>
               ) : transactions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500">
-                    Chưa có phát sinh tài chính nào được ghi nhận.
+                  <td colSpan={8} className="py-12 text-center text-slate-400 italic">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <span className="text-lg">📂</span>
+                      <span>Chưa có phát sinh tài chính nào được ghi nhận.</span>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 transactions.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
-                    <td className="py-3 px-4">
+                  <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
+                    <td className="px-6 py-4">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        className={`inline-flex px-2 py-0.5 rounded-lg text-[10px] font-semibold border ${
                           isReceipt(item.loaiGiaoDich)
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : "bg-red-500/10 text-red-400 border-red-500/20"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                            : "bg-red-50 text-red-700 border-red-200/60"
                         }`}
                       >
                         {getTypeName(item.loaiGiaoDich)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-mono">
+                    <td className="px-6 py-4 font-mono font-medium text-slate-500">
                       {new Date(item.ngayGiaoDich).toLocaleDateString("vi-VN")}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-white">{item.nguoiGiaoDich}</div>
+                        <div className="font-bold text-slate-800">{item.nguoiGiaoDich}</div>
                         {item.evidenceFileId && (
                           <a
                             href={getDownloadUrl(item.evidenceFileId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            className="inline-flex items-center gap-1 text-[9px] text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded transition-all"
                             title="Tải file minh chứng"
                           >
                             📄 PDF
                           </a>
                         )}
                       </div>
-                      {item.hoTenDoanVien && <div className="text-[10px] text-slate-500">ĐV liên kết: {item.hoTenDoanVien}</div>}
+                      {item.hoTenDoanVien && <div className="text-[10px] text-slate-400 font-medium mt-0.5">ĐV liên kết: {item.hoTenDoanVien}</div>}
                     </td>
-                    <td className="py-3 px-4 text-center font-mono">{item.thangNam || "—"}</td>
+                    <td className="px-6 py-4 text-center font-mono font-medium text-slate-500">{item.thangNam || "—"}</td>
                     <td
-                      className={`py-3 px-4 text-right font-mono font-bold ${
-                        isReceipt(item.loaiGiaoDich) ? "text-emerald-400" : "text-red-400"
+                      className={`px-6 py-4 text-right font-mono font-bold ${
+                        isReceipt(item.loaiGiaoDich) ? "text-emerald-600" : "text-red-650"
                       }`}
                     >
                       {isReceipt(item.loaiGiaoDich) ? "+" : "-"}{(item.soTien || 0).toLocaleString()} đ
                     </td>
-                    <td className="py-3 px-4 text-slate-400 truncate max-w-[150px]">{item.ghiChu || "—"}</td>
-                    <td className="py-3 px-4 text-slate-400">{item.tenDonVi || "—"}</td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-6 py-4 text-slate-500 truncate max-w-[180px] font-medium">{item.ghiChu || "—"}</td>
+                    <td className="px-6 py-4 text-slate-500 font-medium">{item.tenDonVi || "—"}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleOpenDetail(item)}
-                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Chi tiết
+                          <Eye className="w-3.5 h-3.5 shrink-0" /> Xem
                         </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
-                          className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-blue-55 hover:bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Sửa
+                          <Edit3 className="w-3.5 h-3.5 shrink-0" /> Sửa
                         </button>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-red-50 hover:bg-red-100 text-red-750 border border-red-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Xóa
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" /> Xóa
                         </button>
                       </div>
                     </td>
@@ -350,14 +395,14 @@ export default function FinancePage() {
 
       {/* Modal Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={() => setIsModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-md bg-white border border-slate-150 rounded-2xl shadow-xl p-6 space-y-5 animate-in scale-in duration-200">
             <div>
-              <h3 className="text-sm font-bold text-white">
+              <h3 className="text-sm font-bold text-slate-800">
                 {isDetailView ? "Chi tiết giao dịch" : editingId ? "Sửa thông tin giao dịch" : "Ghi nhận giao dịch tài chính"}
               </h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến nguồn thu hoặc chi tiêu</p>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-bold uppercase tracking-wider">Nhập các chi tiết liên quan đến nguồn thu hoặc chi tiêu</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -368,7 +413,7 @@ export default function FinancePage() {
                 <select
                   value={formData.donViId}
                   onChange={(e) => setFormData({ ...formData, donViId: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   required
                   disabled={isDetailView || units.length === 1}
                 >
@@ -386,7 +431,7 @@ export default function FinancePage() {
                     value={formData.loaiGiaoDich}
                     onChange={(e) => setFormData({ ...formData, loaiGiaoDich: e.target.value })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   >
                     {types.map((t) => (
                       <option key={t.ma} value={t.ma}>{t.ten}</option>
@@ -401,7 +446,7 @@ export default function FinancePage() {
                     onChange={(e) => setFormData({ ...formData, soTien: parseInt(e.target.value) || 0 })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
               </div>
@@ -415,7 +460,7 @@ export default function FinancePage() {
                     onChange={(e) => setFormData({ ...formData, ngayGiaoDich: e.target.value })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                   />
                 </div>
                 <div>
@@ -426,7 +471,7 @@ export default function FinancePage() {
                     onChange={(e) => setFormData({ ...formData, thangNam: e.target.value })}
                     placeholder="e.g. 06/2026"
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
               </div>
@@ -439,7 +484,7 @@ export default function FinancePage() {
                   onChange={(e) => setFormData({ ...formData, nguoiGiaoDich: e.target.value })}
                   required
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-550/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                 />
               </div>
 
@@ -450,7 +495,7 @@ export default function FinancePage() {
                     value={formData.doanVienId}
                     onChange={(e) => setFormData({ ...formData, doanVienId: e.target.value })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   >
                     <option value="">Chọn đoàn viên (Không bắt buộc)...</option>
                     {members.map((m) => (
@@ -467,7 +512,7 @@ export default function FinancePage() {
                   onChange={(e) => setFormData({ ...formData, ghiChu: e.target.value })}
                   rows={2}
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 resize-none disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                 />
               </div>
 
@@ -480,18 +525,18 @@ export default function FinancePage() {
                         href={getDownloadUrl(formData.fileMinhChungUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                        className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-3 py-2 rounded-xl transition-all"
                       >
                         📄 Tải PDF minh chứng
                       </a>
                     </div>
                   ) : (
-                    <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                    <div className="text-slate-450 italic mt-1 font-semibold">Không có file minh chứng đính kèm</div>
                   )
                 ) : (
                   <EvidenceUpload
                     fileId={formData.fileMinhChungUrl}
-                    initialFileName={editingId ? transactions.find(t => t.id === editingId)?.evidenceFileName : undefined}
+                    initialFileName={(editingId ? transactions.find(t => t.id === editingId)?.evidenceFileName : undefined) || undefined}
                     onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
                     moduleName="Finance"
                     organizationId={formData.donViId || user?.donViId || ""}
@@ -503,14 +548,14 @@ export default function FinancePage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
                   {isDetailView ? "Đóng" : "Hủy"}
                 </button>
                 {!isDetailView && (
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-xs transition-all active:scale-98"
                   >
                     Lưu
                   </button>

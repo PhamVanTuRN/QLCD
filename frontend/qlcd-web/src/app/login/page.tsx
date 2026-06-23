@@ -31,7 +31,7 @@ export default function LoginPage() {
       } else {
         setError(result.error || "Đăng nhập thất bại");
       }
-    } catch (err) {
+    } catch {
       setError("Đã xảy ra lỗi trong quá trình đăng nhập.");
     } finally {
       setIsLoading(false);
@@ -44,58 +44,58 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-100 flex items-center justify-center p-6 relative overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.05),transparent_70%)]" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-400/10 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(37,99,235,0.03),transparent_70%)]" />
       </div>
 
       <div className="relative z-10 w-full max-w-md">
         {/* Logo & Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-white overflow-hidden border border-slate-700/50 shadow-2xl mb-6 p-1">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-white overflow-hidden border border-slate-100 shadow-md mb-4 p-1">
             <img src="/logo_108.png?v=3" className="w-full h-full object-contain rounded-full" alt="Logo Bệnh viện 108" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Hệ thống Công đoàn số</h1>
-          <p className="text-sm text-slate-400 mt-2">Bệnh viện Trung ương Quân đội 108</p>
+          <h1 className="text-xl font-bold text-slate-800 tracking-tight">Hệ thống Công đoàn số</h1>
+          <p className="text-xs text-slate-500 mt-1 font-medium">Bệnh viện Trung ương Quân đội 108</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-8 shadow-2xl">
+        <div className="bg-white border border-slate-150 rounded-2xl p-8 shadow-xl">
           <div className="mb-6">
-            <h2 className="text-lg font-bold text-white">Đăng nhập</h2>
-            <p className="text-xs text-slate-400 mt-1">Sử dụng tài khoản được cấp để truy cập hệ thống</p>
+            <h2 className="text-base font-bold text-slate-850">Đăng nhập</h2>
+            <p className="text-xs text-slate-450 mt-0.5">Sử dụng tài khoản được cấp để truy cập hệ thống</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Tên đăng nhập</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Tên đăng nhập</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="admin"
                 required
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600/20 transition-all"
               />
             </div>
 
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Mật khẩu</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Mật khẩu</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600/20 transition-all"
               />
             </div>
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 flex items-center gap-2">
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-655 flex items-center gap-2">
                 <span>⚠️</span> {error}
               </div>
             )}
@@ -103,15 +103,15 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
+              className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all ${
                 isLoading
-                  ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30 active:scale-[0.98]"
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                  : "bg-blue-600 text-white hover:bg-blue-700 shadow-xs hover:shadow-md active:scale-[0.98]"
               }`}
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin" />
+                  <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
                   Đang xác thực...
                 </span>
               ) : (
@@ -122,18 +122,18 @@ export default function LoginPage() {
         </div>
 
         {/* Demo accounts info */}
-        <div className="mt-6 bg-slate-900/40 border border-slate-800/60 rounded-xl p-5">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-3">Tài khoản mặc định (Hệ thống)</span>
+        <div className="mt-6 bg-slate-50/80 border border-slate-150 rounded-xl p-5 shadow-2xs">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2.5">Tài khoản mặc định (Hệ thống)</span>
           <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between text-slate-400">
-              <div><span className="text-emerald-400 font-semibold">admin</span> — Quản trị viên hệ thống</div>
-              <span className="text-slate-600">admin123</span>
+            <div className="flex items-center justify-between text-slate-600">
+              <div><span className="text-blue-600 font-semibold">admin</span> — Quản trị viên</div>
+              <span className="font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100">admin123</span>
             </div>
-            <div className="flex items-center justify-between text-slate-400">
-              <div><span className="text-blue-400 font-semibold">cdcs_benhvien</span> — Chủ tịch CĐCS</div>
-              <span className="text-slate-600">admin123</span>
+            <div className="flex items-center justify-between text-slate-600">
+              <div><span className="text-teal-600 font-semibold">cdcs_benhvien</span> — Chủ tịch CĐCS</div>
+              <span className="font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100">admin123</span>
             </div>
-            <div className="text-[10px] text-slate-500 mt-3 border-t border-slate-800/60 pt-2 italic">
+            <div className="text-[9px] text-slate-400 mt-3 border-t border-slate-200/60 pt-2 italic leading-relaxed">
               * Khi thêm đơn vị Công đoàn (CĐBP/Tổ công đoàn), tài khoản truy cập tương ứng sẽ được tự động tạo. Thông tin tài khoản có thể xem trực tiếp ở trang Quản lý Tài khoản.
             </div>
           </div>

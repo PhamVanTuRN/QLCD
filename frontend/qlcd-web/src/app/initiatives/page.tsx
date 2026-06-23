@@ -1,15 +1,45 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getInitiativesApi, createInitiativeApi, updateInitiativeApi, deleteInitiativeApi, getCatalogsApi, CatalogDto, getMembers, getFlattenedUnits, getDownloadUrl } from "@/lib/api";
+import { getInitiativesApi, createInitiativeApi, updateInitiativeApi, deleteInitiativeApi, getCatalogsApi, CatalogDto, getMembers, getFlattenedUnits, getDownloadUrl, UnionMemberDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import EvidenceUpload from "@/components/EvidenceUpload";
+import { PageHeader, StatCard } from "@/components/ui-components";
+import { Plus, Search, Lightbulb, Award, Trash2, Edit3, Eye } from "lucide-react";
+
+interface InitiativeItem {
+  id: string;
+  doanVienId: string;
+  hoTenDoanVien?: string | null;
+  maNhanVien?: string | null;
+  tenDeTai: string;
+  linhVuc: string;
+  capDeTai: string;
+  hieuQuaKinhTe?: string | null;
+  ngayNghiemThu?: string | null;
+  namThucHien: number;
+  ketQuaNghiemThu?: string | null;
+  trangThai: number;
+  fileMinhChungUrl?: string | null;
+  evidenceFileId?: string | null;
+  evidenceFileName?: string | null;
+  donViId: string;
+  tenDonVi?: string | null;
+}
+
+interface ApiError {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
 
 export default function InitiativesPage() {
   const { user } = useAuth();
-  const [initiatives, setInitiatives] = useState<any[]>([]);
+  const [initiatives, setInitiatives] = useState<InitiativeItem[]>([]);
   const [types, setTypes] = useState<CatalogDto[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<UnionMemberDto[]>([]);
   const [units, setUnits] = useState<{ id: string; tenDonVi: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -41,7 +71,7 @@ export default function InitiativesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const list = await getInitiativesApi({ search: search || undefined });
+      const list = await getInitiativesApi({ search: search || undefined }) as InitiativeItem[];
       setInitiatives(list);
       
       const cats = await getCatalogsApi({ loai: "LoaiSangKien", activeOnly: true });
@@ -66,7 +96,11 @@ export default function InitiativesPage() {
   };
 
   useEffect(() => {
-    loadData();
+    const timer = setTimeout(() => {
+      loadData();
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const handleOpenCreate = () => {
@@ -88,7 +122,7 @@ export default function InitiativesPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (item: any) => {
+  const handleOpenEdit = (item: InitiativeItem) => {
     setEditingId(item.id);
     setIsDetailView(false);
     setFormData({
@@ -107,7 +141,7 @@ export default function InitiativesPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenDetail = (item: any) => {
+  const handleOpenDetail = (item: InitiativeItem) => {
     setEditingId(item.id);
     setIsDetailView(true);
     setFormData({
@@ -132,9 +166,10 @@ export default function InitiativesPage() {
       await deleteInitiativeApi(id);
       showAlert("success", "Xóa sáng kiến thành công");
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Lỗi xóa sáng kiến");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Lỗi xóa sáng kiến");
     }
   };
 
@@ -164,9 +199,10 @@ export default function InitiativesPage() {
       }
       setIsModalOpen(false);
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
     }
   };
 
@@ -183,166 +219,175 @@ export default function InitiativesPage() {
     }
   };
 
-  const getStatusBadge = (status: number) => {
+  const getStatusBadgeClass = (status: number) => {
     switch (status) {
-      case 1: return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-      case 2: return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-      case 3: return "bg-red-500/10 text-red-400 border-red-500/20";
-      default: return "bg-slate-800 text-slate-400 border-slate-700";
+      case 1: return "bg-blue-50 text-blue-700 border-blue-200/60";
+      case 2: return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
+      case 3: return "bg-red-50 text-red-700 border-red-200/60";
+      default: return "bg-slate-55 text-slate-700 border-slate-200/60";
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Alert */}
       {alert && (
         <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-bounce ${
+          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-in slide-in-from-top duration-300 ${
             alert.type === "success"
-              ? "bg-emerald-950 border-emerald-800 text-emerald-400"
-              : "bg-red-950 border-red-900 text-red-400"
+              ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+              : "bg-red-50 border-red-250 text-red-800"
           }`}
         >
-          <span>{alert.type === "success" ? "✅" : "⚠️"}</span>
-          <span className="text-sm font-semibold">{alert.message}</span>
+          <span className="text-base">{alert.type === "success" ? "✅" : "⚠️"}</span>
+          <span className="text-xs font-bold">{alert.message}</span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Phong trào Sáng kiến & Đề tài Khoa học</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Quản lý danh sách sáng kiến cải tiến kỹ thuật và đề tài nghiên cứu khoa học của cán bộ, đoàn viên
-          </p>
-        </div>
+      <PageHeader 
+        title="Phong trào Sáng kiến & Đề tài Khoa học" 
+        description="Quản lý danh sách sáng kiến cải tiến kỹ thuật và đề tài nghiên cứu khoa học của cán bộ, đoàn viên"
+      >
         <button
           onClick={handleOpenCreate}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-2 active:scale-95"
+          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2 active:scale-98"
         >
-          ➕ Đăng ký Sáng kiến
+          <Plus className="w-4 h-4 shrink-0" /> Đăng ký Sáng kiến
         </button>
-      </div>
+      </PageHeader>
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tổng Đề tài & Sáng kiến</span>
-          <div className="text-2xl font-extrabold text-white mt-2">{initiatives.length} đăng ký</div>
-          <p className="text-[10px] text-slate-400 mt-1">Ghi nhận từ các tổ công đoàn trực thuộc</p>
-        </div>
-        <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Đã nghiệm thu thông qua</span>
-          <div className="text-2xl font-extrabold text-emerald-400 mt-2">
-            {initiatives.filter((i) => i.trangThai === 2).length} sáng kiến
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">Có tính thực tiễn và hiệu quả kinh tế cao</p>
-        </div>
+        <StatCard
+          title="Tổng Đề tài & Sáng kiến"
+          value={`${initiatives.length} đăng ký`}
+          subtitle="Ghi nhận từ các tổ công đoàn trực thuộc"
+          icon={Lightbulb}
+          color="blue"
+        />
+        <StatCard
+          title="Đã nghiệm thu thông qua"
+          value={`${initiatives.filter((i) => i.trangThai === 2).length} sáng kiến`}
+          subtitle="Có tính thực tiễn và hiệu quả kinh tế cao"
+          icon={Award}
+          color="emerald"
+        />
       </div>
 
       {/* Filter panel */}
-      <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <input
-          type="text"
-          placeholder="Tìm kiếm theo tên đề tài, lĩnh vực, tác giả..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
-        />
-        <div className="text-xs text-slate-400">
-          Tổng số: <span className="text-emerald-400 font-bold">{initiatives.length}</span>
+      <div className="bg-white border border-slate-150 p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:max-w-md">
+          <input
+            type="text"
+            placeholder="Tìm kiếm theo tên đề tài, lĩnh vực, tác giả..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+          />
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 shrink-0" />
+        </div>
+        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+          Tổng số: <span className="text-blue-600">{initiatives.length}</span>
         </div>
       </div>
 
       {/* Initiatives table */}
-      <div className="bg-slate-950/20 border border-slate-800 rounded-2xl p-6">
+      <div className="bg-white border border-slate-150 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full border-collapse text-left text-xs table-modern">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold">
-                <th className="py-3 px-4">Tên đề tài / Sáng kiến</th>
-                <th className="py-3 px-4">Cấp đề tài</th>
-                <th className="py-3 px-4">Tác giả (Đoàn viên)</th>
-                <th className="py-3 px-4">Lĩnh vực</th>
-                <th className="py-3 px-4 text-center">Năm thực hiện</th>
-                <th className="py-3 px-4 text-center">Nghiệm thu</th>
-                <th className="py-3 px-4 text-center">Trạng thái</th>
-                <th className="py-3 px-4 text-right">Thao tác</th>
+              <tr className="bg-slate-50/50 text-slate-500 font-semibold border-b border-slate-100 uppercase tracking-wider">
+                <th className="px-6 py-3.5">Tên đề tài / Sáng kiến</th>
+                <th className="px-6 py-3.5">Cấp đề tài</th>
+                <th className="px-6 py-3.5">Tác giả (Đoàn viên)</th>
+                <th className="px-6 py-3.5">Lĩnh vực</th>
+                <th className="px-6 py-3.5 text-center">Năm thực hiện</th>
+                <th className="px-6 py-3.5 text-center">Nghiệm thu</th>
+                <th className="px-6 py-3.5 text-center">Trạng thái</th>
+                <th className="px-6 py-3.5 text-center w-40">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500">
-                    <span className="inline-block w-4 h-4 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin mr-2" />
-                    Đang tải danh sách sáng kiến...
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <span className="inline-block w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-slate-400">Đang tải danh sách sáng kiến...</span>
+                    </div>
                   </td>
                 </tr>
               ) : initiatives.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500">
-                    Chưa có sáng kiến nào được ghi nhận.
+                  <td colSpan={8} className="py-12 text-center text-slate-400 italic">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <span className="text-lg">📂</span>
+                      <span>Chưa có sáng kiến nào được ghi nhận.</span>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 initiatives.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-white">{item.tenDeTai}</div>
-                      {item.hieuQuaKinhTe && <div className="text-[10px] text-slate-500 truncate max-w-[200px]">{item.hieuQuaKinhTe}</div>}
+                  <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-slate-805">{item.tenDeTai}</div>
+                      {item.hieuQuaKinhTe && <div className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate max-w-[220px]">{item.hieuQuaKinhTe}</div>}
                     </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100/80 text-slate-600 border border-slate-200/50 text-[10px] font-semibold">
                         {getTypeName(item.capDeTai)}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-slate-200">{item.hoTenDoanVien || "—"}</div>
+                        <div className="font-bold text-slate-800">{item.hoTenDoanVien || "—"}</div>
                         {item.evidenceFileId && (
                           <a
                             href={getDownloadUrl(item.evidenceFileId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            className="inline-flex items-center gap-1 text-[9px] text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded transition-all"
                             title="Tải file minh chứng"
                           >
                             📄 PDF
                           </a>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-500">Mã NV: {item.maNhanVien || "—"} {item.tenDonVi && `• ${item.tenDonVi}`}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                        Mã NV: {item.maNhanVien || "—"} {item.tenDonVi && `• ${item.tenDonVi}`}
+                      </div>
                     </td>
-                    <td className="py-3 px-4 font-medium">{item.linhVuc}</td>
-                    <td className="py-3 px-4 text-center font-mono">{item.namThucHien}</td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="font-semibold text-slate-300">{item.ketQuaNghiemThu || "—"}</div>
-                      {item.ngayNghiemThu && <div className="text-[9px] text-slate-500">{new Date(item.ngayNghiemThu).toLocaleDateString("vi-VN")}</div>}
+                    <td className="px-6 py-4 font-semibold text-slate-750">{item.linhVuc}</td>
+                    <td className="px-6 py-4 text-center font-mono font-medium text-slate-500">{item.namThucHien}</td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="font-bold text-slate-800">{item.ketQuaNghiemThu || "—"}</div>
+                      {item.ngayNghiemThu && <div className="text-[9px] text-slate-400 font-medium mt-0.5">{new Date(item.ngayNghiemThu).toLocaleDateString("vi-VN")}</div>}
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusBadge(item.trangThai)}`}>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadgeClass(item.trangThai)}`}>
                         {getStatusName(item.trangThai)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleOpenDetail(item)}
-                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Chi tiết
+                          <Eye className="w-3.5 h-3.5 shrink-0" /> Xem
                         </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
-                          className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-blue-55 hover:bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Sửa
+                          <Edit3 className="w-3.5 h-3.5 shrink-0" /> Sửa
                         </button>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-red-50 hover:bg-red-100 text-red-755 border border-red-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Xóa
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" /> Xóa
                         </button>
                       </div>
                     </td>
@@ -356,14 +401,14 @@ export default function InitiativesPage() {
 
       {/* Modal Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={() => setIsModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg bg-white border border-slate-150 rounded-2xl shadow-xl p-6 space-y-5 animate-in scale-in duration-200">
             <div>
-              <h3 className="text-sm font-bold text-white">
+              <h3 className="text-sm font-bold text-slate-800">
                 {isDetailView ? "Chi tiết sáng kiến" : editingId ? "Sửa thông tin đề tài" : "Đăng ký đề tài / sáng kiến mới"}
               </h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến đề tài sáng kiến khoa học</p>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-bold uppercase tracking-wider">Nhập các chi tiết liên quan đến đề tài sáng kiến khoa học</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -374,7 +419,7 @@ export default function InitiativesPage() {
                 <select
                   value={formData.donViId}
                   onChange={(e) => setFormData({ ...formData, donViId: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   required
                   disabled={isDetailView || units.length === 1}
                 >
@@ -392,7 +437,7 @@ export default function InitiativesPage() {
                   onChange={(e) => setFormData({ ...formData, doanVienId: e.target.value })}
                   required
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                 >
                   <option value="">Chọn tác giả đăng ký...</option>
                   {members.map((m) => (
@@ -410,7 +455,7 @@ export default function InitiativesPage() {
                   placeholder="e.g. Cải tiến quy trình tiếp đón người bệnh bằng thẻ quét mã QR"
                   required
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                 />
               </div>
 
@@ -424,7 +469,7 @@ export default function InitiativesPage() {
                     placeholder="e.g. Quản lý Y tế"
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
                 <div>
@@ -433,7 +478,7 @@ export default function InitiativesPage() {
                     value={formData.capDeTai}
                     onChange={(e) => setFormData({ ...formData, capDeTai: e.target.value })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   >
                     {types.map((t) => (
                       <option key={t.ma} value={t.ma}>{t.ten}</option>
@@ -451,7 +496,7 @@ export default function InitiativesPage() {
                     onChange={(e) => setFormData({ ...formData, namThucHien: parseInt(e.target.value) || new Date().getFullYear() })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                   />
                 </div>
                 <div>
@@ -461,7 +506,7 @@ export default function InitiativesPage() {
                     value={formData.ngayNghiemThu}
                     onChange={(e) => setFormData({ ...formData, ngayNghiemThu: e.target.value })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                   />
                 </div>
                 <div>
@@ -472,7 +517,7 @@ export default function InitiativesPage() {
                     onChange={(e) => setFormData({ ...formData, ketQuaNghiemThu: e.target.value })}
                     placeholder="e.g. Đạt, Xuất sắc"
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
               </div>
@@ -485,7 +530,7 @@ export default function InitiativesPage() {
                   placeholder="Mô tả hiệu quả xã hội hoặc số tiền tiết kiệm được cho bệnh viện..."
                   rows={2}
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 resize-none disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                 />
               </div>
 
@@ -496,7 +541,7 @@ export default function InitiativesPage() {
                     value={formData.trangThai}
                     onChange={(e) => setFormData({ ...formData, trangThai: Number(e.target.value) })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   >
                     <option value={1}>Mới đăng ký</option>
                     <option value={2}>Nghiệm thu Đạt</option>
@@ -512,18 +557,18 @@ export default function InitiativesPage() {
                           href={getDownloadUrl(formData.fileMinhChungUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                          className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-3 py-2 rounded-xl transition-all"
                         >
                           📄 Tải PDF minh chứng
                         </a>
                       </div>
                     ) : (
-                      <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                      <div className="text-slate-400 italic mt-1 font-semibold">Không có file minh chứng đính kèm</div>
                     )
                   ) : (
                     <EvidenceUpload
                       fileId={formData.fileMinhChungUrl}
-                      initialFileName={editingId ? initiatives.find(i => i.id === editingId)?.evidenceFileName : undefined}
+                      initialFileName={(editingId ? initiatives.find(i => i.id === editingId)?.evidenceFileName : undefined) || undefined}
                       onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
                       moduleName="Initiatives"
                       organizationId={formData.donViId || user?.donViId || ""}
@@ -536,14 +581,14 @@ export default function InitiativesPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
                   {isDetailView ? "Đóng" : "Hủy"}
                 </button>
                 {!isDetailView && (
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-xs transition-all active:scale-98"
                   >
                     Lưu
                   </button>

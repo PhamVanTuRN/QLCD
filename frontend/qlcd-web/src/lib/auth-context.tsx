@@ -19,6 +19,15 @@ interface AuthContextType {
   isAuthenticated: boolean;
 }
 
+interface ApiError {
+  message?: string;
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -30,10 +39,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem("qlcd_user");
     if (saved) {
       try {
-        setUser(JSON.parse(saved));
+        const parsed = JSON.parse(saved) as UserProfile;
+        Promise.resolve().then(() => {
+          setUser(parsed);
+        });
       } catch { /* ignore */ }
     }
-    setIsLoaded(true);
+    Promise.resolve().then(() => {
+      setIsLoaded(true);
+    });
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -75,9 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true };
       }
       return { success: false, error: "Đăng nhập thất bại" };
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      const msg = err.response?.data?.message || err.message || "Tên đăng nhập hoặc mật khẩu không chính xác";
+      const apiError = err as ApiError;
+      const msg = apiError.response?.data?.message || apiError.message || "Tên đăng nhập hoặc mật khẩu không chính xác";
       return { success: false, error: msg };
     }
   };

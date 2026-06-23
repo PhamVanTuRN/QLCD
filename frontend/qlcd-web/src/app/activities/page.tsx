@@ -4,10 +4,37 @@ import { useState, useEffect } from "react";
 import { getActivitiesApi, createActivityApi, updateActivityApi, deleteActivityApi, getCatalogsApi, CatalogDto, getFlattenedUnits, getDownloadUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import EvidenceUpload from "@/components/EvidenceUpload";
+import { PageHeader } from "@/components/ui-components";
+import { Plus, Search, Trash2, Edit3, Eye } from "lucide-react";
+
+interface ActivityItem {
+  id: string;
+  tenHoatDong: string;
+  loaiHoatDong: string;
+  tuNgay: string;
+  denNgay: string;
+  diaDiem: string;
+  kinhPhi: number;
+  moTa?: string;
+  ketQua?: string;
+  fileMinhChungUrl?: string;
+  evidenceFileId?: string;
+  evidenceFileName?: string;
+  donViId: string;
+  tenDonVi?: string;
+}
+
+interface ApiError {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
 
 export default function ActivitiesPage() {
   const { user } = useAuth();
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [types, setTypes] = useState<CatalogDto[]>([]);
   const [units, setUnits] = useState<{ id: string; tenDonVi: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,7 +66,7 @@ export default function ActivitiesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const list = await getActivitiesApi({ search: search || undefined });
+      const list = await getActivitiesApi({ search: search || undefined }) as ActivityItem[];
       setActivities(list);
       
       const cats = await getCatalogsApi({ loai: "LoaiHoatDong", activeOnly: true });
@@ -59,7 +86,11 @@ export default function ActivitiesPage() {
   };
 
   useEffect(() => {
-    loadData();
+    const timer = setTimeout(() => {
+      loadData();
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const handleOpenCreate = () => {
@@ -80,7 +111,7 @@ export default function ActivitiesPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (item: any) => {
+  const handleOpenEdit = (item: ActivityItem) => {
     setEditingId(item.id);
     setIsDetailView(false);
     setFormData({
@@ -98,7 +129,7 @@ export default function ActivitiesPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenDetail = (item: any) => {
+  const handleOpenDetail = (item: ActivityItem) => {
     setEditingId(item.id);
     setIsDetailView(true);
     setFormData({
@@ -122,9 +153,10 @@ export default function ActivitiesPage() {
       await deleteActivityApi(id);
       showAlert("success", "Xóa hoạt động thành công");
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Lỗi xóa hoạt động");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Lỗi xóa hoạt động");
     }
   };
 
@@ -151,9 +183,10 @@ export default function ActivitiesPage() {
       }
       setIsModalOpen(false);
       loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      showAlert("error", err.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
+      const apiError = err as ApiError;
+      showAlert("error", apiError.response?.data?.message || "Đã xảy ra lỗi khi lưu thông tin");
     }
   };
 
@@ -162,132 +195,137 @@ export default function ActivitiesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Alert */}
       {alert && (
         <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-bounce ${
+          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-in slide-in-from-top duration-300 ${
             alert.type === "success"
-              ? "bg-emerald-950 border-emerald-800 text-emerald-400"
-              : "bg-red-950 border-red-900 text-red-400"
+              ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+              : "bg-red-50 border-red-250 text-red-800"
           }`}
         >
-          <span>{alert.type === "success" ? "✅" : "⚠️"}</span>
-          <span className="text-sm font-semibold">{alert.message}</span>
+          <span className="text-base">{alert.type === "success" ? "✅" : "⚠️"}</span>
+          <span className="text-xs font-bold">{alert.message}</span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Quản lý Hoạt động Công đoàn</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Ghi nhận và lập kế hoạch tổ chức các sự kiện, phong trào thi đua, văn nghệ, thể thao
-          </p>
-        </div>
+      <PageHeader 
+        title="Quản lý Hoạt động Công đoàn" 
+        description="Ghi nhận và lập kế hoạch tổ chức các sự kiện, phong trào thi đua, văn nghệ, thể thao"
+      >
         <button
           onClick={handleOpenCreate}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-2 active:scale-95"
+          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2 active:scale-98"
         >
-          ➕ Thêm Hoạt động
+          <Plus className="w-4 h-4 shrink-0" /> Thêm Hoạt động
         </button>
-      </div>
+      </PageHeader>
 
       {/* Filter panel */}
-      <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <input
-          type="text"
-          placeholder="Tìm kiếm theo tên hoạt động, địa điểm..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
-        />
-        <div className="text-xs text-slate-400">
-          Tổng số hoạt động: <span className="text-emerald-400 font-bold">{activities.length}</span>
+      <div className="bg-white border border-slate-150 p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:max-w-md">
+          <input
+            type="text"
+            placeholder="Tìm kiếm theo tên hoạt động, địa điểm..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+          />
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 shrink-0" />
+        </div>
+        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+          Tổng số hoạt động: <span className="text-blue-600">{activities.length}</span>
         </div>
       </div>
 
       {/* Table list */}
-      <div className="bg-slate-950/20 border border-slate-800 rounded-2xl p-6">
+      <div className="bg-white border border-slate-150 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full border-collapse text-left text-xs table-modern">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold">
-                <th className="py-3 px-4">Tên hoạt động</th>
-                <th className="py-3 px-4">Loại hình</th>
-                <th className="py-3 px-4">Thời gian</th>
-                <th className="py-3 px-4">Địa điểm</th>
-                <th className="py-3 px-4 text-right">Kinh phí</th>
-                <th className="py-3 px-4">Đơn vị tổ chức</th>
-                <th className="py-3 px-4 text-right">Thao tác</th>
+              <tr className="bg-slate-50/50 text-slate-500 font-semibold border-b border-slate-100 uppercase tracking-wider">
+                <th className="px-6 py-3.5">Tên hoạt động</th>
+                <th className="px-6 py-3.5">Loại hình</th>
+                <th className="px-6 py-3.5">Thời gian</th>
+                <th className="px-6 py-3.5">Địa điểm</th>
+                <th className="px-6 py-3.5 text-right">Kinh phí</th>
+                <th className="px-6 py-3.5">Đơn vị tổ chức</th>
+                <th className="px-6 py-3.5 text-center w-40">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">
-                    <span className="inline-block w-4 h-4 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin mr-2" />
-                    Đang tải danh sách hoạt động...
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <span className="inline-block w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-slate-400">Đang tải danh sách hoạt động...</span>
+                    </div>
                   </td>
                 </tr>
               ) : activities.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">
-                    Chưa có hoạt động nào được đăng ký.
+                  <td colSpan={7} className="py-12 text-center text-slate-400 italic">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <span className="text-lg">📂</span>
+                      <span>Chưa có hoạt động nào được đăng ký.</span>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 activities.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
-                    <td className="py-3 px-4">
+                  <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-white">{item.tenHoatDong}</div>
+                        <div className="font-bold text-slate-800">{item.tenHoatDong}</div>
                         {item.evidenceFileId && (
                           <a
                             href={getDownloadUrl(item.evidenceFileId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[9px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.2 rounded transition-all"
+                            className="inline-flex items-center gap-1 text-[9px] text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded transition-all"
                             title="Tải file minh chứng"
                           >
                             📄 PDF
                           </a>
                         )}
                       </div>
-                      {item.moTa && <div className="text-[10px] text-slate-500 truncate max-w-[200px]">{item.moTa}</div>}
+                      {item.moTa && <div className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[240px] font-medium">{item.moTa}</div>}
                     </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100/80 text-slate-600 border border-slate-200/50 text-[10px] font-semibold">
                         {getTypeName(item.loaiHoatDong)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-mono">
+                    <td className="px-6 py-4 font-mono font-medium text-slate-500">
                       {new Date(item.tuNgay).toLocaleDateString("vi-VN")} - {new Date(item.denNgay).toLocaleDateString("vi-VN")}
                     </td>
-                    <td className="py-3 px-4 font-medium">{item.diaDiem}</td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
+                    <td className="px-6 py-4 font-semibold text-slate-700">{item.diaDiem}</td>
+                    <td className="px-6 py-4 text-right font-mono font-bold text-slate-800">
                       {(item.kinhPhi || 0).toLocaleString()} đ
                     </td>
-                    <td className="py-3 px-4 text-slate-400">{item.tenDonVi || "—"}</td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-6 py-4 text-slate-500 font-medium">{item.tenDonVi || "—"}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleOpenDetail(item)}
-                          className="bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/20 text-sky-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Chi tiết
+                          <Eye className="w-3.5 h-3.5 shrink-0" /> Xem
                         </button>
                         <button
                           onClick={() => handleOpenEdit(item)}
-                          className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-blue-55 hover:bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Sửa
+                          <Edit3 className="w-3.5 h-3.5 shrink-0" /> Sửa
                         </button>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
                         >
-                          Xóa
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" /> Xóa
                         </button>
                       </div>
                     </td>
@@ -301,14 +339,14 @@ export default function ActivitiesPage() {
 
       {/* Modal Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={() => setIsModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg bg-white border border-slate-150 rounded-2xl shadow-xl p-6 space-y-5 animate-in scale-in duration-200">
             <div>
-              <h3 className="text-sm font-bold text-white">
+              <h3 className="text-sm font-bold text-slate-800">
                 {isDetailView ? "Chi tiết hoạt động" : editingId ? "Cập nhật hoạt động" : "Thêm hoạt động mới"}
               </h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">Nhập các chi tiết liên quan đến hoạt động Công đoàn</p>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-bold uppercase tracking-wider">Nhập các chi tiết liên quan đến hoạt động Công đoàn</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -319,7 +357,7 @@ export default function ActivitiesPage() {
                 <select
                   value={formData.donViId}
                   onChange={(e) => setFormData({ ...formData, donViId: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   required
                   disabled={isDetailView || units.length === 1}
                 >
@@ -341,7 +379,7 @@ export default function ActivitiesPage() {
                   placeholder="e.g. Hội thao chào mừng 22/12"
                   required
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                 />
               </div>
 
@@ -352,7 +390,7 @@ export default function ActivitiesPage() {
                     value={formData.loaiHoatDong}
                     onChange={(e) => setFormData({ ...formData, loaiHoatDong: e.target.value })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400 transition-all cursor-pointer"
                   >
                     {types.map((t) => (
                       <option key={t.ma} value={t.ma}>{t.ten}</option>
@@ -366,7 +404,7 @@ export default function ActivitiesPage() {
                     value={formData.kinhPhi}
                     onChange={(e) => setFormData({ ...formData, kinhPhi: parseInt(e.target.value) || 0 })}
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
               </div>
@@ -380,7 +418,7 @@ export default function ActivitiesPage() {
                     onChange={(e) => setFormData({ ...formData, tuNgay: e.target.value })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
                 <div>
@@ -391,7 +429,7 @@ export default function ActivitiesPage() {
                     onChange={(e) => setFormData({ ...formData, denNgay: e.target.value })}
                     required
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
               </div>
@@ -405,7 +443,7 @@ export default function ActivitiesPage() {
                   placeholder="e.g. Sân vận động Bệnh viện"
                   required
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-455 transition-all"
                 />
               </div>
 
@@ -416,7 +454,7 @@ export default function ActivitiesPage() {
                   onChange={(e) => setFormData({ ...formData, moTa: e.target.value })}
                   rows={2}
                   disabled={isDetailView}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none disabled:opacity-50"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 resize-none disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                 />
               </div>
 
@@ -429,7 +467,7 @@ export default function ActivitiesPage() {
                     onChange={(e) => setFormData({ ...formData, ketQua: e.target.value })}
                     placeholder="e.g. Thành công tốt đẹp, 20 giải thưởng"
                     disabled={isDetailView}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-450 transition-all"
                   />
                 </div>
                 <div>
@@ -441,18 +479,18 @@ export default function ActivitiesPage() {
                           href={getDownloadUrl(formData.fileMinhChungUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl transition-all"
+                          className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100 px-3 py-2 rounded-xl transition-all"
                         >
                           📄 Tải PDF minh chứng
                         </a>
                       </div>
                     ) : (
-                      <div className="text-slate-500 italic mt-1">Không có file minh chứng đính kèm</div>
+                      <div className="text-slate-400 italic mt-1 font-semibold">Không có file minh chứng đính kèm</div>
                     )
                   ) : (
                     <EvidenceUpload
                       fileId={formData.fileMinhChungUrl}
-                      initialFileName={editingId ? activities.find(a => a.id === editingId)?.evidenceFileName : undefined}
+                      initialFileName={(editingId ? activities.find(a => a.id === editingId)?.evidenceFileName : undefined) || undefined}
                       onChange={(fileId) => setFormData({ ...formData, fileMinhChungUrl: fileId || "" })}
                       moduleName="Activities"
                       organizationId={formData.donViId || user?.donViId || ""}
@@ -465,14 +503,14 @@ export default function ActivitiesPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
                   {isDetailView ? "Đóng" : "Hủy"}
                 </button>
                 {!isDetailView && (
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-xs transition-all active:scale-98"
                   >
                     Lưu
                   </button>
