@@ -118,6 +118,10 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
 
         CalculateMembersRecursive(rootSystem, memberStatsByUnit);
 
+        // Sắp xếp cây tổ chức theo nhóm Khối Chuyên môn
+        var khoiList = await _context.KhoiChuyenMons.ToListAsync(cancellationToken);
+        SortTreeRecursive(rootSystem, khoiList);
+
         // 5. Trim tree to the user's scoped unit root if role is CDBP or TOCD
         if (!_currentUserService.IsAdmin && !_currentUserService.IsCdcs && _currentUserService.OrganizationId.HasValue)
         {
@@ -169,5 +173,42 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
             SoTrinhDoDaiHoc = node.SoTrinhDoDaiHoc,
             SoCoNgoaiNgu = node.SoCoNgoaiNgu
         };
+    }
+
+    private void SortTreeRecursive(UnionUnitDto node, List<KhoiChuyenMon> khoiList)
+    {
+        node.Children = node.Children
+            .OrderBy(c => GetSortOrder(c.MaKhoi, c.TenDonVi, khoiList))
+            .ThenBy(c => c.TenDonVi)
+            .ToList();
+
+        foreach (var child in node.Children)
+        {
+            SortTreeRecursive(child, khoiList);
+        }
+    }
+
+    private int GetSortOrder(Guid? maKhoi, string tenDonVi, List<KhoiChuyenMon> khoiList)
+    {
+        if (maKhoi.HasValue)
+        {
+            var khoi = khoiList.FirstOrDefault(k => k.Id == maKhoi.Value);
+            if (khoi != null)
+            {
+                var tenKhoi = khoi.TenKhoi.ToLower();
+                if (tenKhoi.Contains("cơ quan")) return 1;
+                if (tenKhoi.Contains("nội")) return 2;
+                if (tenKhoi.Contains("ngoại")) return 3;
+                if (tenKhoi.Contains("cận lâm sàng")) return 4;
+            }
+        }
+
+        var nameLower = tenDonVi.ToLower();
+        if (nameLower.Contains("cơ quan") || nameLower.Contains("liên cơ quan")) return 1;
+        if (nameLower.Contains("nội")) return 2;
+        if (nameLower.Contains("ngoại")) return 3;
+        if (nameLower.Contains("cận lâm sàng")) return 4;
+
+        return 5;
     }
 }

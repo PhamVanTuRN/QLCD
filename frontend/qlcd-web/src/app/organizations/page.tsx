@@ -29,7 +29,7 @@ const loaiToChucMap: Record<string, string> = {
 };
 
 export default function OrganizationTree() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [tree, setTree] = useState<UnionUnitDto | null>(null);
   const [selectedNode, setSelectedNode] = useState<UnionUnitDto | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
@@ -189,7 +189,9 @@ export default function OrganizationTree() {
           className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
             isSelected
               ? "bg-blue-50 border-blue-300 shadow-xs"
-              : "bg-white border-slate-150 hover:bg-slate-50 hover:border-slate-350"
+              : node.trangThai === 0
+                ? "bg-slate-50/70 border-slate-200 hover:bg-slate-100"
+                : "bg-white border-slate-150 hover:bg-slate-50 hover:border-slate-350"
           }`}
         >
           <div className="flex items-center gap-3">
@@ -202,7 +204,16 @@ export default function OrganizationTree() {
               </button>
             )}
             {!hasChildren && <span className="w-5" />}
-            <span className={`font-semibold text-sm ${isSelected ? "text-blue-600" : "text-slate-800"}`}>{node.tenDonVi}</span>
+            <span className={`font-semibold text-sm ${
+              isSelected ? "text-blue-600" : "text-slate-800"
+            } ${node.trangThai === 0 ? "text-slate-400 line-through decoration-slate-300 font-normal" : ""}`}>
+              {node.tenDonVi}
+              {node.trangThai === 0 && (
+                <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/50 font-bold ml-1.5 inline-block align-middle">
+                  Ngừng HĐ
+                </span>
+              )}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getBadgeColor(node.loaiToChuc)}`}>
@@ -298,66 +309,87 @@ export default function OrganizationTree() {
                 </div>
               </div>
 
-              {/* Add child actions */}
-              <div className="pt-4 border-t border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Tác vụ Quản lý con</span>
+              {/* Add child actions & Unit Actions */}
+              {hasPermission("Data.ViewAll") ? (
+                <>
+                  <div className="pt-4 border-t border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Tác vụ Quản lý con</span>
 
-                {isLeafNode(selectedNode.loaiToChuc) ? (
-                  <div className="space-y-3">
-                    <button disabled className="w-full bg-slate-50 text-slate-400 cursor-not-allowed py-2.5 rounded-xl text-xs font-bold border border-slate-150">
-                      🔒 Thêm Tổ chức con (Đã khóa)
-                    </button>
-                    <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-650 leading-relaxed font-semibold">
-                      ⚠️ Tổ CĐ là đơn vị cuối cùng. Không cho phép tạo cấp con dưới Tổ CĐ.
+                    {selectedNode.trangThai === 0 ? (
+                      <div className="space-y-3">
+                        <button disabled className="w-full bg-slate-50 text-slate-400 cursor-not-allowed py-2.5 rounded-xl text-xs font-bold border border-slate-150">
+                          🔒 Thêm Tổ chức con (Đã khóa)
+                        </button>
+                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-650 leading-relaxed font-semibold">
+                          ⚠️ Đơn vị này đã ngừng hoạt động. Không thể tạo thêm tổ chức con.
+                        </div>
+                      </div>
+                    ) : isLeafNode(selectedNode.loaiToChuc) ? (
+                      <div className="space-y-3">
+                        <button disabled className="w-full bg-slate-50 text-slate-400 cursor-not-allowed py-2.5 rounded-xl text-xs font-bold border border-slate-150">
+                          🔒 Thêm Tổ chức con (Đã khóa)
+                        </button>
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-650 leading-relaxed font-semibold">
+                          ⚠️ Tổ CĐ là đơn vị cuối cùng. Không cho phép tạo cấp con dưới Tổ CĐ.
+                        </div>
+                      </div>
+                    ) : selectedNode.loaiToChuc === "CDCS" ? (
+                      <div className="space-y-2">
+                        <button onClick={() => openAddModal("CDBP")} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
+                          ➕ Thêm Công đoàn Bộ phận (Level 2)
+                        </button>
+                        <button onClick={() => openAddModal("TOCD_TRUC_THUOC")} className="w-full bg-white hover:bg-slate-50 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200 shadow-xs cursor-pointer">
+                          ➕ Thêm Tổ CĐ trực thuộc (Level 2)
+                        </button>
+                      </div>
+                    ) : selectedNode.loaiToChuc === "CDBP" ? (
+                      <button onClick={() => openAddModal("TOCD_CDBP")} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
+                        ➕ Thêm Tổ CĐ thuộc CĐBP (Level 3)
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* Status */}
+                  <div className="pt-4 border-t border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Trạng thái</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                      selectedNode.trangThai !== 0
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-250"
+                        : "bg-slate-100 text-slate-500 border-slate-200"
+                    }`}>
+                      {selectedNode.trangThai !== 0 ? "Đang hoạt động" : "Ngừng hoạt động"}
+                    </span>
+                  </div>
+
+                  {/* Unit Actions */}
+                  <div className="pt-4 border-t border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Tác vụ Đơn vị</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => openEditModal(selectedNode)}
+                        className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-800 py-2.5 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
+                      >
+                        ✏️ Sửa Đơn vị
+                      </button>
+                      <button
+                        onClick={handleDeleteUnit}
+                        disabled={selectedNode.loaiToChuc === "CDCS"}
+                        className={`py-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
+                          selectedNode.loaiToChuc === "CDCS"
+                            ? "bg-slate-50 text-slate-400 border-slate-150 cursor-not-allowed"
+                            : "bg-red-50 hover:bg-red-100 border-red-100 text-red-600"
+                        }`}
+                      >
+                        🗑️ Xóa Đơn vị
+                      </button>
                     </div>
                   </div>
-                ) : selectedNode.loaiToChuc === "CDCS" ? (
-                  <div className="space-y-2">
-                    <button onClick={() => openAddModal("CDBP")} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
-                      ➕ Thêm Công đoàn Bộ phận (Level 2)
-                    </button>
-                    <button onClick={() => openAddModal("TOCD_TRUC_THUOC")} className="w-full bg-white hover:bg-slate-50 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200 shadow-xs cursor-pointer">
-                      ➕ Thêm Tổ CĐ trực thuộc (Level 2)
-                    </button>
-                  </div>
-                ) : selectedNode.loaiToChuc === "CDBP" ? (
-                  <button onClick={() => openAddModal("TOCD_CDBP")} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
-                    ➕ Thêm Tổ CĐ thuộc CĐBP (Level 3)
-                  </button>
-                ) : null}
-              </div>
-
-              {/* Status */}
-              <div className="pt-4 border-t border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Trạng thái</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-250">
-                  Đang hoạt động
-                </span>
-              </div>
-
-              {/* Unit Actions */}
-              <div className="pt-4 border-t border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Tác vụ Đơn vị</span>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => openEditModal(selectedNode)}
-                    className="bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-600 py-2.5 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
-                  >
-                    ✏️ Sửa Đơn vị
-                  </button>
-                  <button
-                    onClick={handleDeleteUnit}
-                    disabled={selectedNode.loaiToChuc === "CDCS"}
-                    className={`py-2.5 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
-                      selectedNode.loaiToChuc === "CDCS"
-                        ? "bg-slate-50 text-slate-400 border-slate-150 cursor-not-allowed"
-                        : "bg-red-50 hover:bg-red-100 border-red-100 text-red-600"
-                    }`}
-                  >
-                    🗑️ Xóa Đơn vị
-                  </button>
+                </>
+              ) : (
+                <div className="pt-4 border-t border-slate-100 text-center py-4 text-slate-450 italic font-semibold text-[11px] bg-slate-50 rounded-xl border border-slate-150/60">
+                  🔒 Chỉ Admin hoặc CĐCS mới được chỉnh sửa cơ cấu tổ chức.
                 </div>
-              </div>
+              )}
             </>
           ) : (
             <div className="text-center py-8 text-slate-450 italic font-medium">Bấm chọn một đơn vị để xem chi tiết</div>

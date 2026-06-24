@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.Tasks;
+using System.Security.Claims;
 using System;
 using QLCD.Application;
 using QLCD.Infrastructure;
@@ -14,8 +15,16 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Nạp thêm cấu hình từ file appsettings.Local.json (file này sẽ bị Git bỏ qua để bảo mật)
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 // 1. Đăng ký JWT Bearer Authentication
-var key = Encoding.ASCII.GetBytes("Antigravity_QLCD_Super_Secure_Key_12891391398123");
+var jwtSecret = builder.Configuration["JwtSettings:Secret"];
+if (string.IsNullOrEmpty(jwtSecret) || jwtSecret == "YOUR_JWT_SECRET_KEY_MINIMUM_32_CHARACTERS")
+{
+    throw new InvalidOperationException("JWT Secret key is not properly configured. Please set a secure key for 'JwtSettings:Secret'.");
+}
+var key = Encoding.ASCII.GetBytes(jwtSecret);
 builder.Services.AddAuthentication(x =>
 {
     x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -44,6 +53,23 @@ builder.Services.AddAuthentication(x =>
                 context.Token = accessToken;
             }
             return Task.CompletedTask;
+        },
+        OnTokenValidated = async context =>
+        {
+            var dbContext = context.HttpContext.RequestServices.GetRequiredService<QLCDDbContext>();
+            var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(userIdClaim, out Guid userId))
+            {
+                var userExists = await dbContext.TaiKhoans.AnyAsync(u => u.Id == userId && u.TrangThai);
+                if (!userExists)
+                {
+                    context.Fail("User no longer exists or is disabled.");
+                }
+            }
+            else
+            {
+                context.Fail("Invalid user ID in token.");
+            }
         }
     };
 });

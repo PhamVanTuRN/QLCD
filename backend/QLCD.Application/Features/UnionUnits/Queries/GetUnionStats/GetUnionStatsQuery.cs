@@ -155,18 +155,39 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
             {
                 filteredUnitIds.Add(filterOrgId);
                 
-                // Nếu lọc một CDBP thì tự động tính cả các tổ công đoàn trực thuộc
                 var orgInfo = await _context.DonViCongDoans
                     .AsNoTracking()
                     .FirstOrDefaultAsync(u => u.Id == filterOrgId, cancellationToken);
                 
-                if (orgInfo != null && orgInfo.LoaiToChuc == LoaiToChuc.CDBP)
+                if (orgInfo != null)
                 {
-                    var children = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == filterOrgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    filteredUnitIds.AddRange(children);
+                    if (orgInfo.LoaiToChuc == LoaiToChuc.CDCS)
+                    {
+                        // Nếu lọc CDCS (toàn cơ sở) thì lấy toàn bộ các đơn vị cấp dưới trực thuộc và gián tiếp
+                        var level2Ids = await _context.DonViCongDoans
+                            .Where(u => u.MaParent == filterOrgId)
+                            .Select(u => u.Id)
+                            .ToListAsync(cancellationToken);
+                        filteredUnitIds.AddRange(level2Ids);
+
+                        if (level2Ids.Any())
+                        {
+                            var level3Ids = await _context.DonViCongDoans
+                                .Where(u => u.MaParent.HasValue && level2Ids.Contains(u.MaParent.Value))
+                                .Select(u => u.Id)
+                                .ToListAsync(cancellationToken);
+                            filteredUnitIds.AddRange(level3Ids);
+                        }
+                    }
+                    else if (orgInfo.LoaiToChuc == LoaiToChuc.CDBP)
+                    {
+                        // Nếu lọc một CDBP thì tự động tính cả các tổ công đoàn trực thuộc
+                        var children = await _context.DonViCongDoans
+                            .Where(u => u.MaParent == filterOrgId)
+                            .Select(u => u.Id)
+                            .ToListAsync(cancellationToken);
+                        filteredUnitIds.AddRange(children);
+                    }
                 }
             }
             else
@@ -180,6 +201,8 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
             // Mặc định sử dụng toàn bộ phạm vi đơn vị được phép
             filteredUnitIds.AddRange(allowedUnitIds);
         }
+
+        filteredUnitIds = filteredUnitIds.Distinct().ToList();
 
         // 2.2. Lọc theo Khối chuyên môn (MaKhoi)
         if (request.MaKhoi.HasValue)
@@ -355,6 +378,14 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
                     _context.DonViCongDoans.Any(u => u.Id == m.MaToCongDoan && (u.MaKhoi == k.Id || (u.MaParent.HasValue && _context.DonViCongDoans.Any(p => p.Id == u.MaParent && p.MaKhoi == k.Id)))))
             })
             .ToListAsync(cancellationToken);
+
+        // Sắp xếp thứ tự hiển thị Khối Chuyên môn
+        listKhoi = listKhoi
+            .OrderBy(k => k.Name.Contains("Cơ quan") ? 1 :
+                          k.Name.Contains("Nội") ? 2 :
+                          k.Name.Contains("Ngoại") ? 3 :
+                          k.Name.Contains("Cận lâm sàng") ? 4 : 5)
+            .ToList();
 
         // Giới tính
         var listGioiTinh = new List<CountPair>

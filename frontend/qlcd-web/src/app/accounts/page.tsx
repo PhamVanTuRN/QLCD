@@ -27,15 +27,15 @@ interface ApiError {
 }
 
 export default function AccountsPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const router = useRouter();
 
-  // Chỉ cho phép CDCS/ADMIN vào xem tài khoản
+  // Chỉ cho phép ADMIN (có quyền Users.Manage) vào quản lý tài khoản
   useEffect(() => {
-    if (user && user.phamVi !== "CDCS") {
+    if (user && !hasPermission("Users.Manage")) {
       router.push("/");
     }
-  }, [user, router]);
+  }, [user, router, hasPermission]);
 
   const [accounts, setAccounts] = useState<AccountDto[]>([]);
   const [loading, setLoading] = useState(false);

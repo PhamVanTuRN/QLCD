@@ -239,6 +239,10 @@ public static class DbInitializer
 
         if (!await context.DonViCongDoans.AnyAsync(u => u.Id == cdbpNoiId))
         {
+            var khoiCoQuan = khoiList.FirstOrDefault(k => k.TenKhoi == "Khối Cơ quan");
+            var khoiNoi = khoiList.FirstOrDefault(k => k.TenKhoi == "Khối Nội");
+            var khoiNgoai = khoiList.FirstOrDefault(k => k.TenKhoi == "Khối Ngoại");
+
             var cdbpNoi = new DonViCongDoan
             {
                 Id = cdbpNoiId,
@@ -246,6 +250,7 @@ public static class DbInitializer
                 LoaiToChuc = LoaiToChuc.CDBP,
                 Level = 2,
                 MaParent = rootId,
+                MaKhoi = khoiNoi?.Id,
                 TrangThai = 1
             };
             var cdbpNgoai = new DonViCongDoan
@@ -255,6 +260,7 @@ public static class DbInitializer
                 LoaiToChuc = LoaiToChuc.CDBP,
                 Level = 2,
                 MaParent = rootId,
+                MaKhoi = khoiNgoai?.Id,
                 TrangThai = 1
             };
             var cdbpLienCoQuan = new DonViCongDoan
@@ -264,6 +270,7 @@ public static class DbInitializer
                 LoaiToChuc = LoaiToChuc.CDBP,
                 Level = 2,
                 MaParent = rootId,
+                MaKhoi = khoiCoQuan?.Id,
                 TrangThai = 1
             };
             
@@ -549,6 +556,67 @@ public static class DbInitializer
                 TrangThai = true
             });
 
+            await context.SaveChangesAsync();
+        }
+
+        // 5. Seed Quality Criteria
+        if (!await context.QualityCriterias.AnyAsync())
+        {
+            var criteriaList = new List<QualityCriteria>
+            {
+                new() { Ma = "Q1", Ten = "Tỉ lệ CNVCLĐ tham gia công đoàn", PhanLoai = "Tổ chức", MucTieu = 95, DonViTinh = "%", IsInverse = false, ThuTu = 1, AutoCalculationKey = "TL_CNVCLD_THAM_GIA" },
+                new() { Ma = "Q2", Ten = "Tỉ lệ thu đoàn phí đầy đủ", PhanLoai = "Tài chính", MucTieu = 98, DonViTinh = "%", IsInverse = false, ThuTu = 2, AutoCalculationKey = "TL_THU_DOAN_PHI" },
+                new() { Ma = "Q3", Ten = "Tỉ lệ đoàn viên là Đảng viên", PhanLoai = "Chính trị", MucTieu = 30, DonViTinh = "%", IsInverse = false, ThuTu = 3, AutoCalculationKey = "TL_DOAN_VIEN_DANG_VIEN" },
+                new() { Ma = "Q4", Ten = "Tỉ lệ giới thiệu kết nạp Đảng", PhanLoai = "Chính trị", MucTieu = 5, DonViTinh = "%", IsInverse = false, ThuTu = 4, AutoCalculationKey = null },
+                new() { Ma = "Q5", Ten = "Tỉ lệ tham gia hoạt động phong trào", PhanLoai = "Hoạt động", MucTieu = 90, DonViTinh = "%", IsInverse = false, ThuTu = 5, AutoCalculationKey = "TL_THAM_GIA_HOAT_DONG" },
+                new() { Ma = "Q6", Ten = "Số sáng kiến được công nhận", PhanLoai = "Sáng kiến", MucTieu = 15, DonViTinh = "sáng kiến", IsInverse = false, ThuTu = 6, AutoCalculationKey = "SO_SANG_KIEN" },
+                new() { Ma = "Q7", Ten = "Tỉ lệ đoàn viên nữ tham gia BCH", PhanLoai = "Bình đẳng", MucTieu = 25, DonViTinh = "%", IsInverse = false, ThuTu = 7, AutoCalculationKey = null },
+                new() { Ma = "Q8", Ten = "Số vụ vi phạm kỷ luật CĐ", PhanLoai = "Kỷ luật", MucTieu = 0, DonViTinh = "vụ", IsInverse = true, ThuTu = 8, AutoCalculationKey = null },
+                new() { Ma = "Q9", Ten = "Tỉ lệ hoàn thành kế hoạch hoạt động", PhanLoai = "Hoạt động", MucTieu = 100, DonViTinh = "%", IsInverse = false, ThuTu = 9, AutoCalculationKey = "TL_HOAN_THANH_KE_HOACH" },
+                new() { Ma = "Q10", Ten = "Tỉ lệ đoàn viên đánh giá hài lòng", PhanLoai = "Chất lượng", MucTieu = 85, DonViTinh = "%", IsInverse = false, ThuTu = 10, AutoCalculationKey = null }
+            };
+            context.QualityCriterias.AddRange(criteriaList);
+            await context.SaveChangesAsync();
+        }
+
+        // 6. Seed Quality Periods
+        if (!await context.QualityEvaluationPeriods.AnyAsync())
+        {
+            var periods = new List<QualityEvaluationPeriod>
+            {
+                new() { Nam = 2026, Ky = "Q1", TenKy = "Quý 1/2026", TrangThai = 2 },
+                new() { Nam = 2026, Ky = "Q2", TenKy = "Quý 2/2026", TrangThai = 1 },
+                new() { Nam = 2026, Ky = "Q3", TenKy = "Quý 3/2026", TrangThai = 1 },
+                new() { Nam = 2026, Ky = "Q4", TenKy = "Quý 4/2026", TrangThai = 1 },
+                new() { Nam = 2026, Ky = "YEAR", TenKy = "Cả năm 2026", TrangThai = 1 }
+            };
+            context.QualityEvaluationPeriods.AddRange(periods);
+            await context.SaveChangesAsync();
+        }
+
+        // 7. Đồng bộ MaKhoi cho các đơn vị cũ trong database nếu chưa có (để sửa dữ liệu cũ)
+        var oldUnitsToUpdate = await context.DonViCongDoans.Where(u => u.MaKhoi == null).ToListAsync();
+        if (oldUnitsToUpdate.Any())
+        {
+            var dbKhoiCoQuan = await context.KhoiChuyenMons.FirstOrDefaultAsync(k => k.TenKhoi == "Khối Cơ quan");
+            var dbKhoiNoi = await context.KhoiChuyenMons.FirstOrDefaultAsync(k => k.TenKhoi == "Khối Nội");
+            var dbKhoiNgoai = await context.KhoiChuyenMons.FirstOrDefaultAsync(k => k.TenKhoi == "Khối Ngoại");
+
+            foreach (var u in oldUnitsToUpdate)
+            {
+                if (u.TenDonVi.Contains("Liên cơ quan") && dbKhoiCoQuan != null)
+                {
+                    u.MaKhoi = dbKhoiCoQuan.Id;
+                }
+                else if ((u.TenDonVi.Contains("Khối Nội") || u.TenDonVi.Contains("Nội 1")) && dbKhoiNoi != null)
+                {
+                    u.MaKhoi = dbKhoiNoi.Id;
+                }
+                else if ((u.TenDonVi.Contains("Khối Ngoại") || u.TenDonVi.Contains("Ngoại Chấn thương")) && dbKhoiNgoai != null)
+                {
+                    u.MaKhoi = dbKhoiNgoai.Id;
+                }
+            }
             await context.SaveChangesAsync();
         }
     }

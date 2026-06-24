@@ -104,10 +104,15 @@ public class UnionUnitsController : ControllerBase
     {
         try
         {
-            var list = await _context.KhoiChuyenMons
+            var rawList = await _context.KhoiChuyenMons.ToListAsync();
+            var sortedList = rawList
+                .OrderBy(k => k.TenKhoi.Contains("Cơ quan") ? 1 :
+                              k.TenKhoi.Contains("Nội") ? 2 :
+                              k.TenKhoi.Contains("Ngoại") ? 3 :
+                              k.TenKhoi.Contains("Cận lâm sàng") ? 4 : 5)
                 .Select(k => new { id = k.Id, tenKhoi = k.TenKhoi })
-                .ToListAsync();
-            return Ok(new { success = true, data = list });
+                .ToList();
+            return Ok(new { success = true, data = sortedList });
         }
         catch (Exception ex)
         {

@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Domain.Entities;
+using QLCD.Domain.Enums;
 
 namespace QLCD.Application.Features.UnionUnits.Commands.UpdateUnionUnit;
 
@@ -33,6 +34,25 @@ public class UpdateUnionUnitCommandHandler : IRequestHandler<UpdateUnionUnitComm
         if (unit == null)
         {
             throw new ArgumentException("Đơn vị công đoàn không tồn tại.");
+        }
+
+        if (request.TrangThai == 0 && unit.TrangThai == 1)
+        {
+            // Kiểm tra xem đơn vị này có đơn vị con nào đang hoạt động không
+            var hasActiveChildren = await _context.DonViCongDoans
+                .AnyAsync(u => u.MaParent == request.Id && u.TrangThai == 1, cancellationToken);
+            if (hasActiveChildren)
+            {
+                throw new ArgumentException("Không thể ngừng hoạt động đơn vị này vì vẫn còn các đơn vị con đang hoạt động. Vui lòng giải thể hoặc chuyển cấp các đơn vị con trước.");
+            }
+
+            // Kiểm tra xem đơn vị này có đoàn viên nào đang sinh hoạt trực thuộc không
+            var hasActiveMembers = await _context.DoanViens
+                .AnyAsync(d => d.MaToCongDoan == request.Id && d.TrangThai == TrangThaiDoanVien.DangSinhHoat, cancellationToken);
+            if (hasActiveMembers)
+            {
+                throw new ArgumentException("Không thể ngừng hoạt động đơn vị này vì vẫn còn đoàn viên đang sinh hoạt. Vui lòng điều chuyển tất cả đoàn viên sang đơn vị khác trước.");
+            }
         }
 
         unit.TenDonVi = request.TenDonVi;

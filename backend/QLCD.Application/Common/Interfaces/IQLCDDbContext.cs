@@ -25,6 +25,12 @@ public interface IQLCDDbContext
     DbSet<ThiDuaCongDoan> ThiDuaCongDoans { get; }
     DbSet<EvidenceFile> EvidenceFiles { get; }
     
+    DbSet<QualityCriteria> QualityCriterias { get; }
+    DbSet<QualityEvaluationPeriod> QualityEvaluationPeriods { get; }
+    DbSet<QualityEvaluation> QualityEvaluations { get; }
+    DbSet<QualityEvaluationDetail> QualityEvaluationDetails { get; }
+    DbSet<QualityManualInput> QualityManualInputs { get; }
+    
     DatabaseFacade Database { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);

@@ -30,6 +30,11 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
     public DbSet<SangKien> SangKiens { get; set; } = null!;
     public DbSet<ThiDuaCongDoan> ThiDuaCongDoans { get; set; } = null!;
     public DbSet<EvidenceFile> EvidenceFiles { get; set; } = null!;
+    public DbSet<QualityCriteria> QualityCriterias { get; set; } = null!;
+    public DbSet<QualityEvaluationPeriod> QualityEvaluationPeriods { get; set; } = null!;
+    public DbSet<QualityEvaluation> QualityEvaluations { get; set; } = null!;
+    public DbSet<QualityEvaluationDetail> QualityEvaluationDetails { get; set; } = null!;
+    public DbSet<QualityManualInput> QualityManualInputs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

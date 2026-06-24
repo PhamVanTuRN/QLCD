@@ -30,6 +30,22 @@ api.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
+// Interceptor to handle unauthorized/expired token responses
+api.interceptors.response.use((response) => {
+  return response;
+}, (error) => {
+  if (error.response && error.response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('qlcd_user');
+      localStorage.removeItem('qlcd_token');
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
+  }
+  return Promise.reject(error);
+});
+
 // ==================== Authentication ====================
 export async function loginApi(payload: Record<string, unknown>) {
   const res = await api.post('/auth/login', payload);
@@ -445,6 +461,143 @@ export async function getFlattenedUnits(): Promise<{ id: string; tenDonVi: strin
   }
   recurse(tree);
   return list;
+}
+
+// ==================== Union Quality (Chất lượng Công đoàn) ====================
+export interface QualityEvaluationPeriodDto {
+  id: string;
+  nam: number;
+  ky: string;
+  tenKy: string;
+  trangThai: number; // 0: Closed, 1: Open, 2: Locked
+}
+
+export interface QualityCriteriaDto {
+  id: string;
+  ma: string;
+  ten: string;
+  phanLoai: string;
+  mucTieu: number;
+  donViTinh: string;
+  isInverse: boolean;
+  thuTu: number;
+  trangThai: boolean;
+  moTa: string | null;
+  autoCalculationKey: string | null;
+}
+
+export interface QualityEvaluationDetailDto {
+  id?: string;
+  criteriaId: string;
+  ma: string;
+  ten: string;
+  phanLoai: string;
+  donViTinh: string;
+  mucTieu: number;
+  thucTe: number;
+  isPassed: boolean;
+  diemSo: number;
+  fileMinhChungUrl?: string | null;
+  ghiChu?: string | null;
+}
+
+export interface SummaryStatsDto {
+  subUnitsTotal: number;
+  subUnitsEvaluated: number;
+  subUnitsExcellent: number;
+  subUnitsStrong: number;
+  subUnitsGood: number;
+  subUnitsUnfinished: number;
+}
+
+export interface QualityEvaluationDto {
+  id: string | null;
+  donViCongDoanId: string;
+  periodId: string;
+  tongDiem: number;
+  xepLoai: string;
+  datSoTieuChi: number;
+  tongSoTieuChi: number;
+  ngayDanhGia: string;
+  nguoiDanhGia: string | null;
+  ghiChu: string | null;
+  details: QualityEvaluationDetailDto[];
+}
+
+export async function getQualityPeriodsApi(): Promise<QualityEvaluationPeriodDto[]> {
+  const res = await api.get('/union-quality/periods');
+  return res.data?.data ?? [];
+}
+
+export async function getQualityCriteriaApi(): Promise<QualityCriteriaDto[]> {
+  const res = await api.get('/union-quality/criteria');
+  return res.data?.data ?? [];
+}
+
+export async function getQualityEvaluationApi(
+  organizationId: string,
+  year: number,
+  period: string
+): Promise<{ success: boolean; data: QualityEvaluationDto | null; summaryStats: SummaryStatsDto }> {
+  const res = await api.get('/union-quality/evaluation', {
+    params: { organizationId, year, period }
+  });
+  return res.data;
+}
+
+export async function getManualInputsApi(
+  organizationId: string,
+  year: number,
+  period: string
+): Promise<{ criteriaId: string; criteriaMa: string; value: number }[]> {
+  const res = await api.get('/union-quality/manual-inputs', {
+    params: { organizationId, year, period }
+  });
+  return res.data?.data ?? [];
+}
+
+export async function saveManualInputsApi(payload: {
+  organizationId: string;
+  year: number;
+  period: string;
+  inputs: { criteriaMa: string; value: number }[];
+}) {
+  const res = await api.post('/union-quality/manual-inputs', payload);
+  return res.data;
+}
+
+export async function calculateQualityApi(payload: {
+  organizationId: string;
+  year: number;
+  period: string;
+  manualInputs?: { criteriaMa: string; value: number }[];
+}): Promise<{ success: boolean; data: QualityEvaluationDto; summaryStats: SummaryStatsDto }> {
+  const res = await api.post('/union-quality/calculate', payload);
+  return res.data;
+}
+
+export async function saveQualityEvaluationApi(payload: {
+  organizationId: string;
+  year: number;
+  period: string;
+  tongDiem: number;
+  xepLoai: string;
+  datSoTieuChi: number;
+  tongSoTieuChi: number;
+  ghiChu?: string | null;
+  details: {
+    criteriaId: string;
+    criteriaMa: string;
+    mucTieu: number;
+    thucTe: number;
+    isPassed: boolean;
+    diemSo: number;
+    fileMinhChungUrl?: string | null;
+    ghiChu?: string | null;
+  }[];
+}) {
+  const res = await api.post('/union-quality/save', payload);
+  return res.data;
 }
 
 export default api;

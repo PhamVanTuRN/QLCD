@@ -565,7 +565,7 @@ export default function Dashboard() {
             <p className="text-[11px] text-slate-500 mt-1 font-medium">Các tiêu chí phân tích hồ sơ đoàn viên áp dụng theo điều kiện lọc hiện tại</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             {/* Chất lượng đoàn viên */}
             <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Chất lượng đánh giá</span>
@@ -631,6 +631,25 @@ export default function Dashboard() {
                 ) : (
                   <div className="text-slate-400 text-[10px] italic">Không có chức danh ghi nhận</div>
                 )}
+              </div>
+            </div>
+
+            {/* Đảng viên */}
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Đảng viên & Đoàn thể</span>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 truncate">Đảng viên:</span>
+                  <span className="font-semibold text-red-650">
+                    {stats.doanVienDangVien} <span className="text-[10px] text-slate-400 font-medium">({stats.tiLeDangVien}%)</span>
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 truncate">Quần chúng:</span>
+                  <span className="font-semibold text-slate-700">
+                    {stats.tongDoanVien - stats.doanVienDangVien} <span className="text-[10px] text-slate-400 font-medium">({stats.tongDoanVien > 0 ? (100 - stats.tiLeDangVien).toFixed(1) : "0.0"}%)</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>

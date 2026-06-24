@@ -44,6 +44,62 @@ public class DeleteUnionUnitCommandHandler : IRequestHandler<DeleteUnionUnitComm
             throw new ArgumentException("Không thể xóa đơn vị này vì vẫn còn đoàn viên đang sinh hoạt trực thuộc.");
         }
 
+        // Kiểm tra dữ liệu hoạt động phong trào phát sinh
+        var hasActivities = await _context.HoatDongCongDoans
+            .AnyAsync(h => h.DonViId == request.Id, cancellationToken);
+        if (hasActivities)
+        {
+            throw new ArgumentException("Không thể xóa đơn vị này vì đã phát sinh dữ liệu Hoạt động Công đoàn. Vui lòng chuyển đơn vị sang trạng thái Ngừng hoạt động.");
+        }
+
+        // Kiểm tra dữ liệu tài chính phát sinh
+        var hasFinances = await _context.TaiChinhCongDoans
+            .AnyAsync(t => t.DonViId == request.Id, cancellationToken);
+        if (hasFinances)
+        {
+            throw new ArgumentException("Không thể xóa đơn vị này vì đã phát sinh dữ liệu Tài chính Công đoàn. Vui lòng chuyển đơn vị sang trạng thái Ngừng hoạt động.");
+        }
+
+        // Kiểm tra dữ liệu phúc lợi phát sinh
+        var hasWelfares = await _context.PhucLoiDoanViens
+            .AnyAsync(p => p.DonViId == request.Id, cancellationToken);
+        if (hasWelfares)
+        {
+            throw new ArgumentException("Không thể xóa đơn vị này vì đã phát sinh dữ liệu Phúc lợi Đoàn viên. Vui lòng chuyển đơn vị sang trạng thái Ngừng hoạt động.");
+        }
+
+        // Kiểm tra dữ liệu sáng kiến phát sinh
+        var hasInitiatives = await _context.SangKiens
+            .AnyAsync(s => s.DonViId == request.Id, cancellationToken);
+        if (hasInitiatives)
+        {
+            throw new ArgumentException("Không thể xóa đơn vị này vì đã phát sinh dữ liệu Sáng kiến & Đề tài. Vui lòng chuyển đơn vị sang trạng thái Ngừng hoạt động.");
+        }
+
+        // Kiểm tra dữ liệu thi đua phát sinh
+        var hasEmulations = await _context.ThiDuaCongDoans
+            .AnyAsync(t => t.DonViId == request.Id, cancellationToken);
+        if (hasEmulations)
+        {
+            throw new ArgumentException("Không thể xóa đơn vị này vì đã phát sinh dữ liệu Thi đua Công đoàn. Vui lòng chuyển đơn vị sang trạng thái Ngừng hoạt động.");
+        }
+
+        // Kiểm tra dữ liệu đánh giá chất lượng phát sinh
+        var hasEvaluations = await _context.QualityEvaluations
+            .AnyAsync(q => q.DonViCongDoanId == request.Id, cancellationToken);
+        if (hasEvaluations)
+        {
+            throw new ArgumentException("Không thể xóa đơn vị này vì đã phát sinh dữ liệu Đánh giá Chất lượng. Vui lòng chuyển đơn vị sang trạng thái Ngừng hoạt động.");
+        }
+
+        // Kiểm tra dữ liệu chỉ số chất lượng thủ công phát sinh
+        var hasManualInputs = await _context.QualityManualInputs
+            .AnyAsync(q => q.DonViCongDoanId == request.Id, cancellationToken);
+        if (hasManualInputs)
+        {
+            throw new ArgumentException("Không thể xóa đơn vị này vì đã phát sinh dữ liệu Chỉ số chất lượng. Vui lòng chuyển đơn vị sang trạng thái Ngừng hoạt động.");
+        }
+
         // Thực hiện soft-delete đơn vị
         unit.IsDeleted = true;
         unit.TrangThai = 0;

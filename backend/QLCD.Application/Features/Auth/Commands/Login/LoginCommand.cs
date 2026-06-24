@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Shared.Security;
+using Microsoft.Extensions.Configuration;
 
 namespace QLCD.Application.Features.Auth.Commands.Login;
 
@@ -31,10 +32,12 @@ public class LoginResponseDto
 public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDto>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IConfiguration _configuration;
 
-    public LoginCommandHandler(IQLCDDbContext context)
+    public LoginCommandHandler(IQLCDDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _configuration = configuration;
     }
 
     public async Task<LoginResponseDto> Handle(LoginCommand request, CancellationToken cancellationToken)
@@ -50,7 +53,12 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
 
         // Generate JWT Token
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes("Antigravity_QLCD_Super_Secure_Key_12891391398123");
+        var jwtSecret = _configuration["JwtSettings:Secret"];
+        if (string.IsNullOrEmpty(jwtSecret) || jwtSecret == "YOUR_JWT_SECRET_KEY_MINIMUM_32_CHARACTERS")
+        {
+            throw new InvalidOperationException("JWT Secret key is not properly configured in QLCD.Application.");
+        }
+        var key = Encoding.ASCII.GetBytes(jwtSecret);
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(new[]

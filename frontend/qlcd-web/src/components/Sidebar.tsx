@@ -35,7 +35,7 @@ const extraNavItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
 
   const getScopeBadgeColor = (scope: string) => {
     switch (scope) {
@@ -46,8 +46,8 @@ export default function Sidebar() {
     }
   };
 
-  const isSystemAdmin = user?.vaiTro === "Administrator";
-  const isCdcsUser = user?.phamVi === "CDCS";
+  const showCatalogs = hasPermission("Dictionaries.View") && user?.phamVi === "CDCS";
+  const showAccounts = hasPermission("Users.Manage");
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
@@ -73,8 +73,8 @@ export default function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 isActive
-                  ? "bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs font-semibold"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-150/40 shadow-xs font-semibold"
+                  : "text-slate-600 hover:bg-slate-55 hover:text-emerald-700"
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" /> {item.label}
@@ -95,8 +95,8 @@ export default function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium transition-all ${
                 isActive
-                  ? "bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs font-semibold"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-blue-600"
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-150/40 shadow-xs font-semibold"
+                  : "text-slate-550 hover:bg-slate-55 hover:text-emerald-700"
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" /> {item.label}
@@ -104,30 +104,32 @@ export default function Sidebar() {
           );
         })}
 
-        {isCdcsUser && (
+        {(showCatalogs || showAccounts) && (
           <>
             <div className="pt-4 border-t border-slate-100 my-4">
               <span className="px-4 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Cấu hình hệ thống</span>
             </div>
             
-            <Link
-              href="/catalogs"
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium transition-all ${
-                pathname.startsWith("/catalogs")
-                  ? "bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs font-semibold"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-blue-600"
-              }`}
-            >
-              <Folder className="w-4 h-4 shrink-0" /> Quản lý Danh mục
-            </Link>
+            {showCatalogs && (
+              <Link
+                href="/catalogs"
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                  pathname.startsWith("/catalogs")
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-150/40 shadow-xs font-semibold"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-emerald-700"
+                }`}
+              >
+                <Folder className="w-4 h-4 shrink-0" /> Quản lý Danh mục
+              </Link>
+            )}
 
-            {isSystemAdmin && (
+            {showAccounts && (
               <Link
                 href="/accounts"
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium transition-all ${
                   pathname.startsWith("/accounts")
-                    ? "bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs font-semibold"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-blue-600"
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-150/40 shadow-xs font-semibold"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-emerald-700"
                 }`}
               >
                 <Key className="w-4 h-4 shrink-0" /> Tài khoản Tổ chức

@@ -34,7 +34,8 @@ node_modules/
 out/
 build/
 dist/
-.env*.local
+.env*
+appsettings.Local.json
 
 # OS files
 .DS_Store

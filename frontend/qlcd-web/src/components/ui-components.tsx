@@ -10,14 +10,19 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, children }: PageHeaderProps) {
   return (
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-800 tracking-tight">{title}</h2>
-        {description && (
-          <p className="text-xs text-slate-500 mt-1 font-medium">{description}</p>
-        )}
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#2e7d32] text-white p-5 rounded-2xl shadow-sm mb-6 animate-in fade-in duration-300">
+      <div className="flex items-center gap-3.5">
+        <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white shrink-0 shadow-inner">
+          <span className="text-2xl">📋</span>
+        </div>
+        <div>
+          <h2 className="text-base font-extrabold tracking-tight text-white">{title}</h2>
+          {description && (
+            <p className="text-[11px] text-emerald-100/90 mt-1.5 font-medium">{description}</p>
+          )}
+        </div>
       </div>
-      {children && <div className="flex items-center gap-2.5">{children}</div>}
+      {children && <div className="flex items-center gap-2.5 shrink-0">{children}</div>}
     </div>
   );
 }
@@ -211,9 +216,9 @@ export function ActionButton({
   disabled = false,
 }: ActionButtonProps) {
   const styles = {
-    primary: "bg-blue-600 hover:bg-blue-700 text-white shadow-xs focus:ring-blue-500/20",
+    primary: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs focus:ring-emerald-500/20",
     secondary: "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs focus:ring-slate-500/20",
-    success: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs focus:ring-emerald-500/20",
+    success: "bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs focus:ring-emerald-500/20",
     danger: "bg-red-600 hover:bg-red-700 text-white shadow-xs focus:ring-red-500/20",
     info: "bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 shadow-xs focus:ring-sky-500/20",
     warning: "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 shadow-xs focus:ring-amber-500/20",
@@ -275,11 +280,13 @@ interface FormSectionProps {
 
 export function FormSection({ title, description, children }: FormSectionProps) {
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-xs space-y-4">
+    <div className="bg-white border border-slate-150 rounded-2xl p-6 shadow-xs space-y-4">
       <div className="border-b border-slate-100 pb-3">
-        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{title}</h3>
+        <h3 className="text-sm font-extrabold text-[#00448a] tracking-wide flex items-center gap-2">
+          <span>🔷</span> {title}
+        </h3>
         {description && (
-          <p className="text-[10px] text-slate-500 mt-0.5 font-medium">{description}</p>
+          <p className="text-[10px] text-slate-400 mt-1 font-semibold">{description}</p>
         )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

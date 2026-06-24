@@ -112,6 +112,7 @@ export default function MembersList() {
   const [chucVus, setChucVus] = useState<CatalogDto[]>([]);
   const [donViCongTacs, setDonViCongTacs] = useState<CatalogDto[]>([]);
   const [chuyenMons, setChuyenMons] = useState<CatalogDto[]>([]);
+  const [educationList, setEducationList] = useState<CatalogDto[]>([]);
 
   // Add member modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -225,6 +226,8 @@ export default function MembersList() {
       setDonViCongTacs(dv);
       const cm = await getCatalogsApi({ loai: "ChuyenMon", activeOnly: true });
       setChuyenMons(cm);
+      const edu = await getCatalogsApi({ loai: "HocHamHocVi", activeOnly: true });
+      setEducationList(edu);
     } catch (err) {
       console.error(err);
     }
@@ -564,9 +567,10 @@ export default function MembersList() {
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Trình độ học vấn</label>
                 <select value={addForm.trinhDoHocVan} onChange={e => setAddForm({ ...addForm, trinhDoHocVan: e.target.value })}
                   className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
-                  <option value="">Chọn...</option>
-                  <option value="Trung cấp">Trung cấp</option><option value="Cao đẳng">Cao đẳng</option>
-                  <option value="Đại học">Đại học</option><option value="Thạc sĩ">Thạc sĩ</option><option value="Tiến sĩ">Tiến sĩ</option>
+                  <option value="">Chọn Trình độ học vấn...</option>
+                  {educationList.map(edu => (
+                    <option key={edu.id} value={edu.ten}>{edu.ten}</option>
+                  ))}
                 </select>
               </div>
               <div>
