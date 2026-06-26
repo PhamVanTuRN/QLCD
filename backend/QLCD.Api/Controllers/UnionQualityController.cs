@@ -338,7 +338,7 @@ public class UnionQualityController : ControllerBase
                         break;
 
                     case "Q3": // Tỉ lệ đoàn viên là Đảng viên
-                        var dangVienCount = activeMembers.Count(d => d.DangVien);
+                        var dangVienCount = activeMembers.Count(d => d.DangVien == "Đảng viên chính thức" || d.DangVien == "Đảng viên dự bị");
                         thucTe = totalActiveMembers > 0 ? ((double)dangVienCount / totalActiveMembers) * 100.0 : 0.0;
                         break;
 

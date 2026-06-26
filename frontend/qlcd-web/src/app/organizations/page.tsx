@@ -250,7 +250,9 @@ export default function OrganizationTree() {
               <span className="text-[10px] text-slate-500 font-semibold">Tổ CĐ luôn là cấp cuối cùng</span>
             </div>
           </div>
-          <div className="-ml-6">{renderNode(tree)}</div>
+          <div className="-ml-6 max-h-[650px] overflow-auto pr-2 pb-2">
+            {renderNode(tree)}
+          </div>
         </div>
 
         {/* Right Detail Panel */}
@@ -282,16 +284,20 @@ export default function OrganizationTree() {
                       <span className="font-semibold text-pink-600">{selectedNode.soDoanVienNu ?? 0}</span>
                     </div>
                     <div className="flex justify-between border-r border-slate-150 pr-3">
-                      <span className="text-slate-500">Đảng viên:</span>
-                      <span className="font-semibold text-red-500">★ {selectedNode.soDoanVienDangVien ?? 0}</span>
+                      <span className="text-slate-500">Đảng viên CT:</span>
+                      <span className="font-semibold text-red-600">★ {selectedNode.soDoanVienDangVien ?? 0}</span>
                     </div>
                     <div className="flex justify-between pl-1">
+                      <span className="text-slate-500">Đảng viên DB:</span>
+                      <span className="font-semibold text-rose-500">★ {selectedNode.soDoanVienDangVienDuBi ?? 0}</span>
+                    </div>
+                    <div className="flex justify-between border-r border-slate-150 pr-3">
                       <span className="text-slate-500">Ngoại ngữ:</span>
                       <span className="font-semibold text-teal-600">🌐 {selectedNode.soCoNgoaiNgu ?? 0}</span>
                     </div>
-                    <div className="col-span-2 flex justify-between pt-1.5 border-t border-slate-150">
+                    <div className="flex justify-between pl-1">
                       <span className="text-slate-500">Đại học trở lên:</span>
-                      <span className="font-semibold text-purple-650">{selectedNode.soTrinhDoDaiHoc ?? 0}</span>
+                      <span className="font-semibold text-purple-650">🎓 {selectedNode.soTrinhDoDaiHoc ?? 0}</span>
                     </div>
                   </div>
                 </div>

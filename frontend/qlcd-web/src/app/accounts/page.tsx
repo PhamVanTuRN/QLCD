@@ -101,7 +101,7 @@ export default function AccountsPage() {
     }
 
     try {
-      await resetAccountPasswordApi(selectedAccountId!, { password: newPassword });
+      await resetAccountPasswordApi(selectedAccountId!, { newPassword: newPassword });
       showAlert("success", `Đặt lại mật khẩu cho tài khoản ${selectedUsername} thành công`);
       setIsResetModalOpen(false);
       loadAccounts();
@@ -280,9 +280,36 @@ export default function AccountsPage() {
             </div>
 
             <form onSubmit={handleResetSubmit} className="space-y-4 text-xs">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm(`Bạn có chắc chắn muốn đặt lại mật khẩu cho tài khoản "${selectedUsername}" về mặc định "123456aA@"?`)) {
+                    try {
+                      await resetAccountPasswordApi(selectedAccountId!, { newPassword: "123456aA@" });
+                      showAlert("success", `Đặt lại mật khẩu cho tài khoản ${selectedUsername} về mặc định thành công`);
+                      setIsResetModalOpen(false);
+                      loadAccounts();
+                    } catch (err) {
+                      console.error(err);
+                      const apiError = err as ApiError;
+                      showAlert("error", apiError.response?.data?.message || "Lỗi đặt lại mật khẩu");
+                    }
+                  }
+                }}
+                className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-250 rounded-xl py-2.5 px-3 text-center font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
+              >
+                🔄 Reset về mật khẩu mặc định (123456aA@)
+              </button>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-150"></div>
+                <span className="flex-shrink mx-3 text-[9px] text-slate-400 font-bold uppercase tracking-wider">Hoặc tự nhập</span>
+                <div className="flex-grow border-t border-slate-150"></div>
+              </div>
+
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Mật khẩu mới <span className="text-red-500">*</span>
+                  Mật khẩu mới tự chọn <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"

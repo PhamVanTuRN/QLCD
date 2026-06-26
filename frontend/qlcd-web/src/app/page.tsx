@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { 
   getStats, 
   UnionStatsDto, 
@@ -70,8 +70,8 @@ function getSelectableUnits(tree: UnionUnitDto | null, user: UserProfile | null)
 // Mock stats mặc định khi chưa có dữ liệu từ DB
 const defaultStats: UnionStatsDto = {
   tongDoanVien: 0, doanVienNam: 0, doanVienNu: 0,
-  doanVienDangSinhHoat: 0, doanVienDangVien: 0,
-  tiLeDangVien: 0, tiLeNu: 0,
+  doanVienDangSinhHoat: 0, doanVienDangVien: 0, doanVienDangVienDuBi: 0,
+  tiLeDangVien: 0, tiLeDangVienDuBi: 0, tiLeNu: 0,
   tongCDBP: 0, tongToCongDoan: 0,
   ketNapMoiThang: 0, chuyenDiThang: 0, nghiHuuThang: 0,
   
@@ -84,6 +84,9 @@ const defaultStats: UnionStatsDto = {
   doanVienTheoChucVu: [],
   doanVienTheoNgoaiNgu: [],
   doanVienTheoTrinhDo: [],
+  doanVienTheoLoaiCanBo: [],
+  doanVienTheoDanToc: [],
+  doanVienTheoTonGiao: [],
 
   tongThuDoanPhi: 0,
   tongChi: 0,
@@ -119,6 +122,79 @@ export default function Dashboard() {
 
   const [stats, setStats] = useState<UnionStatsDto>(defaultStats);
   const [loading, setLoading] = useState(true);
+
+  // Helper to get combined or filtered chart data for Chart 1
+  const getChartData = useCallback(() => {
+    if (!stats) return [];
+    
+    // 1. If running new API, stats.doanVienTheoToCd is empty
+    if (!stats.doanVienTheoToCd || stats.doanVienTheoToCd.length === 0) {
+      return (stats.doanVienTheoCdbp || []).map(d => ({ name: d.name, doanVien: d.count }));
+    }
+
+    // 2. If running old API, merge arrays but avoid duplicates
+    const activeOrgId = selectedOrg || user?.donViId;
+    const currentOrg = selectableOrgs.find(o => o.id === activeOrgId);
+    const currentLevel = currentOrg ? currentOrg.level : 1;
+    const targetLevel = currentLevel + 1;
+
+    // Filter combined list by target level units
+    const targetOrgNames = selectableOrgs
+      .filter(o => o.level === targetLevel)
+      .map(o => o.tenDonVi.trim().toLowerCase());
+
+    const combined = [...(stats.doanVienTheoCdbp || []), ...(stats.doanVienTheoToCd || [])];
+    const filtered = combined.filter(item => {
+      const trimmedName = item.name.trim().toLowerCase();
+      return targetOrgNames.includes(trimmedName);
+    });
+
+    const finalData = filtered.length > 0 ? filtered : combined;
+    const uniqueMap = new Map<string, number>();
+    finalData.forEach(item => {
+      uniqueMap.set(item.name, item.count);
+    });
+
+    return Array.from(uniqueMap.entries()).map(([name, count]) => ({
+      name,
+      doanVien: count
+    }));
+  }, [stats, selectedOrg, user, selectableOrgs]);
+
+  // Dynamic width calculations for scrollable charts
+  const chart1ContainerRef = useRef<HTMLDivElement>(null);
+  const chart5ContainerRef = useRef<HTMLDivElement>(null);
+  const [chart1Width, setChart1Width] = useState(600);
+  const [chart5Width, setChart5Width] = useState(600);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleResize = () => {
+      if (chart1ContainerRef.current) {
+        const parentW = chart1ContainerRef.current.clientWidth;
+        const dataLength = getChartData().length;
+        const requiredW = dataLength * 85;
+        setChart1Width(Math.max(parentW, requiredW, 600));
+      }
+      if (chart5ContainerRef.current) {
+        const parentW = chart5ContainerRef.current.clientWidth;
+        const dataLength = stats.thiDuaTheoToChuc.length || 0;
+        const requiredW = dataLength * 85;
+        setChart5Width(Math.max(parentW, requiredW, 600));
+      }
+    };
+
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    const timer = setTimeout(handleResize, 100);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(timer);
+    };
+  }, [stats.doanVienTheoCdbp, stats.doanVienTheoToCd, stats.thiDuaTheoToChuc, getChartData]);
 
   // Load catalogs on mount
   useEffect(() => {
@@ -428,12 +504,21 @@ export default function Dashboard() {
             {/* Chart 1: Members by organisation */}
             <div className="lg:col-span-2 bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
               <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Đoàn viên theo Tổ chức Công đoàn</h3>
-              <div className="h-80 flex items-center justify-center">
-                {stats.doanVienTheoCdbp.length === 0 && stats.doanVienTheoToCd.length === 0 ? (
-                  <span className="text-xs text-slate-400 italic">Không có dữ liệu đơn vị công đoàn</span>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.doanVienTheoCdbp.length > 0 ? stats.doanVienTheoCdbp.map(d => ({ name: d.name, doanVien: d.count })) : stats.doanVienTheoToCd.map(d => ({ name: d.name, doanVien: d.count }))}>
+              <div ref={chart1ContainerRef} className="w-full overflow-x-auto pb-2">
+                <div 
+                  className="h-80 relative"
+                  style={{ width: `${chart1Width}px` }}
+                >
+                  {getChartData().length === 0 ? (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs text-slate-400 italic">Không có dữ liệu đơn vị công đoàn</span>
+                    </div>
+                  ) : (
+                    <BarChart 
+                      width={chart1Width} 
+                      height={320} 
+                      data={getChartData()}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                       <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} />
                       <YAxis stroke="#94A3B8" fontSize={10} />
@@ -441,19 +526,21 @@ export default function Dashboard() {
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="doanVien" name="Đoàn viên" fill="#2563EB" radius={[4, 4, 0, 0]} />
                     </BarChart>
-                  </ResponsiveContainer>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Chart 2: Members by block */}
             <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs flex flex-col">
               <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Đoàn viên theo Khối chuyên môn</h3>
-              <div className="flex-1 h-60 min-h-[240px] flex items-center justify-center">
+              <div className="flex-1 h-60 min-h-[240px] w-full relative">
                 {stats.doanVienTheoKhoi.length === 0 ? (
-                  <span className="text-xs text-slate-400 italic">Không có dữ liệu khối chuyên môn</span>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs text-slate-400 italic">Không có dữ liệu khối chuyên môn</span>
+                  </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={240} minWidth={0}>
                     <PieChart>
                       <Pie 
                         data={stats.doanVienTheoKhoi.map(k => ({ name: k.name, value: k.count }))} 
@@ -491,11 +578,13 @@ export default function Dashboard() {
             {/* Chart 3: Revenue & Expense timeline */}
             <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
               <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Biến động Thu - Chi Tài chính</h3>
-              <div className="h-80 flex items-center justify-center">
+              <div className="h-80 w-full relative">
                 {stats.thuChiTheoThoiGian.length === 0 ? (
-                  <span className="text-xs text-slate-400 italic">Không có dữ liệu biến động thu chi</span>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs text-slate-400 italic">Không có dữ liệu biến động thu chi</span>
+                  </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={320} minWidth={0}>
                     <LineChart data={stats.thuChiTheoThoiGian}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                       <XAxis dataKey="timeLabel" stroke="#94A3B8" fontSize={10} />
@@ -513,11 +602,13 @@ export default function Dashboard() {
             {/* Chart 4: Activities by month */}
             <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
               <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Hoạt động Công đoàn theo Tháng</h3>
-              <div className="h-80 flex items-center justify-center">
+              <div className="h-80 w-full relative">
                 {stats.hoatDongTheoThang.length === 0 ? (
-                  <span className="text-xs text-slate-400 italic">Không có dữ liệu hoạt động công đoàn</span>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs text-slate-400 italic">Không có dữ liệu hoạt động công đoàn</span>
+                  </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={320} minWidth={0}>
                     <BarChart data={stats.hoatDongTheoThang}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                       <XAxis dataKey="timeLabel" stroke="#94A3B8" fontSize={10} />
@@ -532,15 +623,23 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Row 3: Emulation Stacked Bar */}
           <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-xs">
             <h3 className="text-xs font-bold text-slate-800 mb-6 uppercase tracking-wider">Kết quả Thi đua khen thưởng theo Đơn vị</h3>
-            <div className="h-80 flex items-center justify-center">
-              {stats.thiDuaTheoToChuc.length === 0 ? (
-                <span className="text-xs text-slate-400 italic">Không có dữ liệu thi đua khen thưởng</span>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.thiDuaTheoToChuc}>
+            <div ref={chart5ContainerRef} className="w-full overflow-x-auto pb-2">
+              <div 
+                className="h-80 relative"
+                style={{ width: `${chart5Width}px` }}
+              >
+                {stats.thiDuaTheoToChuc.length === 0 ?
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs text-slate-400 italic">Không có dữ liệu thi đua khen thưởng</span>
+                  </div>
+                :
+                  <BarChart 
+                    width={chart5Width} 
+                    height={320} 
+                    data={stats.thiDuaTheoToChuc}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                     <XAxis dataKey="organizationName" stroke="#94A3B8" fontSize={10} />
                     <YAxis stroke="#94A3B8" fontSize={10} />
@@ -550,8 +649,8 @@ export default function Dashboard() {
                     <Bar dataKey="datYeuCau" name="Đạt yêu cầu / Khá" stackId="a" fill={THI_DUA_COLORS[1]} />
                     <Bar dataKey="chuaDat" name="Không đạt / Kém" stackId="a" fill={THI_DUA_COLORS[2]} radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
-              )}
+                }
+              </div>
             </div>
           </div>
         </div>
@@ -565,27 +664,52 @@ export default function Dashboard() {
             <p className="text-[11px] text-slate-500 mt-1 font-medium">Các tiêu chí phân tích hồ sơ đoàn viên áp dụng theo điều kiện lọc hiện tại</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            {/* Chất lượng đoàn viên */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Phân loại cán bộ */}
             <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Chất lượng đánh giá</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Phân loại cán bộ (Loại cán bộ)</span>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                {stats.doanVienTheoChatLuong.length > 0 ? (
-                  stats.doanVienTheoChatLuong.map(item => (
+                {stats.doanVienTheoLoaiCanBo && stats.doanVienTheoLoaiCanBo.length > 0 ? (
+                  stats.doanVienTheoLoaiCanBo.map(item => (
                     <div key={item.name} className="flex justify-between text-xs">
                       <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
-                      <span className="font-semibold text-emerald-650">{item.count}</span>
+                      <span className="font-semibold text-blue-650">{item.count}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-400 text-[10px] italic">Không có dữ liệu đánh giá xếp loại</div>
+                  <div className="text-slate-400 text-[10px] italic">Không có dữ liệu loại cán bộ</div>
                 )}
+              </div>
+            </div>
+
+            {/* Đảng viên */}
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Đảng viên & Đoàn thể</span>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 truncate">Đảng viên chính thức:</span>
+                  <span className="font-semibold text-red-650">
+                    {stats.doanVienDangVien} <span className="text-[10px] text-slate-400 font-medium">({stats.tiLeDangVien}%)</span>
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 truncate">Đảng viên dự bị:</span>
+                  <span className="font-semibold text-rose-500">
+                    {stats.doanVienDangVienDuBi} <span className="text-[10px] text-slate-400 font-medium">({stats.tiLeDangVienDuBi}%)</span>
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 truncate">Quần chúng / Khác:</span>
+                  <span className="font-semibold text-slate-700">
+                    {stats.tongDoanVien - stats.doanVienDangVien - stats.doanVienDangVienDuBi} <span className="text-[10px] text-slate-400 font-medium">({stats.tongDoanVien > 0 ? (100 - stats.tiLeDangVien - stats.tiLeDangVienDuBi).toFixed(1) : "0.0"}%)</span>
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Trình độ chuyên môn */}
             <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Học vấn & Học hàm học vị</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Học văn & Học hàm học vị</span>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                 {stats.doanVienTheoTrinhDo.length > 0 ? (
                   stats.doanVienTheoTrinhDo.map(item => (
@@ -596,23 +720,6 @@ export default function Dashboard() {
                   ))
                 ) : (
                   <div className="text-slate-400 text-[10px] italic">Không có dữ liệu trình độ</div>
-                )}
-              </div>
-            </div>
-
-            {/* Ngoại ngữ */}
-            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Kỹ năng ngoại ngữ</span>
-              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                {stats.doanVienTheoNgoaiNgu.length > 0 ? (
-                  stats.doanVienTheoNgoaiNgu.map(item => (
-                    <div key={item.name} className="flex justify-between text-xs">
-                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
-                      <span className="font-semibold text-sky-655">{item.count}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-slate-400 text-[10px] italic">Không có chứng chỉ ghi nhận</div>
                 )}
               </div>
             </div>
@@ -634,22 +741,71 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Đảng viên */}
+            {/* Dân tộc */}
             <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Đảng viên & Đoàn thể</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Dân tộc</span>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500 truncate">Đảng viên:</span>
-                  <span className="font-semibold text-red-650">
-                    {stats.doanVienDangVien} <span className="text-[10px] text-slate-400 font-medium">({stats.tiLeDangVien}%)</span>
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500 truncate">Quần chúng:</span>
-                  <span className="font-semibold text-slate-700">
-                    {stats.tongDoanVien - stats.doanVienDangVien} <span className="text-[10px] text-slate-400 font-medium">({stats.tongDoanVien > 0 ? (100 - stats.tiLeDangVien).toFixed(1) : "0.0"}%)</span>
-                  </span>
-                </div>
+                {stats.doanVienTheoDanToc && stats.doanVienTheoDanToc.length > 0 ? (
+                  stats.doanVienTheoDanToc.map(item => (
+                    <div key={item.name} className="flex justify-between text-xs">
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-emerald-650">{item.count}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-400 text-[10px] italic">Không có dữ liệu dân tộc</div>
+                )}
+              </div>
+            </div>
+
+            {/* Tôn giáo */}
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tôn giáo</span>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                {stats.doanVienTheoTonGiao && stats.doanVienTheoTonGiao.length > 0 ? (
+                  stats.doanVienTheoTonGiao.map(item => (
+                    <div key={item.name} className="flex justify-between text-xs">
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-rose-650">{item.count}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-400 text-[10px] italic">Không có dữ liệu tôn giáo</div>
+                )}
+              </div>
+            </div>
+
+            {/* Ngoại ngữ */}
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Kỹ năng ngoại ngữ</span>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                {stats.doanVienTheoNgoaiNgu.length > 0 ? (
+                  stats.doanVienTheoNgoaiNgu.map(item => (
+                    <div key={item.name} className="flex justify-between text-xs">
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-sky-655">{item.count}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-400 text-[10px] italic">Không có chứng chỉ ghi nhận</div>
+                )}
+              </div>
+            </div>
+
+            {/* Chất lượng đoàn viên */}
+            <div className="p-4 bg-slate-50/50 border border-slate-100 rounded-xl space-y-3">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Chất lượng đánh giá</span>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                {stats.doanVienTheoChatLuong.length > 0 ? (
+                  stats.doanVienTheoChatLuong.map(item => (
+                    <div key={item.name} className="flex justify-between text-xs">
+                      <span className="text-slate-500 truncate max-w-[150px]">{item.name}:</span>
+                      <span className="font-semibold text-pink-650">{item.count}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-400 text-[10px] italic">Không có dữ liệu đánh giá xếp loại</div>
+                )}
               </div>
             </div>
           </div>

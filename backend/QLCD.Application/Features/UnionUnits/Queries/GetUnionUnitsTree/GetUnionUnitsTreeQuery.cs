@@ -27,6 +27,7 @@ public class UnionUnitDto
     public int SoDoanVienNam { get; set; }
     public int SoDoanVienNu { get; set; }
     public int SoDoanVienDangVien { get; set; }
+    public int SoDoanVienDangVienDuBi { get; set; }
     public int SoTrinhDoDaiHoc { get; set; }
     public int SoCoNgoaiNgu { get; set; }
 
@@ -39,6 +40,7 @@ public class UnitStats
     public int SoDoanVienNam { get; set; }
     public int SoDoanVienNu { get; set; }
     public int SoDoanVienDangVien { get; set; }
+    public int SoDoanVienDangVienDuBi { get; set; }
     public int SoTrinhDoDaiHoc { get; set; }
     public int SoCoNgoaiNgu { get; set; }
 }
@@ -84,7 +86,8 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
                     SoDoanVien = g.Count(),
                     SoDoanVienNam = g.Count(d => d.GioiTinh == 1),
                     SoDoanVienNu = g.Count(d => d.GioiTinh == 0),
-                    SoDoanVienDangVien = g.Count(d => d.DangVien),
+                    SoDoanVienDangVien = g.Count(d => d.DangVien == "Đảng viên chính thức"),
+                    SoDoanVienDangVienDuBi = g.Count(d => d.DangVien == "Đảng viên dự bị"),
                     SoTrinhDoDaiHoc = g.Count(d => d.TrinhDoHocVan == "Đại học" || d.TrinhDoHocVan == "Thạc sĩ" || d.TrinhDoHocVan == "Tiến sĩ"),
                     SoCoNgoaiNgu = g.Count(d => d.CoNgoaiNgu)
                 });
@@ -143,6 +146,7 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
         int childrenNam = 0;
         int childrenNu = 0;
         int childrenDangVien = 0;
+        int childrenDangVienDuBi = 0;
         int childrenDaiHoc = 0;
         int childrenNgoaiNgu = 0;
 
@@ -153,6 +157,7 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
             childrenNam += childStats.SoDoanVienNam;
             childrenNu += childStats.SoDoanVienNu;
             childrenDangVien += childStats.SoDoanVienDangVien;
+            childrenDangVienDuBi += childStats.SoDoanVienDangVienDuBi;
             childrenDaiHoc += childStats.SoTrinhDoDaiHoc;
             childrenNgoaiNgu += childStats.SoCoNgoaiNgu;
         }
@@ -161,6 +166,7 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
         node.SoDoanVienNam = directStats.SoDoanVienNam + childrenNam;
         node.SoDoanVienNu = directStats.SoDoanVienNu + childrenNu;
         node.SoDoanVienDangVien = directStats.SoDoanVienDangVien + childrenDangVien;
+        node.SoDoanVienDangVienDuBi = directStats.SoDoanVienDangVienDuBi + childrenDangVienDuBi;
         node.SoTrinhDoDaiHoc = directStats.SoTrinhDoDaiHoc + childrenDaiHoc;
         node.SoCoNgoaiNgu = directStats.SoCoNgoaiNgu + childrenNgoaiNgu;
 
@@ -170,6 +176,7 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
             SoDoanVienNam = node.SoDoanVienNam,
             SoDoanVienNu = node.SoDoanVienNu,
             SoDoanVienDangVien = node.SoDoanVienDangVien,
+            SoDoanVienDangVienDuBi = node.SoDoanVienDangVienDuBi,
             SoTrinhDoDaiHoc = node.SoTrinhDoDaiHoc,
             SoCoNgoaiNgu = node.SoCoNgoaiNgu
         };

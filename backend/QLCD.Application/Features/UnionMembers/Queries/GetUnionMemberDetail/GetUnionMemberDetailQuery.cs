@@ -44,7 +44,7 @@ public class UnionMemberDetailDto
     public string? HocVi { get; set; }
     public string? ChuyenNganhDaoTao { get; set; }
     public string? TrinhDoLyLuanChinhTri { get; set; }
-    public bool DangVien { get; set; }
+    public string DangVien { get; set; } = "khác";
     public string? GhiChu { get; set; }
     public List<MemberLanguageDetailDto> NgoaiNgus { get; set; } = new();
 }

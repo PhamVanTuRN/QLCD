@@ -59,7 +59,7 @@ public class DoanVien : BaseEntity
     public string? DienThoaiLienHeKhanCap { get; set; }
 
     // Thông tin thống kê
-    public bool DangVien { get; set; } = false;
+    public string DangVien { get; set; } = "khác";
     public string? GhiChu { get; set; }
 
     // Navigation properties

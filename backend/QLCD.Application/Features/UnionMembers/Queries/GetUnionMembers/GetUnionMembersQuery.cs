@@ -36,7 +36,7 @@ public class UnionMemberDto
     public VaiTroCongDoan VaiTro { get; set; }
     public TrangThaiDoanVien TrangThai { get; set; }
     public DateTime NgayVaoCongDoan { get; set; }
-    public bool DangVien { get; set; }
+    public string DangVien { get; set; } = "khác";
     public string? DienThoai { get; set; }
     public string? Email { get; set; }
     public string? TrinhDoHocVan { get; set; }

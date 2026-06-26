@@ -124,8 +124,7 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
             suffix++;
         }
 
-        string tempPassword = $"108@{baseName}";
-        if (tempPassword.Length < 8) tempPassword += "123";
+        string tempPassword = "123456aA@";
 
         string role = request.LoaiToChuc switch
         {

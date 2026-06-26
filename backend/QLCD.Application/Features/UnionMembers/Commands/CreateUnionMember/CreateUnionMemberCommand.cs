@@ -38,7 +38,7 @@ public record CreateUnionMemberCommand : IRequest<Guid>
     public string? HocVi { get; init; }
     public string? ChuyenNganhDaoTao { get; init; }
     public string? TrinhDoLyLuanChinhTri { get; init; }
-    public bool DangVien { get; init; }
+    public string DangVien { get; init; } = "khác";
     public DateTime? NgayVaoDang { get; init; }
     public string? GhiChu { get; init; }
     public List<CreateMemberLanguageDto>? NgoaiNgus { get; init; }

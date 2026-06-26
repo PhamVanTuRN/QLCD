@@ -9,11 +9,11 @@ import { PageHeader, ActionButton } from "@/components/ui-components";
 
 // Mock data khi API trả rỗng
 const mockMembers: UnionMemberDto[] = [
-  { id: "m1", hoTen: "Trần Quốc Toản", maNhanVien: "NV-0042", soCCCD: "001095001234", ngaySinh: "1990-03-15", gioiTinh: 1, chucVu: "Phó khoa", donViCongTac: "Khoa Tiêu hóa", chucDanhChuyenMon: "Bác sĩ", maToCongDoan: "tcd-tieuhoa", tenToCongDoan: "Tổ CĐ Khoa Tiêu hóa", vaiTro: "DoanVien", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2015-06-01", dangVien: true, dienThoai: "0912345678", email: "toan.tq@bv108.vn", trinhDoHocVan: "Thạc sĩ" },
-  { id: "m2", hoTen: "Nguyễn Thị Định", maNhanVien: "NV-0281", soCCCD: "001097004321", ngaySinh: "1992-08-20", gioiTinh: 0, chucVu: "Điều dưỡng trưởng", donViCongTac: "Khoa Tiêu hóa", chucDanhChuyenMon: "Điều dưỡng", maToCongDoan: "tcd-tieuhoa", tenToCongDoan: "Tổ CĐ Khoa Tiêu hóa", vaiTro: "ToTruong", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2016-01-15", dangVien: false, dienThoai: "0923456789", email: "dinh.nt@bv108.vn", trinhDoHocVan: "Đại học" },
-  { id: "m3", hoTen: "Phạm Hùng", maNhanVien: "NV-0985", soCCCD: "002094002345", ngaySinh: "1985-12-10", gioiTinh: 1, chucVu: "Trưởng khoa", donViCongTac: "Khoa Tim mạch", chucDanhChuyenMon: "Bác sĩ", maToCongDoan: "tcd-tim", tenToCongDoan: "Tổ CĐ Khoa Tim mạch", vaiTro: "UyVienBCH", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2010-09-01", dangVien: true, dienThoai: "0934567890", email: "hung.p@bv108.vn", trinhDoHocVan: "Tiến sĩ" },
-  { id: "m4", hoTen: "Hoàng Văn Thái", maNhanVien: "NV-0120", soCCCD: "003096009876", ngaySinh: "1988-05-25", gioiTinh: 1, chucVu: "Dược sĩ trưởng", donViCongTac: "Khoa Dược", chucDanhChuyenMon: "Dược sĩ", maToCongDoan: "tcd-tructhuoc1", tenToCongDoan: "Tổ CĐ trực thuộc CĐCS số 1", vaiTro: "ToTruong", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2014-03-01", dangVien: true, dienThoai: "0945678901", email: "thai.hv@bv108.vn", trinhDoHocVan: "Thạc sĩ" },
-  { id: "m5", hoTen: "Bùi Thị Xuân", maNhanVien: "NV-1209", soCCCD: "004098006543", ngaySinh: "1995-11-30", gioiTinh: 0, chucVu: "Điều dưỡng", donViCongTac: "Khoa Khớp", chucDanhChuyenMon: "Điều dưỡng", maToCongDoan: "tcd-khop", tenToCongDoan: "Tổ CĐ Khoa Khớp", vaiTro: "DoanVien", trangThai: "TamDung", ngayVaoCongDoan: "2019-07-15", dangVien: false, dienThoai: "0956789012", email: "xuan.bt@bv108.vn", trinhDoHocVan: "Đại học" },
+  { id: "m1", hoTen: "Trần Quốc Toản", maNhanVien: "NV-0042", soCCCD: "001095001234", ngaySinh: "1990-03-15", gioiTinh: 1, chucVu: "Phó khoa", donViCongTac: "Khoa Tiêu hóa", chucDanhChuyenMon: "Bác sĩ", maToCongDoan: "tcd-tieuhoa", tenToCongDoan: "Tổ CĐ Khoa Tiêu hóa", vaiTro: "DoanVien", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2015-06-01", dangVien: "Đảng viên chính thức", dienThoai: "0912345678", email: "toan.tq@bv108.vn", trinhDoHocVan: "Thạc sĩ" },
+  { id: "m2", hoTen: "Nguyễn Thị Định", maNhanVien: "NV-0281", soCCCD: "001097004321", ngaySinh: "1992-08-20", gioiTinh: 0, chucVu: "Điều dưỡng trưởng", donViCongTac: "Khoa Tiêu hóa", chucDanhChuyenMon: "Điều dưỡng", maToCongDoan: "tcd-tieuhoa", tenToCongDoan: "Tổ CĐ Khoa Tiêu hóa", vaiTro: "ToTruong", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2016-01-15", dangVien: "khác", dienThoai: "0923456789", email: "dinh.nt@bv108.vn", trinhDoHocVan: "Đại học" },
+  { id: "m3", hoTen: "Phạm Hùng", maNhanVien: "NV-0985", soCCCD: "002094002345", ngaySinh: "1985-12-10", gioiTinh: 1, chucVu: "Trưởng khoa", donViCongTac: "Khoa Tim mạch", chucDanhChuyenMon: "Bác sĩ", maToCongDoan: "tcd-tim", tenToCongDoan: "Tổ CĐ Khoa Tim mạch", vaiTro: "UyVienBCH", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2010-09-01", dangVien: "Đảng viên chính thức", dienThoai: "0934567890", email: "hung.p@bv108.vn", trinhDoHocVan: "Tiến sĩ" },
+  { id: "m4", hoTen: "Hoàng Văn Thái", maNhanVien: "NV-0120", soCCCD: "003096009876", ngaySinh: "1988-05-25", gioiTinh: 1, chucVu: "Dược sĩ trưởng", donViCongTac: "Khoa Dược", chucDanhChuyenMon: "Dược sĩ", maToCongDoan: "tcd-tructhuoc1", tenToCongDoan: "Tổ CĐ trực thuộc CĐCS số 1", vaiTro: "ToTruong", trangThai: "DangSinhHoat", ngayVaoCongDoan: "2014-03-01", dangVien: "Đảng viên dự bị", dienThoai: "0945678901", email: "thai.hv@bv108.vn", trinhDoHocVan: "Thạc sĩ" },
+  { id: "m5", hoTen: "Bùi Thị Xuân", maNhanVien: "NV-1209", soCCCD: "004098006543", ngaySinh: "1995-11-30", gioiTinh: 0, chucVu: "Điều dưỡng", donViCongTac: "Khoa Khớp", chucDanhChuyenMon: "Điều dưỡng", maToCongDoan: "tcd-khop", tenToCongDoan: "Tổ CĐ Khoa Khớp", vaiTro: "DoanVien", trangThai: "TamDung", ngayVaoCongDoan: "2019-07-15", dangVien: "khác", dienThoai: "0956789012", email: "xuan.bt@bv108.vn", trinhDoHocVan: "Đại học" },
 ];
 
 const vaiTroLabels: Record<string, string> = {
@@ -87,24 +87,52 @@ interface AddMemberFormState {
   donViCongTac: string;
   chucDanhChuyenMon: string;
   trinhDoHocVan: string;
-  dangVien: boolean;
+  dangVien: string;
   dienThoai: string;
   email: string;
   danToc: string;
   tonGiao: string;
   queQuan: string;
+  diaChiLienHe: string;
+  soTheDoanVien: string;
+  hocHam: string;
+  hocVi: string;
+  ghiChu: string;
   ngoaiNgus: MemberLanguageItem[];
 }
+
+const PAGE_SIZE = 15;
 
 export default function MembersList() {
   const { user } = useAuth();
   const [members, setMembers] = useState<UnionMemberDto[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    setCurrentPage(1);
+  };
+
+  const handleGroupChange = (val: string) => {
+    setSelectedGroup(val);
+    setCurrentPage(1);
+  };
+
+  const handleRoleChange = (val: string) => {
+    setSelectedRole(val);
+    setCurrentPage(1);
+  };
+
+  const handleStatusChange = (val: string) => {
+    setSelectedStatus(val);
+    setCurrentPage(1);
+  };
 
   // Catalogs
   const [languagesList, setLanguagesList] = useState<CatalogDto[]>([]);
@@ -113,14 +141,17 @@ export default function MembersList() {
   const [donViCongTacs, setDonViCongTacs] = useState<CatalogDto[]>([]);
   const [chuyenMons, setChuyenMons] = useState<CatalogDto[]>([]);
   const [educationList, setEducationList] = useState<CatalogDto[]>([]);
+  const [danTocsList, setDanTocsList] = useState<CatalogDto[]>([]);
+  const [tonGiaosList, setTonGiaosList] = useState<CatalogDto[]>([]);
 
   // Add member modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState<AddMemberFormState>({
     hoTen: "", ngaySinh: "", gioiTinh: 1, soCCCD: "", maNhanVien: "", maToCongDoan: "",
     ngayVaoCongDoan: "", vaiTro: 1, loaiCanBo: 1, chucVu: "", donViCongTac: "",
-    chucDanhChuyenMon: "", trinhDoHocVan: "", dangVien: false, dienThoai: "", email: "",
+    chucDanhChuyenMon: "", trinhDoHocVan: "", dangVien: "khác", dienThoai: "", email: "",
     danToc: "Kinh", tonGiao: "Không", queQuan: "",
+    diaChiLienHe: "", soTheDoanVien: "", hocHam: "", hocVi: "", ghiChu: "",
     ngoaiNgus: []
   });
   const [addError, setAddError] = useState("");
@@ -138,7 +169,9 @@ export default function MembersList() {
       search: searchTerm || undefined,
       toCongDoanId: selectedGroup || undefined,
       vaiTro: selectedRole || undefined,
-      trangThai: selectedStatus || undefined
+      trangThai: selectedStatus || undefined,
+      page: currentPage,
+      pageSize: PAGE_SIZE
     });
     if (data !== null) {
       setMembers(data.items);
@@ -165,7 +198,7 @@ export default function MembersList() {
             return false;
           } else if (user.phamVi === "CDBP") {
             if (userOrg === "70967e9e-a3c3-4486-9cb0-65d150382d94") {
-              return m.maToCongDoan === "tcd-tieuhoa" || m.maToCongDoan === "tcd-tim";
+               return m.maToCongDoan === "tcd-tieuhoa" || m.maToCongDoan === "tcd-tim";
             }
             if (userOrg === "d6e077b4-fd1b-49cc-ae92-32014b418b4c") {
               return m.maToCongDoan === "tcd-chinhhinh" || m.maToCongDoan === "tcd-khop";
@@ -186,10 +219,15 @@ export default function MembersList() {
       if (selectedGroup) filtered = filtered.filter(m => m.maToCongDoan === selectedGroup);
       if (selectedRole) filtered = filtered.filter(m => m.vaiTro === selectedRole);
       if (selectedStatus) filtered = filtered.filter(m => m.trangThai === selectedStatus);
-      setMembers(filtered);
+      
       setTotalCount(filtered.length);
+
+      // Client-side pagination for mock fallback data
+      const startIndex = (currentPage - 1) * PAGE_SIZE;
+      const paginated = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+      setMembers(paginated);
     }
-  }, [searchTerm, selectedGroup, selectedRole, selectedStatus, user]);
+  }, [searchTerm, selectedGroup, selectedRole, selectedStatus, currentPage, user]);
 
   const loadGroups = useCallback(async () => {
     const tree = await getUnionTree();
@@ -228,6 +266,10 @@ export default function MembersList() {
       setChuyenMons(cm);
       const edu = await getCatalogsApi({ loai: "HocHamHocVi", activeOnly: true });
       setEducationList(edu);
+      const dt = await getCatalogsApi({ loai: "DanToc", activeOnly: true });
+      setDanTocsList(dt);
+      const tg = await getCatalogsApi({ loai: "TonGiao", activeOnly: true });
+      setTonGiaosList(tg);
     } catch (err) {
       console.error(err);
     }
@@ -293,8 +335,9 @@ export default function MembersList() {
       setAddForm({
         hoTen: "", ngaySinh: "", gioiTinh: 1, soCCCD: "", maNhanVien: "", maToCongDoan: "",
         ngayVaoCongDoan: "", vaiTro: 1, loaiCanBo: 1, chucVu: "", donViCongTac: "",
-        chucDanhChuyenMon: "", trinhDoHocVan: "", dangVien: false, dienThoai: "", email: "",
+        chucDanhChuyenMon: "", trinhDoHocVan: "", dangVien: "khác", dienThoai: "", email: "",
         danToc: "Kinh", tonGiao: "Không", queQuan: "",
+        diaChiLienHe: "", soTheDoanVien: "", hocHam: "", hocVi: "", ghiChu: "",
         ngoaiNgus: []
       });
       await loadMembers();
@@ -360,13 +403,13 @@ export default function MembersList() {
           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Tìm kiếm nhanh</label>
           <input
             type="text" placeholder="Họ tên, mã NV, số CCCD..."
-            value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-850 focus:outline-none focus:border-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
           />
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Đơn vị Công đoàn</label>
-          <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
+          <select value={selectedGroup} onChange={(e) => handleGroupChange(e.target.value)}
             className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
             <option value="">Tất cả Đơn vị</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -374,7 +417,7 @@ export default function MembersList() {
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Vai trò công đoàn</label>
-          <select value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}
+          <select value={selectedRole} onChange={(e) => handleRoleChange(e.target.value)}
             className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
             <option value="">Tất cả vai trò</option>
             {Object.entries(vaiTroLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -382,7 +425,7 @@ export default function MembersList() {
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Trạng thái</label>
-          <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}
+          <select value={selectedStatus} onChange={(e) => handleStatusChange(e.target.value)}
             className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
             <option value="">Tất cả trạng thái</option>
             {Object.entries(trangThaiLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -417,7 +460,9 @@ export default function MembersList() {
                       {m.hoTen}
                     </Link>
                     <div className="text-[10px] text-slate-400 mt-0.5">
-                      {m.dangVien && <span className="text-red-500 font-semibold mr-2">★ Đảng viên</span>}
+                      {m.dangVien && m.dangVien !== "khác" && (
+                        <span className="text-red-500 font-semibold mr-2">★ {m.dangVien}</span>
+                      )}
                       {m.gioiTinh === 0 ? "Nữ" : "Nam"}
                     </div>
                   </td>
@@ -476,6 +521,36 @@ export default function MembersList() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalCount > 0 && (
+          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between text-xs bg-slate-50/10">
+            <span className="text-slate-500 font-medium">
+              Hiển thị <span className="font-semibold text-slate-800">{Math.min(totalCount, (currentPage - 1) * PAGE_SIZE + 1)}</span> - <span className="font-semibold text-slate-800">{Math.min(totalCount, currentPage * PAGE_SIZE)}</span> trong tổng số <span className="font-semibold text-slate-800">{totalCount}</span> đoàn viên
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="bg-white border border-slate-200 hover:bg-slate-55 text-slate-700 font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 disabled:hover:bg-white disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                ⬅️ Trang trước
+              </button>
+              <span className="text-slate-600 font-semibold px-2">
+                Trang {currentPage} / {Math.ceil(totalCount / PAGE_SIZE) || 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCount / PAGE_SIZE), prev + 1))}
+                disabled={currentPage === Math.ceil(totalCount / PAGE_SIZE) || totalCount === 0}
+                className="bg-white border border-slate-200 hover:bg-slate-55 text-slate-700 font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 disabled:hover:bg-white disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                Trang sau ➡️
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Member Modal */}
@@ -583,12 +658,73 @@ export default function MembersList() {
                 <input type="email" value={addForm.email} onChange={e => setAddForm({ ...addForm, email: e.target.value })}
                   className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="email@bv108.vn" />
               </div>
-              <div className="flex items-end gap-4 col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={addForm.dangVien} onChange={e => setAddForm({ ...addForm, dangVien: e.target.checked })}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20" />
-                  <span className="text-xs text-slate-600 font-medium">Là Đảng viên</span>
-                </label>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Phân loại Đảng viên</label>
+                <select
+                  value={addForm.dangVien}
+                  onChange={e => setAddForm({ ...addForm, dangVien: e.target.value })}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+                >
+                  <option value="khác">Khác / Chưa vào Đảng</option>
+                  <option value="Đảng viên chính thức">Đảng viên chính thức</option>
+                  <option value="Đảng viên dự bị">Đảng viên dự bị</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Loại cán bộ</label>
+                <select value={addForm.loaiCanBo} onChange={e => setAddForm({ ...addForm, loaiCanBo: Number(e.target.value) })}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
+                  <option value={1}>Sĩ quan</option>
+                  <option value={2}>QN chuyên nghiệp</option>
+                  <option value={3}>CNV quốc phòng</option>
+                  <option value={4}>Lao động hợp đồng</option>
+                  <option value={5}>Khác</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Dân tộc</label>
+                <select value={addForm.danToc} onChange={e => setAddForm({ ...addForm, danToc: e.target.value })}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
+                  <option value="">Chọn Dân tộc...</option>
+                  {danTocsList.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Tôn giáo</label>
+                <select value={addForm.tonGiao} onChange={e => setAddForm({ ...addForm, tonGiao: e.target.value })}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer">
+                  <option value="">Chọn Tôn giáo...</option>
+                  {tonGiaosList.map(c => <option key={c.id} value={c.ten}>{c.ten}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Quê quán</label>
+                <input type="text" value={addForm.queQuan} onChange={e => setAddForm({ ...addForm, queQuan: e.target.value })}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="e.g. Hà Nội" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Địa chỉ liên hệ</label>
+                <input type="text" value={addForm.diaChiLienHe} onChange={e => setAddForm({ ...addForm, diaChiLienHe: e.target.value })}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="e.g. Ba Đình, Hà Nội" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Số thẻ đoàn viên</label>
+                <input type="text" value={addForm.soTheDoanVien} onChange={e => setAddForm({ ...addForm, soTheDoanVien: e.target.value })}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" placeholder="Số thẻ đoàn viên..." />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Học hàm / Học vị</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Học hàm" value={addForm.hocHam} onChange={e => setAddForm({ ...addForm, hocHam: e.target.value })}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" />
+                  <input type="text" placeholder="Học vị" value={addForm.hocVi} onChange={e => setAddForm({ ...addForm, hocVi: e.target.value })}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all" />
+                </div>
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Ghi chú bổ sung</label>
+                <textarea value={addForm.ghiChu} onChange={e => setAddForm({ ...addForm, ghiChu: e.target.value })} rows={2}
+                  className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all resize-none" placeholder="Nhập ghi chú (nếu có)" />
               </div>
             </div>
 

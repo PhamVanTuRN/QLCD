@@ -40,7 +40,7 @@ public record UpdateUnionMemberCommand : IRequest<bool>
     public string? HocVi { get; init; }
     public string? ChuyenNganhDaoTao { get; init; }
     public string? TrinhDoLyLuanChinhTri { get; init; }
-    public bool DangVien { get; init; }
+    public string DangVien { get; init; } = "khác";
     public TrangThaiDoanVien TrangThai { get; init; }
     public string? GhiChu { get; init; }
     public List<UpdateMemberLanguageDto>? NgoaiNgus { get; init; }

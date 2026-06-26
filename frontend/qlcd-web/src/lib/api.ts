@@ -52,6 +52,11 @@ export async function loginApi(payload: Record<string, unknown>) {
   return res.data?.data;
 }
 
+export async function changePasswordApi(payload: Record<string, unknown>) {
+  const res = await api.post('/auth/change-password', payload);
+  return res.data;
+}
+
 // ==================== Accounts ====================
 export async function getAccountsApi() {
   const res = await api.get('/accounts');
@@ -115,6 +120,7 @@ export interface UnionUnitDto {
   soDoanVienNam?: number;
   soDoanVienNu?: number;
   soDoanVienDangVien?: number;
+  soDoanVienDangVienDuBi?: number;
   soTrinhDoDaiHoc?: number;
   soCoNgoaiNgu?: number;
   children: UnionUnitDto[];
@@ -180,7 +186,7 @@ export interface UnionMemberDto {
   vaiTro: string;
   trangThai: string;
   ngayVaoCongDoan: string;
-  dangVien: boolean;
+  dangVien: string;
   dienThoai: string | null;
   email: string | null;
   trinhDoHocVan: string | null;
@@ -364,7 +370,9 @@ export interface UnionStatsDto {
   doanVienNu: number;
   doanVienDangSinhHoat: number;
   doanVienDangVien: number;
+  doanVienDangVienDuBi: number;
   tiLeDangVien: number;
+  tiLeDangVienDuBi: number;
   tiLeNu: number;
   tongCDBP: number;
   tongToCongDoan: number;
@@ -382,6 +390,9 @@ export interface UnionStatsDto {
   doanVienTheoChucVu: { name: string; count: number }[];
   doanVienTheoNgoaiNgu: { name: string; count: number }[];
   doanVienTheoTrinhDo: { name: string; count: number }[];
+  doanVienTheoLoaiCanBo: { name: string; count: number }[];
+  doanVienTheoDanToc: { name: string; count: number }[];
+  doanVienTheoTonGiao: { name: string; count: number }[];
 
   // Scoped submodule totals
   tongThuDoanPhi: number;

@@ -57,7 +57,7 @@ interface MemberFormStateDetail {
   hocVi: string;
   chuyenNganhDaoTao: string;
   trinhDoLyLuanChinhTri: string;
-  dangVien: boolean;
+  dangVien: string;
   ghiChu: string;
   ngoaiNgus: MemberLanguageItem[];
 }
@@ -173,6 +173,8 @@ function MemberDetailContent() {
   const [donViCongTacs, setDonViCongTacs] = useState<CatalogDto[]>([]);
   const [chuyenMons, setChuyenMons] = useState<CatalogDto[]>([]);
   const [educationList, setEducationList] = useState<CatalogDto[]>([]);
+  const [danTocsList, setDanTocsList] = useState<CatalogDto[]>([]);
+  const [tonGiaosList, setTonGiaosList] = useState<CatalogDto[]>([]);
 
   // Edit form state
   const [formData, setFormData] = useState<MemberFormStateDetail>({
@@ -202,7 +204,7 @@ function MemberDetailContent() {
     hocVi: "",
     chuyenNganhDaoTao: "",
     trinhDoLyLuanChinhTri: "",
-    dangVien: false,
+    dangVien: "khác",
     ghiChu: "",
     ngoaiNgus: [] as MemberLanguageItem[]
   });
@@ -252,7 +254,7 @@ function MemberDetailContent() {
         hocVi: data.hocVi || "",
         chuyenNganhDaoTao: data.chuyenNganhDaoTao || "",
         trinhDoLyLuanChinhTri: data.trinhDoLyLuanChinhTri || "",
-        dangVien: data.dangVien ?? false,
+        dangVien: data.dangVien ?? "khác",
         ghiChu: data.ghiChu || "",
         ngoaiNgus: data.ngoaiNgus ? data.ngoaiNgus.map((l: Partial<MemberLanguageItem>) => ({
           ngoaiNgu: l.ngoaiNgu,
@@ -285,6 +287,12 @@ function MemberDetailContent() {
 
       const edu = await getCatalogsApi({ loai: "HocHamHocVi", activeOnly: true });
       setEducationList(edu);
+
+      const dt = await getCatalogsApi({ loai: "DanToc", activeOnly: true });
+      setDanTocsList(dt);
+
+      const tg = await getCatalogsApi({ loai: "TonGiao", activeOnly: true });
+      setTonGiaosList(tg);
 
     } catch (err) {
       console.error(err);
@@ -464,8 +472,8 @@ function MemberDetailContent() {
           <div className="bg-white border border-slate-150 p-6 rounded-2xl shadow-xs space-y-6 flex flex-col items-center text-center">
             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-indigo-650 flex items-center justify-center font-bold text-white text-3xl shadow-md relative">
               {member.hoTen.split(" ").map((w: string) => w[0]).slice(-2).join("")}
-              {member.dangVien && (
-                <span className="absolute bottom-1 right-1 bg-red-500 border-2 border-white rounded-full w-7 h-7 flex items-center justify-center text-white text-[10px] shadow-sm" title="Đảng viên">
+              {member.dangVien && member.dangVien !== "khác" && (
+                <span className="absolute bottom-1 right-1 bg-red-500 border-2 border-white rounded-full w-7 h-7 flex items-center justify-center text-white text-[10px] shadow-sm" title={member.dangVien}>
                   ★
                 </span>
               )}
@@ -503,6 +511,12 @@ function MemberDetailContent() {
                 <span className="text-slate-400 font-medium">Ngày vào CĐ</span>
                 <span className="font-semibold text-slate-700">
                   {member.ngayVaoCongDoan ? new Date(member.ngayVaoCongDoan).toLocaleDateString("vi-VN") : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-medium">Đảng viên</span>
+                <span className={`font-semibold ${member.dangVien && member.dangVien !== "khác" ? "text-red-650" : "text-slate-500"}`}>
+                  {member.dangVien || "khác"}
                 </span>
               </div>
             </div>
@@ -741,21 +755,29 @@ function MemberDetailContent() {
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Dân tộc</label>
-              <input
-                type="text"
+              <select
                 value={formData.danToc}
                 onChange={(e) => setFormData({ ...formData, danToc: e.target.value })}
-                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
-              />
+                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+              >
+                <option value="">Chọn Dân tộc...</option>
+                {danTocsList.map((c) => (
+                  <option key={c.id} value={c.ten}>{c.ten}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Tôn giáo</label>
-              <input
-                type="text"
+              <select
                 value={formData.tonGiao}
                 onChange={(e) => setFormData({ ...formData, tonGiao: e.target.value })}
-                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
-              />
+                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+              >
+                <option value="">Chọn Tôn giáo...</option>
+                {tonGiaosList.map((c) => (
+                  <option key={c.id} value={c.ten}>{c.ten}</option>
+                ))}
+              </select>
             </div>
 
             {/* Professional Info */}
@@ -855,6 +877,16 @@ function MemberDetailContent() {
                 className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
               />
             </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Số thẻ đoàn viên</label>
+              <input
+                type="text"
+                value={formData.soTheDoanVien}
+                onChange={(e) => setFormData({ ...formData, soTheDoanVien: e.target.value })}
+                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
+                placeholder="Nhập số thẻ đoàn viên"
+              />
+            </div>
 
             {/* Academic Info */}
             <div>
@@ -890,19 +922,16 @@ function MemberDetailContent() {
               </div>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Đảng viên</label>
-              <div className="flex items-center gap-3 mt-2">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.dangVien}
-                    onChange={(e) => setFormData({ ...formData, dangVien: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500" />
-                  <span className="ml-2 text-xs font-semibold text-slate-600">Là Đảng viên</span>
-                </label>
-              </div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Phân loại Đảng viên</label>
+              <select
+                value={formData.dangVien}
+                onChange={(e) => setFormData({ ...formData, dangVien: e.target.value })}
+                className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+              >
+                <option value="khác">Khác / Chưa vào Đảng</option>
+                <option value="Đảng viên chính thức">Đảng viên chính thức</option>
+                <option value="Đảng viên dự bị">Đảng viên dự bị</option>
+              </select>
             </div>
           </div>
 

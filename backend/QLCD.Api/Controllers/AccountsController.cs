@@ -72,13 +72,17 @@ public class AccountsController : ControllerBase
                 return NotFound(new { success = false, message = "Không tìm thấy tài khoản." });
             }
 
-            if (string.IsNullOrWhiteSpace(request.NewPassword))
+            string? newPassword = !string.IsNullOrWhiteSpace(request.NewPassword) 
+                ? request.NewPassword 
+                : request.Password;
+
+            if (string.IsNullOrWhiteSpace(newPassword))
             {
                 return BadRequest(new { success = false, message = "Mật khẩu không được để trống." });
             }
 
-            account.PasswordHash = PasswordHasher.Hash(request.NewPassword);
-            account.PasswordRaw = request.NewPassword;
+            account.PasswordHash = PasswordHasher.Hash(newPassword);
+            account.PasswordRaw = newPassword;
             await _context.SaveChangesAsync(CancellationToken.None);
 
             return Ok(new { success = true, message = "Đặt lại mật khẩu thành công." });
@@ -92,5 +96,6 @@ public class AccountsController : ControllerBase
 
 public class ResetPasswordRequest
 {
-    public required string NewPassword { get; set; }
+    public string? NewPassword { get; set; }
+    public string? Password { get; set; }
 }
