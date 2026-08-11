@@ -1,37 +1,32 @@
-# 05. FUNCTIONAL REQUIREMENTS - YÊU CẦU CHỨC NĂNG
+# FUNCTIONAL REQUIREMENTS
 
-Tài liệu này liệt kê các yêu cầu chức năng (FR) chi tiết cho Hệ thống Quản lý Công đoàn BV108.
+Tài liệu này liệt kê các Yêu cầu Chức năng (Functional Requirements - FR) của hệ thống Quản lý Điểm danh.
 
-## 1. Phân hệ Quản lý Tổ chức & Danh mục (FR-ORG)
-* **FR-ORG-01 (Quản lý Đơn vị Công đoàn)**: Cho phép thêm, sửa, xem thông tin 15 CĐBP và các Tổ công đoàn trực thuộc. Thiết lập mối quan hệ cấp cha-con giữa các đơn vị.
-* **FR-ORG-02 (Cấu hình Người đại diện)**: Gán quyền Tổ trưởng cho tài khoản đoàn viên tương ứng với từng Tổ công đoàn; gán quyền Chủ tịch/Phó Chủ tịch CĐBP, CĐCS.
-* **FR-ORG-03 (Quản lý Danh mục dùng chung)**: Quản lý danh mục loại phúc lợi (ốm đau, thai sản, hiếu hỉ...), danh mục hình thức khen thưởng, danh mục chức danh y tế.
+## 1. Quản lý Sự kiện (Event) & Địa điểm (Location)
+- **FR-EVT-001:** Hệ thống cho phép tạo, sửa, xóa (soft delete), và xem danh sách Sự kiện.
+- **FR-EVT-002:** Hệ thống cho phép gán một hoặc nhiều Địa điểm (Location) cho một Sự kiện thông qua quan hệ N:N.
+- **FR-LOC-001:** Quản lý danh mục Địa điểm (Location).
 
-## 2. Phân hệ Quản lý Hồ sơ Đoàn viên (FR-MEM)
-* **FR-MEM-01 (Tiếp nhận Đoàn viên)**: Tổ trưởng nhập thông tin trực tiếp hoặc đoàn viên tự đăng ký trực tuyến, gửi hồ sơ chờ phê duyệt.
-* **FR-MEM-02 (Phê duyệt Hồ sơ)**: Quy trình phê duyệt qua 2 cấp: BCH CĐBP duyệt sơ bộ -> Văn phòng CĐCS phê duyệt chính thức và cấp mã đoàn viên.
-* **FR-MEM-03 (Chuyển sinh hoạt Nội bộ)**: Chuyển đoàn viên từ Tổ công đoàn này sang Tổ công đoàn khác trong bệnh viện (do chuyển công tác chuyên môn).
-* **FR-MEM-04 (Chuyển sinh hoạt Ngoại bộ)**: Thực hiện thủ tục cho đoàn viên chuyển hẳn ra ngoài bệnh viện hoặc tiếp nhận đoàn viên từ đơn vị khác về.
-* **FR-MEM-05 (Cập nhật Trạng thái)**: Chuyển đổi trạng thái hoạt động (Đang sinh hoạt, Miễn sinh hoạt do thai sản/đi học, Đã xóa tên khỏi danh sách đoàn viên).
+## 2. Quản lý Thiết bị (Device)
+- **FR-DEV-001:** Quản lý Thiết bị điểm danh, gán Thiết bị vào Địa điểm.
+- **FR-DEV-002:** Cho phép thiết bị gọi API nhận xác thực để cấu hình kết nối.
 
-## 3. Phân hệ Quản lý Tài chính (FR-FIN)
-* **FR-FIN-01 (Đồng bộ Bảng lương thu đoàn phí)**: Cho phép import file Excel bảng lương hàng tháng từ Phòng Tài chính bệnh viện để tự động ghi nhận đóng đoàn phí.
-* **FR-FIN-02 (Thu đoàn phí thủ công)**: Tổ trưởng công đoàn có thể thu bằng tiền mặt và click xác nhận trạng thái đóng tiền của đoàn viên trên giao diện mobile/web.
-* **FR-FIN-03 (Tự động Phân bổ Kinh phí)**: Hệ thống tự động tính toán số tiền được trích lại 60% của từng CĐBP, lưu vết số dư tài khoản của từng đơn vị.
-* **FR-FIN-04 (Quản lý Thu - Chi Khác)**: Ghi nhận các nguồn thu khác (bệnh viện hỗ trợ, nhà tài trợ...) và các khoản chi hoạt động phong trào của CĐCS/CĐBP.
+## 3. Cấu hình Quy tắc Điểm danh (Attendance Configuration)
+- **FR-RUL-001:** Cho phép cấu hình Attendance Rule cho từng Sự kiện (Số lần quét tối thiểu, thời gian hiện diện tối thiểu).
+- **FR-RUL-002:** Cho phép định nghĩa nhiều Attendance Window (Khung giờ) cho từng Sự kiện. Có thể đánh dấu cờ `Required`.
 
-## 4. Phân hệ Thi đua & Bình xét (FR-AWD)
-* **FR-AWD-01 (Thiết lập Đợt thi đua)**: CĐCS khởi tạo các đợt thi đua (Ví dụ: Thi đua chào mừng Ngày Thầy thuốc Việt Nam 27/2, Thi đua cuối năm...). Cấu hình chỉ tiêu phân bổ giải thưởng.
-* **FR-AWD-02 (Gửi Đề xuất Thi đua)**: Tổ trưởng công đoàn nhập biên bản và danh sách đoàn viên được đề nghị khen thưởng từ cuộc họp tổ.
-* **FR-AWD-03 (Thẩm định & Khống chế Tỷ lệ)**: Hệ thống tự động cảnh báo nếu tỷ lệ đề xuất vượt quá số % quy định của CĐBP đó (Ví dụ: vượt quá 15% đoàn viên xuất sắc).
-* **FR-AWD-04 (Quyết định Khen thưởng)**: BCH CĐCS phê duyệt và ban hành quyết định khen thưởng trên hệ thống, tự động gửi thông báo chúc mừng tới cá nhân đoàn viên.
+## 4. Quá trình Điểm danh (Attendance Logging)
+- **FR-ATT-001:** Hệ thống cung cấp API tiếp nhận Raw Logs từ Thiết bị (`ReceiveAttendanceLogCommand`).
+- **FR-ATT-002:** Hệ thống chống duplicate log: Nếu cùng một người quét cùng một máy trong khoảng thời gian rất ngắn (ví dụ: 10 giây), log vẫn được nhận nhưng có thể đánh dấu IsValid = false (debounce) hoặc được lọc ở khâu tính toán.
+- **FR-ATT-003:** Khi nhận Log, hệ thống phải tự động truy xuất `Location` của thiết bị để suy luận ra `Event` đang diễn ra.
 
-## 5. Phân hệ Phúc lợi & Cứu trợ (FR-WEL)
-* **FR-WEL-01 (Yêu cầu Trợ cấp/Thăm hỏi)**: Đoàn viên hoặc Tổ trưởng tạo đơn yêu cầu thăm hỏi (ốm đau nằm viện, hiếu hỉ, thai sản, thân nhân qua đời...).
-* **FR-WEL-02 (Đính kèm Minh chứng)**: Chụp ảnh giấy ra viện, giấy chứng nhận kết hôn... tải trực tiếp lên hệ thống.
-* **FR-WEL-03 (Phê duyệt Trợ cấp)**: Quy trình phê duyệt nhanh (CĐBP kiểm tra xác thực -> CĐCS phê duyệt chi tiền).
-* **FR-WEL-04 (Xác nhận Chi trả)**: Thủ quỹ xác nhận trạng thái đã chi tiền (Tiền mặt/Chuyển khoản), hệ thống lưu lại mã giao dịch.
+## 5. Tính toán Kết quả (Attendance Result)
+- **FR-CAL-001:** Hệ thống tự động tính toán `AttendanceResult` cho mỗi người tham dự dựa vào `Raw Logs`, `Rules` và `Windows` của Sự kiện.
+- **FR-CAL-002:** `AttendanceResult` hiển thị chi tiết (First Time, Last Time, số log hợp lệ, trạng thái).
+- **FR-CAL-003:** Cho phép quản trị viên kích hoạt tính năng **Recalculate** toàn bộ kết quả của một Sự kiện khi quy tắc thay đổi.
+- **FR-CAL-004:** Cho phép quản trị viên **Manual Override** kết quả của một cá nhân, bắt buộc lưu vết kiểm toán (Audit Log) kèm lý do ghi đè.
 
-## 6. Phân hệ Tương tác & Thông báo (FR-NOT)
-* **FR-NOT-01 (Bảng tin Công đoàn)**: Đăng tải các tin tức, hoạt động chính sách, văn bản chỉ đạo mới của công đoàn bệnh viện.
-* **FR-NOT-02 (Hệ thống Thông báo)**: Gửi thông báo tức thời (Push Notification/Email) cho đoàn viên khi: có thông tin đóng đoàn phí thành công, có quyết định khen thưởng, hoặc đề xuất trợ cấp được duyệt.
+## 6. Báo cáo & Thống kê (Reporting)
+- **FR-REP-001:** Cung cấp danh sách tham dự chi tiết theo Sự kiện, hiển thị trạng thái (PRESENT, ABSENT, INCOMPLETE, v.v.).
+- **FR-REP-002:** Xuất dữ liệu điểm danh ra file (Excel/CSV).
+- **FR-REP-003:** Dashboard tổng quan số liệu sự kiện trong ngày.

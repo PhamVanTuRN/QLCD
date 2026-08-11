@@ -1,32 +1,45 @@
-# 11. UI/UX GUIDELINES - NGUYÊN TẮC UI/UX
+# UI/UX GUIDELINES
 
-Tài liệu này định hình phong cách thiết kế giao diện (UI) và trải nghiệm người dùng (UX) cho phần mềm QLCD BV108.
+Tài liệu hướng dẫn thiết kế giao diện cho phần mềm Quản lý điểm danh (Dựa trên Next.js và TailwindCSS).
 
-## 1. Phong cách Thiết kế & Tone màu Chủ đạo
-Vì hệ thống phục vụ trong môi trường quân đội (Bệnh viện TWQĐ 108) kết hợp với y tế, bảng màu được thiết kế hài hòa giữa sắc xanh lá đặc trưng của quân phục nhẹ và sắc xanh y tế tin cậy, sạch sẽ.
+## 1. Cấu trúc Menu (Sidebar)
+Menu bên trái cần được tổ chức theo nhóm nghiệp vụ:
 
-* **Bảng màu (Color Palette)**:
-  * **Màu chủ đạo (Primary)**: `#1E4620` (Xanh lá quân đội đậm - thể hiện sự trang nghiêm, kỷ luật) hoặc `#0284C7` (Xanh nước biển y tế - thể hiện sự chuyên nghiệp y khoa).
-  * **Màu phụ trợ (Secondary)**: `#059669` (Xanh ngọc - màu của sức sống, phúc lợi công đoàn).
-  * **Màu nền (Background)**:
-    * Light Mode: `#F8FAFC` (Màu xám trắng tinh tế, giảm mỏi mắt cho nhân viên trực y tế).
-    * Dark Mode: `#0F172A` (Màu tối xanh đen sang trọng).
-  * **Màu cảnh báo (Alerts)**:
-    * Lỗi/Nguy hiểm: `#EF4444` (Đỏ).
-    * Cảnh báo/Chờ duyệt: `#F59E0B` (Vàng hổ phách).
-    * Thành công: `#10B981` (Xanh lá cây).
+**1. Tổng quan**
+- Dashboard chung
 
-## 2. Phông chữ (Typography)
-* Sử dụng các phông chữ hiện đại, hỗ trợ hiển thị tiếng Việt hoàn hảo, dễ đọc trên cả màn hình máy tính và thiết bị di động:
-  * Phông chủ đạo: **Inter** hoặc **Outfit** (từ Google Fonts).
-  * Kích thước văn bản cơ bản (Body text): `14px` (`text-sm`) hoặc `16px` (`text-base`).
-  * Tiêu đề chính (Headings): `24px` đến `32px` với định dạng chữ đậm (`font-bold`).
+**2. Quản lý sự kiện**
+- Danh sách sự kiện
+- Tạo/Sửa sự kiện
 
-## 3. Quy tắc Thiết kế Responsive & Tương thích Di động
-* **Hỗ trợ 100% Responsive**: Giao diện tự động co giãn tối ưu trên các độ phân giải từ màn hình Desktop lớn (1920x1080) đến Laptop (1366x768), Tablet và Smartphone (iOS/Android).
-* **Ứng dụng Mobile-First cho Tổ trưởng và Đoàn viên**: Các tính năng của đoàn viên (đăng ký trợ cấp, xem tin tức) và của Tổ trưởng (xác nhận đóng đoàn phí nhanh bằng một lần chạm) cần được tối ưu nút bấm to, rõ ràng, giảm thiểu việc phải gõ văn bản nhiều.
+**3. Quản lý địa điểm**
+- Danh sách hội trường / Location
+- Quản lý Camera / Thiết bị (Device)
 
-## 4. Các yếu tố tăng trải nghiệm người dùng (Micro-animations)
-* **Hover Effects**: Các nút bấm, thẻ thông tin (cards) hoặc dòng bảng khi di chuột qua phải có hiệu ứng chuyển màu mượt mà (`transition-all duration-300`) kết hợp đổ bóng mờ nhẹ (`shadow-md`).
-* **Trạng thái Loading**: Khi hệ thống đang tải dữ liệu hoặc gửi request phê duyệt, phải có hiệu ứng Skeleton Loading (khung xám mờ chuyển động nhẹ) thay cho màn hình trống trơn, tạo cảm giác hệ thống phản hồi nhanh.
-* **Thông báo tức thời (Toast)**: Sau khi thực hiện hành động thành công hoặc thất bại, hiển thị hộp thoại nhỏ góc trên bên phải màn hình tự động biến mất sau 3 giây để người dùng nắm bắt kết quả mà không cần bấm tắt.
+**4. Quản lý điểm danh**
+- Log điểm danh (Raw Logs - Chỉ xem)
+- Kết quả điểm danh (View + Override)
+- Danh sách tham dự (Participant List)
+
+**5. Cấu hình**
+- Attendance Rules & Windows
+
+**6. Báo cáo**
+- Báo cáo tổng hợp
+- Export dữ liệu
+
+**7. Tích hợp & Hệ thống**
+- Đồng bộ HLĐT
+- Users & Roles
+
+## 2. Style Guide
+Hệ thống giữ nguyên Design System hiện có (nếu có từ dự án cũ), với các tông màu cơ bản:
+- Primary Color: Xanh Blue (Tạo cảm giác y tế, tin cậy).
+- Danger Color: Đỏ (Cho các hành động Xóa, hoặc trạng thái ABSENT, INVALID).
+- Success Color: Xanh lá (Cho trạng thái PRESENT).
+- Warning Color: Vàng/Cam (Cho trạng thái INCOMPLETE, LATE).
+
+## 3. Quy tắc UX
+- **Không bao giờ cho phép xóa Raw Logs trên UI:** Log điểm danh chỉ có màn hình View, không có nút Delete hay Edit.
+- **Xác nhận (Confirm) khi ghi đè:** Khi user thực hiện Manual Override, UI phải hiển thị Dialog yêu cầu nhập lý do bắt buộc.
+- **Tính toán nặng (Recalculate):** Nút Recalculate phải có cảnh báo tiến trình có thể mất thời gian, hiển thị loading spinner không chặn toàn màn hình.

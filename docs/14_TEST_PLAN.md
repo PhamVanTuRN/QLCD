@@ -1,41 +1,66 @@
-# 14. TEST PLAN - KẾ HOẠCH KIỂM THỬ
+# TEST PLAN
 
-Tài liệu này định hình chiến lược, phương pháp và các kịch bản kiểm thử chính nhằm đảm bảo chất lượng phần mềm QLCD.
+Tài liệu này vạch ra kế hoạch kiểm thử cho hệ thống.
 
-## 1. Chiến lược Kiểm thử (Testing Strategy)
-Hệ thống sẽ được kiểm thử qua 3 cấp độ chính:
-* **Kiểm thử Đơn vị (Unit Testing)**: Tập trung kiểm tra tính đúng đắn của các Business Rules trong tầng Domain và xử lý logic trong tầng Application của Backend. Đạt độ phủ mã nguồn (Code Coverage) tối thiểu **80%** cho các lớp này.
-* **Kiểm thử Tích hợp (Integration Testing)**: Kiểm tra sự tương tác giữa Application và Infrastructure (đặc biệt là kết nối cơ sở dữ liệu thực tế thông qua các InMemory Database hoặc Test Container). Kiểm tra các API endpoints.
-* **Kiểm thử Chấp nhận Người dùng (User Acceptance Testing - UAT)**: Tổ chức kiểm thử thực tế với Tổ trưởng và cán bộ Công đoàn BV108 để đánh giá độ tiện dụng, tốc độ phản hồi và độ chính xác của nghiệp vụ.
+## 1. Unit Testing
+- Test các Queries và Commands bằng cách mock `IAttendanceDbContext`.
+- Kiểm thử kỹ `AttendanceCalculationService` vì đây là core logic.
 
-## 2. Kịch bản Kiểm thử Nghiệp vụ Trọng tâm (Core Test Cases)
+## 2. Các kịch bản Integration Test chính
 
-### TC_MEM_01: Kiểm tra tính đúng đắn khi chuyển sinh hoạt công đoàn
-* **Mục tiêu**: Đảm bảo lịch sử đóng đoàn phí và thi đua không bị mất khi chuyển tổ công đoàn.
-* **Các bước thực hiện**:
-  1. Chọn đoàn viên A thuộc Tổ công đoàn X (đã đóng đoàn phí các tháng 1, 2, 3).
-  2. Thực hiện thao tác chuyển đoàn viên A sang Tổ công đoàn Y.
-  3. Kiểm tra thông tin của đoàn viên A tại Tổ Y.
-* **Kết quả kỳ vọng**:
-  * Mã tổ công đoàn của đoàn viên A cập nhật thành Tổ Y.
-  * Truy vấn bảng `DongDoanPhi` vẫn hiển thị đầy đủ lịch sử đóng phí tháng 1, 2, 3 của đoàn viên A.
-  * Số dư quỹ của Tổ X giảm đi tương ứng và Tổ Y tăng lên nếu có cơ chế chia sẻ quỹ di động.
+**TEST-001: Event chọn nhiều Location**
+- Mở form tạo Event, chọn 3 Locations khác nhau.
+- Verify bảng `EventLocations` có 3 bản ghi chính xác.
 
-### TC_FIN_01: Kiểm tra việc áp dụng quy tắc đóng đoàn phí tối đa
-* **Mục tiêu**: Đảm bảo số tiền đóng đoàn phí không vượt quá hạn mức trần của Tổng Liên đoàn Lao động đối với lao động hợp đồng.
-* **Đầu vào thử nghiệm**: Tạo một đoàn viên là lao động hợp đồng có lương cơ bản cao (Ví dụ: 30.000.000 VNĐ).
-* **Các bước thực hiện**:
-  1. Chạy tiến trình tính đoàn phí tự động của tháng.
-* **Kết quả kỳ vọng**:
-  * Số tiền đóng đoàn phí của người đó phải bằng mức trần tối đa quy định (ví dụ 10% lương tối thiểu vùng, khoảng 468.000 VNĐ) chứ không phải là 1% lương thực tế (300.000 VNĐ) nếu 1% lương thực tế vượt quá mức trần này (quy định tùy theo từng thời điểm pháp luật).
+**TEST-002: Location có nhiều Device**
+- Tạo 2 thiết bị gán cho cùng 1 Location.
+- Quét thẻ thử từ cả 2 thiết bị và verify Log đẩy về có cùng `LocationId`.
 
-### TC_AWD_01: Kiểm tra ràng buộc tỷ lệ khống chế khen thưởng
-* **Mục tiêu**: Đảm bảo không cho phép duyệt quá 15% đoàn viên xuất sắc tại cấp CĐBP.
-* **Đầu vào thử nghiệm**: CĐBP Khối Nội 1 có tổng cộng 100 đoàn viên.
-* **Các bước thực hiện**:
-  1. Đăng nhập tài khoản Chủ tịch CĐBP Khối Nội 1.
-  2. Chọn danh sách đề xuất thi đua gồm 16 đoàn viên xếp loại "Đoàn viên xuất sắc".
-  3. Bấm nút "Gửi duyệt lên CĐCS".
-* **Kết quả kỳ vọng**:
-  * Hệ thống chặn hành động gửi duyệt.
-  * Hiển thị thông báo lỗi chi tiết: "Số lượng đề xuất vượt quá chỉ tiêu cho phép (Tối đa 15 đoàn viên xuất sắc/100 đoàn viên hiện có)".
+**TEST-003: Single attendance rule**
+- Cấu hình Rule: Tối thiểu 1 lần quét.
+- Tạo 1 Log hợp lệ.
+- Chạy Calculate, verify `AttendanceStatus` = `PRESENT`.
+
+**TEST-004: Multiple attendance window**
+- Cấu hình Window Sáng (07:00 - 11:00) và Window Chiều (13:00 - 17:00), cả hai đều Required.
+- Tạo Log lúc 08:00 (Sáng).
+- Calculate -> `INCOMPLETE`.
+- Tạo thêm Log lúc 14:00 (Chiều).
+- Calculate -> `PRESENT`.
+
+**TEST-005: Attendance log hợp lệ**
+- Thiết bị gọi API `ReceiveAttendanceLogCommand` với payload đúng định dạng.
+- Trả về mã HTTP 201 (Created), kiểm tra db có bản ghi.
+
+**TEST-006: Duplicate log**
+- Đẩy 2 Log từ cùng 1 CCCD, tại cùng 1 thiết bị, cách nhau 2 giây.
+- Hệ thống vẫn nhận 2 Log, nhưng không được phép đếm dư khi check logic (hoặc log thứ 2 bị đánh IsValid = false tùy cấu hình).
+
+**TEST-007: Log ngoài attendance window**
+- Cấu hình Window Sáng (07:00 - 11:00).
+- Tạo Log lúc 12:00.
+- Calculate -> `INCOMPLETE` (Vì không nằm trong cửa sổ bắt buộc).
+
+**TEST-008: Ambiguous Event**
+- Tạo 2 Event cùng diễn ra tại Hội trường A lúc 09:00 - 10:00.
+- Bắn Log từ Device ở Hội trường A lúc 09:15.
+- Xác nhận Log không bị ép gán cứng vào 1 Event ngẫu nhiên mà được đánh dấu là không xác định (EventId = null) và ValidationMessage thể hiện Ambiguous.
+
+**TEST-009: Recalculate result**
+- Thay đổi Rule thành yêu cầu 2 lần quét thay vì 1.
+- Bấm nút Recalculate toàn bộ sự kiện.
+- Những người chỉ có 1 lần quét phải đổi trạng thái từ PRESENT sang INCOMPLETE.
+
+**TEST-010: Manual override**
+- Chỉnh sửa trạng thái của 1 người đang ABSENT thành PRESENT.
+- Verify `IsManualOverride` = true và Audit Log được lưu.
+- Bấm Recalculate toàn hệ thống.
+- Trạng thái người này vẫn phải giữ là PRESENT (không bị tính toán lại).
+
+**TEST-011: Permission**
+- Đăng nhập bằng Role Viewer.
+- Gọi API tạo Event. Verify trả về 403 Forbidden.
+
+**TEST-012: Report**
+- Sinh dữ liệu mẫu cho 100 người tham gia sự kiện.
+- Verify thời gian xuất báo cáo Excel dưới 5 giây.

@@ -1,35 +1,28 @@
-# 15. ROADMAP - LỘ TRÌNH PHÁT TRIỂN KHUYẾN NGHỊ
+# ROADMAP
 
-Lộ trình phát triển và hoàn thiện Hệ thống QLCD Bệnh viện TWQĐ 108 được chia làm 4 giai đoạn (Phases) kế thừa chặt chẽ để đảm bảo không phá vỡ cấu trúc và dữ liệu.
+Lộ trình phát triển phần mềm Quản lý điểm danh.
 
-```
-┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-│     Phase 1      │ ───> │     Phase 2      │ ───> │     Phase 3      │ ───> │     Phase 4      │
-│ Tài liệu, DB,    │      │ Hoạt động,       │      │ Tài chính,       │      │ Sáng kiến,       │
-│ Auth, Tổ chức,   │      │ Khen thưởng      │      │ Phúc lợi,        │      │ Thi đua trực     │
-│ Đoàn viên, Dash  │      │ Kỷ luật, Văn bản │      │ Mái ấm CĐ        │      │ tuyến, QR, Chữ ký│
-└──────────────────┘      └──────────────────┘      └──────────────────┘      └──────────────────┘
-```
+## PHASE 1: Core Attendance Management
+- Hoàn thiện luồng điểm danh cốt lõi.
+- Quản lý Event, Location, Device.
+- Cấu hình Rule & Window.
+- Tính toán kết quả.
+- Manual Override.
 
-## Phase 1: Core Foundation & Nhân sự (Trọng tâm hiện tại)
-* **Tài liệu nền tảng**: Xây dựng 14 tài liệu phân tích nghiệp vụ và database design chi tiết.
-* **Cơ sở dữ liệu**: Thiết lập ERD và các class C# Entity hoàn chỉnh.
-* **Xác thực cơ bản (Auth)**: JWT Token Authentication cơ bản.
-* **Tổ chức công đoàn**: Cây tổ chức 3 cấp nghiêm ngặt, liên kết khối chuyên môn, chặn các lỗi sai cấu trúc.
-* **Đoàn viên**: Quản lý hồ sơ chi tiết (học vấn, đa ngoại ngữ), 9 loại biến động trong transaction, import/export Excel.
-* **Dashboard cơ bản**: Thống kê số lượng đoàn viên tự động theo đơn vị, giới tính, quân hàm.
+## PHASE 2: Device Integration
+- Tích hợp chuẩn hóa với các thiết bị phần cứng thực tế (Camera AI, API nhận diện, máy quét RFID).
+- Xử lý debounce logs, nhận dạng sai.
 
-## Phase 2: Hoạt động & Quản lý Hành chính
-* **Hoạt động công đoàn**: Kế hoạch năm/quý/tháng, hội nghị, phong trào văn thể mỹ.
-* **Khen thưởng & Kỷ luật**: Ghi nhận quyết định khen thưởng thi đua, quản lý thời hạn hiệu lực kỷ luật đoàn viên.
-* **Văn bản**: Quản lý lưu trữ văn bản đi/đến, thư viện biểu mẫu nội bộ.
+## PHASE 3: Advanced Reports
+- Xây dựng module Báo cáo nâng cao (Dashboard biểu đồ trực quan, Export PDF tự động).
 
-## Phase 3: Tài chính & Chăm lo đời sống
-* **Tài chính công đoàn**: Thu đoàn phí tự động qua lương hoặc thủ công, phân bổ 60% kinh phí trích lại cho cơ sở.
-* **Phúc lợi đoàn viên**: Quy trình đề xuất thăm hỏi hiếu hỷ, ốm đau, thai sản kèm minh chứng trực quan.
-* **Mái ấm công đoàn**: Theo dõi các quỹ hỗ trợ đặc biệt dài hạn cho đoàn viên hoàn cảnh đặc biệt khó khăn.
+## PHASE 4: HLĐT Integration
+- Tích hợp với hệ thống Huấn luyện Đào tạo qua chuẩn RestAPI (Sử dụng CCCD làm khóa chính).
+- Tự động kéo danh sách học viên từ HLĐT xuống Event.
 
-## Phase 4: Sáng kiến khoa học & Số hóa nâng cao
-* **Sáng kiến & Đề tài**: Đăng ký, nghiệm thu đề tài khoa học y tế quân sự và sáng kiến cải tiến kỹ thuật.
-* **Thi đua trực tuyến**: Chấm điểm tự động dựa trên tiêu chí và hoạt động thực tế, bảng xếp hạng các đơn vị.
-* **QR Code & Chữ ký số**: Check-in sự kiện qua QR Code, ký duyệt điện tử các báo cáo tài chính/khen thưởng.
+## PHASE 5: CME (Continuing Medical Education)
+- Quản lý việc cấp chứng chỉ đào tạo liên tục dựa trên kết quả điểm danh. (Nếu được phép triển khai trên hệ thống này thay vì HLĐT).
+
+## PHASE 6: Advanced Automation/AI (nếu cần)
+- Cảnh báo điểm danh hộ, điểm danh bất thường.
+- Dò tìm gian lận (ví dụ: quét cửa trước và cửa sau cách nhau 1 giây - impossible travel).
