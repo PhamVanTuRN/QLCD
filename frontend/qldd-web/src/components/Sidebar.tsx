@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -17,7 +17,8 @@ import {
   Award,
   Folder,
   Key,
-  LogOut
+  LogOut,
+  ChevronUp
 } from "lucide-react";
 
 const mainNavItems = [
@@ -41,6 +42,19 @@ export default function Sidebar() {
   const [pwdError, setPwdError] = useState("");
   const [pwdSuccess, setPwdSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,9 +154,43 @@ export default function Sidebar() {
 
       {/* User panel */}
       {user && (
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs border border-blue-400/20 shadow-sm">
+        <div className="relative border-t border-slate-100 bg-slate-50/50" ref={userMenuRef}>
+          {/* Avatar dropdown menu - appears above the user panel */}
+          {isUserMenuOpen && (
+            <div className="absolute bottom-full left-3 right-3 mb-1.5 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-150 z-20">
+              <button
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  setPwdError("");
+                  setPwdSuccess("");
+                  setOldPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                  setIsChangePwdOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[11px] font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer"
+              >
+                <Key className="w-3.5 h-3.5 shrink-0" /> Đổi mật khẩu
+              </button>
+              <div className="border-t border-slate-100" />
+              <button
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  logout();
+                }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[11px] font-semibold text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" /> Đăng xuất
+              </button>
+            </div>
+          )}
+
+          {/* Clickable user info row */}
+          <button
+            onClick={() => setIsUserMenuOpen((prev) => !prev)}
+            className="w-full p-4 flex items-center gap-3 hover:bg-slate-100/60 transition-colors cursor-pointer text-left"
+          >
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs border border-blue-400/20 shadow-sm shrink-0">
               {user.hoTen.split(" ").map(w => w[0]).slice(-2).join("")}
             </div>
             <div className="flex-1 min-w-0">
@@ -154,28 +202,8 @@ export default function Sidebar() {
                 <span className="text-[10px] text-blue-600 font-medium truncate">{user.vaiTro}</span>
               </div>
             </div>
-          </div>
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={() => {
-                setPwdError("");
-                setPwdSuccess("");
-                setOldPassword("");
-                setNewPassword("");
-                setConfirmPassword("");
-                setIsChangePwdOpen(true);
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-blue-50 text-slate-650 hover:text-blue-650 text-[10px] font-bold py-2 rounded-lg border border-slate-200 hover:border-blue-150 transition-all cursor-pointer"
-            >
-              <Key className="w-3 h-3 shrink-0" /> Đổi mật khẩu
-            </button>
-            <button
-              onClick={logout}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[10px] font-bold py-2 rounded-lg border border-slate-200 hover:border-red-100 transition-all cursor-pointer"
-            >
-              <LogOut className="w-3 h-3 shrink-0" /> Đăng xuất
-            </button>
-          </div>
+            <ChevronUp className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isUserMenuOpen ? "" : "rotate-180"}`} />
+          </button>
         </div>
       )}
 
