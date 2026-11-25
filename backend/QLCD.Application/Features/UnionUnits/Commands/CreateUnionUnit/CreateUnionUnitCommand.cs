@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,7 +12,9 @@ namespace QLCD.Application.Features.UnionUnits.Commands.CreateUnionUnit;
 
 public record CreateUnionUnitCommand : IRequest<Guid>
 {
+    [Required, StringLength(150)]
     public required string TenDonVi { get; init; }
+    [EnumDataType(typeof(LoaiToChuc))]
     public LoaiToChuc LoaiToChuc { get; init; }
     public Guid? MaParent { get; init; }
     public Guid? MaKhoi { get; init; }
@@ -28,6 +31,9 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
 
     public async Task<Guid> Handle(CreateUnionUnitCommand request, CancellationToken cancellationToken)
     {
+        await using var transaction = _context.Database.IsRelational()
+            ? await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken)
+            : null;
         // 1. Kiểm tra ràng buộc chỉ có duy nhất 01 CĐCS
         if (request.LoaiToChuc == LoaiToChuc.CDCS)
         {
@@ -98,7 +104,6 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
         };
 
         _context.DonViCongDoans.Add(newUnit);
-        await _context.SaveChangesAsync(cancellationToken);
 
         // Tự động tạo tài khoản quản lý cho đơn vị mới
         var baseName = ToUnaccentedLowercase(request.TenDonVi);
@@ -115,7 +120,7 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
             _ => "tocd_"
         };
 
-        string username = prefix + baseName;
+        string username = prefix + baseName[..Math.Min(baseName.Length, 36)];
         int suffix = 1;
         string finalUsername = username;
         while (await _context.TaiKhoans.AnyAsync(a => a.Username == finalUsername, cancellationToken))
@@ -124,8 +129,6 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
             suffix++;
         }
 
-        string tempPassword = $"108@{baseName}";
-        if (tempPassword.Length < 8) tempPassword += "123";
 
         string role = request.LoaiToChuc switch
         {
@@ -134,19 +137,22 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
             _ => "TOCD"
         };
 
+        var displayName = $"Quản lý {request.TenDonVi}";
         var newAccount = new TaiKhoan
         {
             Username = finalUsername,
-            PasswordHash = QLCD.Shared.Security.PasswordHasher.Hash(tempPassword),
-            HoTen = $"Quản lý {request.TenDonVi}",
+            PasswordHash = QLCD.Shared.Security.PasswordHasher.Hash(QLCD.Application.Features.Auth.AccountCredentials.InitialPassword),
+            HoTen = displayName.Length <= 100 ? displayName : "Quản lý công đoàn",
             VaiTro = role,
             OrganizationId = newUnit.Id,
-            PasswordRaw = tempPassword,
-            TrangThai = true
+            MustChangePassword = true,
+            TrangThai = false
         };
 
         _context.TaiKhoans.Add(newAccount);
         await _context.SaveChangesAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
 
         return newUnit.Id;
     }

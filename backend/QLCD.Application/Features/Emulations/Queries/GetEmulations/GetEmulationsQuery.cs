@@ -5,19 +5,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
+using QLCD.Domain.Entities;
 
 namespace QLCD.Application.Features.Emulations.Queries.GetEmulations;
 
 public record GetEmulationsQuery : IRequest<List<EmulationDto>>
 {
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = PageBounds.DefaultSize;
     public string? Search { get; init; }
     public int? Nam { get; init; }
     public string? XepLoai { get; init; }
     
     // Auth scope
-    public Guid? ScopeOrgId { get; init; }
-    public string? UserRole { get; init; }
 }
 
 public class EmulationDto
@@ -36,62 +38,43 @@ public class EmulationDto
     public string? TenXepLoai { get; set; }
     public string? KhenThuong { get; set; }
     public int TrangThai { get; set; }
+    public string? FileMinhChungUrl { get; set; }
+    public Guid? EvidenceFileId { get; set; }
+    public string? EvidenceFileName { get; set; }
+    public long? EvidenceFileSize { get; set; }
+    public string? DownloadUrl { get; set; }
 }
 
 public class GetEmulationsQueryHandler : IRequestHandler<GetEmulationsQuery, List<EmulationDto>>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetEmulationsQueryHandler(IQLCDDbContext context)
+    public GetEmulationsQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<List<EmulationDto>> Handle(GetEmulationsQuery request, CancellationToken cancellationToken)
     {
+        var offset = PageBounds.Offset(request.Page, request.PageSize);
         var query = _context.ThiDuaCongDoans
             .Include(e => e.DoanVien)
             .Include(e => e.DonVi)
             .AsNoTracking();
 
         // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
-        {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    // Lọc bản ghi cá nhân thuộc tổ quản lý hoặc bản ghi tập thể thuộc tổ quản lý
-                    query = query.Where(e => 
-                        (e.DonViId.HasValue && (e.DonViId == orgId || childOrgIds.Contains(e.DonViId.Value))) ||
-                        (e.DoanVienId.HasValue && (e.DoanVien != null && (e.DoanVien.MaToCongDoan == orgId || childOrgIds.Contains(e.DoanVien.MaToCongDoan)))));
-                }
-                else // TOCD
-                {
-                    query = query.Where(e => 
-                        (e.DonViId.HasValue && e.DonViId == orgId) ||
-                        (e.DoanVienId.HasValue && e.DoanVien != null && e.DoanVien.MaToCongDoan == orgId));
-                }
-            }
-            else
-            {
-                return new List<EmulationDto>();
-            }
-        }
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        query = EmulationScope.Apply(query, allowedOrgIds);
 
         // 2. Lọc & Tìm kiếm
-        if (!string.IsNullOrEmpty(request.Search))
+        var search = PageBounds.Search(request.Search);
+        if (search is not null)
         {
-            var search = request.Search.ToLower();
             query = query.Where(e => 
                 e.TenPhongTrao.ToLower().Contains(search) || 
-                (e.DoanVien != null && e.DoanVien.HoTen.ToLower().Contains(search)) || 
+                (e.DoanVien != null && (e.DonViId == null || e.DonViId == e.DoanVien.MaToCongDoan) && e.DoanVien.HoTen.ToLower().Contains(search)) ||
                 (e.DonVi != null && e.DonVi.TenDonVi.ToLower().Contains(search)));
         }
 
@@ -112,37 +95,59 @@ public class GetEmulationsQueryHandler : IRequestHandler<GetEmulationsQuery, Lis
 
         var list = await query
             .OrderByDescending(e => e.Nam)
-            .Select(e => new EmulationDto
+            .ThenBy(e => e.Id)
+            .Skip(offset).Take(request.PageSize + 1)
+            .Select(e => new
+            {
+                Emulation = e,
+                File = _context.EvidenceFiles
+                    .Where(f => f.RelatedEntityId == e.Id && f.ModuleName == "Emulations" && f.OrganizationId == (e.DonViId ?? (e.DoanVien != null ? e.DoanVien.MaToCongDoan : (Guid?)null)) && !f.IsDeleted)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        var dtoList = new List<EmulationDto>();
+        foreach (var item in list)
+        {
+            var e = item.Emulation;
+            var f = item.File;
+            var visibleMember = e.DoanVien != null && (e.DonViId == null || e.DonViId == e.DoanVien.MaToCongDoan)
+                ? e.DoanVien : null;
+
+            var dto = new EmulationDto
             {
                 Id = e.Id,
                 TenPhongTrao = e.TenPhongTrao,
-                DoanVienId = e.DoanVienId,
-                HoTenDoanVien = e.DoanVien != null ? e.DoanVien.HoTen : null,
-                MaNhanVien = e.DoanVien != null ? e.DoanVien.MaNhanVien : null,
+                DoanVienId = visibleMember?.Id,
+                HoTenDoanVien = visibleMember?.HoTen,
+                MaNhanVien = visibleMember?.MaNhanVien,
                 DonViId = e.DonViId,
                 TenDonVi = e.DonVi != null ? e.DonVi.TenDonVi : (e.DoanVien != null && e.DoanVien.ToCongDoan != null ? e.DoanVien.ToCongDoan.TenDonVi : ""),
                 Nam = e.Nam,
                 DiemTuDanhGia = e.DiemTuDanhGia,
                 DiemBchDuyet = e.DiemBchDuyet,
                 XepLoai = e.XepLoai,
-                TenXepLoai = "",
+                TenXepLoai = catalogs.TryGetValue(e.XepLoai, out var name) ? name : e.XepLoai,
                 KhenThuong = e.KhenThuong,
-                TrangThai = e.TrangThai
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var item in list)
-        {
-            if (catalogs.TryGetValue(item.XepLoai, out var name))
-            {
-                item.TenXepLoai = name;
-            }
-            else
-            {
-                item.TenXepLoai = item.XepLoai;
-            }
+                TrangThai = e.TrangThai,
+                FileMinhChungUrl = f != null ? f.Id.ToString() : null,
+                EvidenceFileId = f?.Id,
+                EvidenceFileName = f?.OriginalFileName,
+                EvidenceFileSize = f?.FileSize,
+                DownloadUrl = f != null ? $"/api/v1/evidence-files/download/{f.Id}" : null
+            };
+            dtoList.Add(dto);
         }
 
-        return list;
+        return dtoList;
     }
+}
+
+internal static class EmulationScope
+{
+    public static IQueryable<ThiDuaCongDoan> Apply(IQueryable<ThiDuaCongDoan> query, IReadOnlyCollection<Guid>? allowed)
+        => allowed is null ? query : query.Where(e =>
+            (e.DonViId.HasValue && allowed.Contains(e.DonViId.Value)) ||
+            (!e.DonViId.HasValue && e.DoanVien != null && allowed.Contains(e.DoanVien.MaToCongDoan)));
 }

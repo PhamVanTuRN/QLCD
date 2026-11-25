@@ -24,11 +24,13 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
     // Mới bổ sung
     public DbSet<DanhMucDungChung> DanhMucDungChungs { get; set; } = null!;
     public DbSet<TaiKhoan> TaiKhoans { get; set; } = null!;
+    public DbSet<AuthSession> AuthSessions { get; set; } = null!;
     public DbSet<HoatDongCongDoan> HoatDongCongDoans { get; set; } = null!;
     public DbSet<TaiChinhCongDoan> TaiChinhCongDoans { get; set; } = null!;
     public DbSet<PhucLoiDoanVien> PhucLoiDoanViens { get; set; } = null!;
     public DbSet<SangKien> SangKiens { get; set; } = null!;
     public DbSet<ThiDuaCongDoan> ThiDuaCongDoans { get; set; } = null!;
+    public DbSet<EvidenceFile> EvidenceFiles { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,6 +68,7 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
             entity.Property(e => e.HoTen).HasMaxLength(100).IsRequired();
             entity.Property(e => e.SoCCCD).HasMaxLength(12).IsRequired();
             entity.Property(e => e.MaNhanVien).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.MaToCongDoan).IsConcurrencyToken();
 
             entity.HasOne(e => e.ToCongDoan)
                 .WithMany(t => t.DoanViens)
@@ -111,6 +114,8 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
         {
             entity.Property(e => e.EntityName).HasMaxLength(100).IsRequired();
             entity.Property(e => e.Action).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.CorrelationId).HasMaxLength(128);
+            entity.HasIndex(e => e.Timestamp);
         });
 
         // 7. Cấu hình thực thể DanhMucDungChung
@@ -131,12 +136,25 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
             entity.Property(e => e.PasswordHash).HasMaxLength(250).IsRequired();
             entity.Property(e => e.HoTen).HasMaxLength(100).IsRequired();
             entity.Property(e => e.VaiTro).HasMaxLength(50).IsRequired();
-            entity.Property(e => e.PasswordRaw).HasMaxLength(100);
+            entity.Property(e => e.SecurityVersion).IsConcurrencyToken();
+            entity.Property(e => e.LastMfaStep).IsConcurrencyToken();
+            entity.Property(e => e.ProtectedMfaSecret).HasMaxLength(500);
+            entity.Property(e => e.ActivationCodeHash).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.RecoveryCodeHashes).HasMaxLength(650).IsUnicode(false);
 
             entity.HasOne(e => e.Organization)
                 .WithMany()
                 .HasForeignKey(e => e.OrganizationId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AuthSession>(entity =>
+        {
+            entity.Property(e => e.TokenHash).HasMaxLength(64).IsUnicode(false).IsRequired();
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasIndex(e => e.ExpiresAtUtc);
+            entity.HasOne(e => e.Account).WithMany().HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // 9. Cấu hình thực thể HoatDongCongDoan
@@ -236,7 +254,22 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // 14. Cấu hình Global Query Filter cho Soft Delete (IsDeleted == false)
+        // 14. Cấu hình thực thể EvidenceFile
+        modelBuilder.Entity<EvidenceFile>(entity =>
+        {
+            entity.Property(e => e.OriginalFileName).HasMaxLength(250).IsRequired();
+            entity.Property(e => e.StoredFileName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.FileExtension).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.ContentType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.StoragePath).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ModuleName).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.RelatedEntityId).IsConcurrencyToken();
+            entity.Property(e => e.IsDeleted).IsConcurrencyToken();
+            entity.HasIndex(e => new { e.ModuleName, e.RelatedEntityId });
+            entity.HasIndex(e => e.OrganizationId);
+        });
+
+        // 15. Cấu hình Global Query Filter cho Soft Delete (IsDeleted == false)
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))

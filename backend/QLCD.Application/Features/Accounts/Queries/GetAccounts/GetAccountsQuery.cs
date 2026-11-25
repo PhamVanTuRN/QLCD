@@ -5,11 +5,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
 
 namespace QLCD.Application.Features.Accounts.Queries.GetAccounts;
 
-public record GetAccountsQuery : IRequest<List<AccountDto>>;
+public record GetAccountsQuery : IRequest<List<AccountDto>>
+{
+    public string? Search { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = PageBounds.DefaultSize;
+}
 
 public class AccountDto
 {
@@ -19,12 +25,16 @@ public class AccountDto
     public required string VaiTro { get; set; }
     public Guid? OrganizationId { get; set; }
     public string? DonViTen { get; set; }
-    public string? PasswordRaw { get; set; }
+    public bool MustChangePassword { get; set; }
     public bool TrangThai { get; set; }
+    public bool AuthenticatorEnabled { get; set; }
+    public bool ActivationPending { get; set; }
+    public bool CanIssueActivation { get; set; }
 }
 
 public class GetAccountsQueryHandler : IRequestHandler<GetAccountsQuery, List<AccountDto>>
 {
+    private const string SystemOrganizationName = "Hệ thống";
     private readonly IQLCDDbContext _context;
 
     public GetAccountsQueryHandler(IQLCDDbContext context)
@@ -34,9 +44,23 @@ public class GetAccountsQueryHandler : IRequestHandler<GetAccountsQuery, List<Ac
 
     public async Task<List<AccountDto>> Handle(GetAccountsQuery request, CancellationToken cancellationToken)
     {
-        var list = await _context.TaiKhoans
-            .Include(t => t.Organization)
+        var offset = PageBounds.Offset(request.Page, request.PageSize);
+        var search = PageBounds.Search(request.Search);
+        var query = _context.TaiKhoans.AsNoTracking();
+        if (search is not null)
+        {
+            var matchesSystemOrganization = SystemOrganizationName.ToLowerInvariant().Contains(search, StringComparison.Ordinal);
+            query = query.Where(account => account.Username.ToLower().Contains(search)
+                || account.HoTen.ToLower().Contains(search)
+                || (account.Organization != null
+                    ? account.Organization.TenDonVi.ToLower().Contains(search)
+                    : matchesSystemOrganization));
+        }
+
+        return await query
             .OrderByDescending(t => t.CreatedDate)
+            .ThenBy(t => t.Id)
+            .Skip(offset).Take(request.PageSize + 1)
             .Select(t => new AccountDto
             {
                 Id = t.Id,
@@ -44,12 +68,13 @@ public class GetAccountsQueryHandler : IRequestHandler<GetAccountsQuery, List<Ac
                 HoTen = t.HoTen,
                 VaiTro = t.VaiTro,
                 OrganizationId = t.OrganizationId,
-                DonViTen = t.Organization != null ? t.Organization.TenDonVi : "Hệ thống",
-                PasswordRaw = t.PasswordRaw,
-                TrangThai = t.TrangThai
+                DonViTen = t.Organization != null ? t.Organization.TenDonVi : SystemOrganizationName,
+                MustChangePassword = t.MustChangePassword,
+                TrangThai = t.TrangThai,
+                AuthenticatorEnabled = t.ProtectedMfaSecret != null,
+                ActivationPending = t.ActivationCodeHash != null,
+                CanIssueActivation = t.ProtectedMfaSecret == null && t.ActivationCodeHash == null
             })
             .ToListAsync(cancellationToken);
-
-        return list;
     }
 }

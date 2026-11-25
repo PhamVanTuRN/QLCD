@@ -1,5 +1,6 @@
+using QLCD.Application.Common;
+using QLCD.Domain.Security;
 using System;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -11,7 +12,7 @@ namespace QLCD.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/welfare")]
-[Authorize]
+[Authorize(Roles = SecurityRoles.Business)]
 public class WelfareController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -21,118 +22,47 @@ public class WelfareController : ControllerBase
         _mediator = mediator;
     }
 
-    private string? GetUserRole() => User.FindFirst(ClaimTypes.Role)?.Value;
-
-    private Guid? GetScopeOrgId()
-    {
-        var val = User.FindFirst("OrganizationId")?.Value;
-        return Guid.TryParse(val, out Guid orgId) ? orgId : null;
-    }
-
     [HttpGet]
-    public async Task<IActionResult> Get([FromQuery] string? search, [FromQuery] string? loaiPhucLoi, [FromQuery] int? trangThai)
+    public async Task<IActionResult> Get([FromQuery] string? search, [FromQuery] string? loaiPhucLoi, [FromQuery] int? trangThai, [FromQuery] int page = 1, [FromQuery] int pageSize = PageBounds.DefaultSize)
     {
-        try
+        var query = new GetWelfareQuery
         {
-            var query = new GetWelfareQuery
-            {
-                Search = search,
-                LoaiPhucLoi = loaiPhucLoi,
-                TrangThai = trangThai,
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            };
-            var list = await _mediator.Send(query);
-            return Ok(new { success = true, data = list });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+            Page = page,
+            PageSize = pageSize,
+            Search = search,
+            LoaiPhucLoi = loaiPhucLoi,
+            TrangThai = trangThai,
+        };
+        var list = await _mediator.Send(query, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = list.Take(pageSize), hasMore = list.Count > pageSize });
     }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateWelfareCommand command)
     {
-        try
-        {
-            var finalCommand = command with
-            {
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            };
-            var id = await _mediator.Send(finalCommand);
-            return Ok(new { success = true, data = id });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        var id = await _mediator.Send(command, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = id });
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateWelfareCommand command)
     {
-        try
+        if (id != command.Id)
         {
-            if (id != command.Id)
-            {
-                return BadRequest(new { success = false, message = "ID không trùng khớp." });
-            }
-            var finalCommand = command with
-            {
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            };
-            var result = await _mediator.Send(finalCommand);
-            return Ok(new { success = true, data = result });
+            return BadRequest(new { success = false, message = "ID không trùng khớp." });
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        var result = await _mediator.Send(command, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = result });
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = SecurityRoles.Central + "," + SecurityRoles.Department)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        try
+        var result = await _mediator.Send(new DeleteWelfareCommand
         {
-            var result = await _mediator.Send(new DeleteWelfareCommand
-            {
-                Id = id,
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            });
-            return Ok(new { success = true, data = result });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+            Id = id,
+        }, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = result });
     }
 }

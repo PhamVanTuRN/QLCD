@@ -1,34 +1,120 @@
-import axios from 'axios';
+import axios from "axios";
+import type {
+  ActivityDto, ActivityInput, EmulationDto, EmulationInput, FinanceDto, FinanceInput,
+  InitiativeDto, InitiativeInput, MemberDetailDto, MemberInput, MemberUpdate, WelfareDto, WelfareInput,
+} from "./business-types";
 
-const api = axios.create({
-  baseURL: 'http://localhost:5023/api/v1',
-  timeout: 15000,
-  headers: { 'Content-Type': 'application/json' }
-});
+const api = axios.create({ baseURL: "/api/v1", timeout: 45_000 });
+const csrfClient = axios.create({ baseURL: "/api/v1", timeout: 10_000 });
 
-// Interceptor to automatically attach JWT token
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('qlcd_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+export function apiMessage(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError<{ message?: string }>(error)) return fallback;
+  return error.response?.data?.message || fallback;
+}
+
+api.interceptors.request.use(async config => {
+  if (["post", "put", "patch", "delete"].includes(config.method?.toLowerCase() ?? "")) {
+    const response = await csrfClient.get<{ token: string }>("/auth/csrf");
+    config.headers.set("X-CSRF-Token", response.data.token);
   }
   return config;
-}, (error) => {
+});
+
+export const sessionExpiredEvent = "qlcd:session-ended";
+
+api.interceptors.response.use(response => response, error => {
+  if (typeof window !== "undefined" && axios.isAxiosError(error) && error.response?.status === 401
+    && !["/auth/login", "/auth/login/authenticator", "/auth/session", "/auth/change-password"].includes(error.config?.url ?? "")) {
+    window.dispatchEvent(new Event(sessionExpiredEvent));
+  }
   return Promise.reject(error);
 });
 
-// ==================== Authentication ====================
-export async function loginApi(payload: any) {
-  const res = await api.post('/auth/login', payload);
-  return res.data?.data;
+export interface SessionProfile {
+  id: string;
+  username: string;
+  hoTen: string;
+  vaiTro: "ADMIN" | "CDCS" | "CDBP" | "TOCD";
+  organizationId: string | null;
+  donViTen: string | null;
+  mustChangePassword: boolean;
+  needsAuthenticator: boolean;
+  requiresActivation: boolean;
+  hasRecoveryCodes: boolean;
 }
 
-// ==================== Accounts ====================
-export async function getAccountsApi() {
-  const res = await api.get('/accounts');
-  return res.data?.data ?? [];
+export async function getSessionApi(): Promise<SessionProfile> {
+  const response = await api.get<{ data: SessionProfile }>("/auth/session");
+  return response.data.data;
+}
+
+export async function loginApi(username: string, password: string) {
+  const { data: { data } } = await api.post<{ data: SessionProfile | { challenge: string } }>("/auth/login", {
+    username, password, beginAuthenticator: true,
+  });
+  return data;
+}
+
+export async function verifyLoginAuthenticator(challenge: string, code: string): Promise<SessionProfile> {
+  const { data } = await api.post<{ data: SessionProfile }>("/auth/login/authenticator", { challenge, code });
+  return data.data;
+}
+
+export interface AuthenticatorSetup { setup: string; key: string; qrImage: string }
+
+export async function getAuthenticatorStatus(signal: AbortSignal) {
+  const { data } = await api.get<{ data: SessionProfile }>("/auth/authenticator", { signal });
+  return data.data;
+}
+
+export async function beginAuthenticatorSetup(currentPassword: string, activationCode: string) {
+  const { data } = await api.post<{ data: AuthenticatorSetup }>("/auth/authenticator/setup", { currentPassword, activationCode });
+  return data.data;
+}
+
+export async function beginAuthenticatorRecovery(challenge: string, recoveryCode: string) {
+  const { data } = await api.post<{ data: AuthenticatorSetup }>("/auth/authenticator/recovery", { challenge, recoveryCode });
+  return data.data;
+}
+
+export async function confirmAuthenticatorSetup(setup: string, code: string, recovery = false) {
+  const path = recovery ? "/auth/authenticator/recovery/confirm" : "/auth/authenticator/confirm";
+  const { data } = await api.post<{ data: { codes: string[] } }>(path, { setup, code });
+  return data.data;
+}
+
+export async function rotateRecoveryCodes(currentPassword: string, code: string) {
+  const { data } = await api.post<{ data: { codes: string[] } }>("/auth/authenticator/recovery-codes", { currentPassword, code });
+  return data.data.codes;
+}
+
+export async function logoutApi() {
+  await api.post("/auth/logout");
+}
+
+export async function changePasswordApi(currentPassword: string, newPassword: string, confirmPassword: string, code: string) {
+  await api.post("/auth/change-password", { currentPassword, newPassword, confirmPassword, code });
+}
+
+export interface ListParams {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PageSlice<T> {
+  data: T[];
+  hasMore: boolean;
+}
+
+async function getPage<T>(path: string, params?: ListParams, signal?: AbortSignal): Promise<PageSlice<T>> {
+  const response = await api.get<PageSlice<T>>(path, { params, signal });
+  return { data: response.data.data ?? [], hasMore: response.data.hasMore === true };
+}
+
+export async function getAccountsApi<T>(params?: ListParams, signal?: AbortSignal) {
+  const { data } = await api.get<PageSlice<T> & { canResetCredentials: boolean }>("/accounts", { params, signal });
+  return { data: data.data ?? [], hasMore: data.hasMore === true, canResetCredentials: data.canResetCredentials === true };
 }
 
 export async function toggleAccountApi(id: string) {
@@ -36,12 +122,26 @@ export async function toggleAccountApi(id: string) {
   return res.data;
 }
 
-export async function resetAccountPasswordApi(id: string, payload: any) {
-  const res = await api.post(`/accounts/${id}/reset-password`, payload);
-  return res.data;
+export async function issueAccountActivation(id: string, identityVerified: boolean) {
+  const { data } = await api.post<{ data: { activationCode: string } }>(`/accounts/${id}/activate`, { identityVerified });
+  return data.data.activationCode;
+}
+
+export async function resetAccountPassword(id: string, confirmed: boolean, currentPassword: string, code: string) {
+  await api.post(`/accounts/${id}/reset-password`, { confirmed, currentPassword, code });
+}
+
+export async function resetAccountAuthenticator(id: string, identityVerified: boolean, currentPassword: string, code: string) {
+  const { data } = await api.post<{ data: { activationCode: string } }>(`/accounts/${id}/reset-2fa`, { identityVerified, currentPassword, code });
+  return data.data.activationCode;
 }
 
 // ==================== Catalogs (Danh mục) ====================
+export interface CatalogParams extends ListParams {
+  loai?: string;
+  activeOnly?: boolean;
+}
+
 export interface CatalogDto {
   id: string;
   loai: string;
@@ -52,22 +152,21 @@ export interface CatalogDto {
   ghiChu: string | null;
 }
 
-export async function getCatalogsApi(params?: { loai?: string; search?: string; activeOnly?: boolean }): Promise<CatalogDto[]> {
-  try {
-    const res = await api.get('/catalogs', { params });
-    return res.data?.data ?? [];
-  } catch {
-    return [];
-  }
+export function getCatalogsPage(params?: CatalogParams, signal?: AbortSignal) {
+  return getPage<CatalogDto>("/catalogs", params, signal);
 }
 
-export async function createCatalogApi(payload: any) {
+export async function getCatalogsApi(params?: CatalogParams, signal?: AbortSignal): Promise<CatalogDto[]> {
+  return (await getCatalogsPage({ ...params, pageSize: 200 }, signal)).data;
+}
+
+export async function createCatalogApi(payload: Omit<CatalogDto, "id">) {
   const res = await api.post('/catalogs', payload);
   return res.data;
 }
 
-export async function updateCatalogApi(id: string, payload: any) {
-  const res = await api.put(`/catalogs/${id}`, payload);
+export async function updateCatalogApi(id: string, payload: Pick<CatalogDto, "ten" | "thuTu" | "trangThai" | "ghiChu">) {
+  const res = await api.put(`/catalogs/${id}`, { ...payload, id });
   return res.data;
 }
 
@@ -92,18 +191,17 @@ export interface UnionUnitDto {
   soCoNgoaiNgu?: number;
   children: UnionUnitDto[];
   trangThai: number;
+  coTheTiepNhanDoanVien?: boolean;
 }
 
-export async function getUnionTree(): Promise<UnionUnitDto | null> {
-  try {
-    const res = await api.get('/union-units/tree');
-    return res.data?.data ?? null;
-  } catch { return null; }
+export async function getUnionTree(signal?: AbortSignal): Promise<UnionUnitDto | null> {
+  const res = await api.get<{ data: UnionUnitDto | null }>("/union-units/tree", { signal });
+  return res.data?.data ?? null;
 }
 
 export interface CreateUnionUnitPayload {
   tenDonVi: string;
-  loaiToChuc: number;
+  loaiToChuc: "CDCS" | "CDBP" | "TO_CD_TRUC_THUOC_CDCS" | "TO_CD_THUOC_CDBP";
   maParent?: string;
   maKhoi?: string;
 }
@@ -113,7 +211,7 @@ export async function createUnionUnit(payload: CreateUnionUnitPayload) {
   return res.data;
 }
 
-export async function updateUnionUnit(id: string, payload: any) {
+export async function updateUnionUnit(id: string, payload: { id: string; tenDonVi: string; maKhoi: string | null; trangThai: number }) {
   const res = await api.put(`/union-units/${id}`, payload);
   return res.data;
 }
@@ -161,25 +259,23 @@ export interface GetMembersParams {
   pageSize?: number;
 }
 
-export async function getMembers(params?: GetMembersParams): Promise<GetMembersResult | null> {
-  try {
-    const res = await api.get('/union-members', { params });
-    return res.data?.data ?? null;
-  } catch { return null; }
+export async function getMembers(params?: GetMembersParams, signal?: AbortSignal): Promise<GetMembersResult> {
+  const response = await api.get<{ data: GetMembersResult }>("/union-members", { params, signal });
+  return response.data.data;
 }
 
-export async function getMemberDetailApi(id: string) {
-  const res = await api.get(`/union-members/${id}`);
-  return res.data?.data ?? null;
+export async function getMemberDetailApi(id: string, signal?: AbortSignal): Promise<MemberDetailDto> {
+  const response = await api.get<{ data: MemberDetailDto }>(`/union-members/${id}`, { signal });
+  return response.data.data;
 }
 
-export async function createMember(payload: any) {
-  const res = await api.post('/union-members', payload);
-  return res.data;
+export async function createMember(payload: MemberInput) {
+  const res = await api.post<{ data: string }>("/union-members", payload);
+  return res.data.data;
 }
 
-export async function updateMemberApi(id: string, payload: any) {
-  const res = await api.put(`/union-members/${id}`, payload);
+export async function updateMemberApi(id: string, payload: MemberUpdate) {
+  const res = await api.put(`/union-members/${id}`, { ...payload, id });
   return res.data;
 }
 
@@ -192,6 +288,7 @@ export interface TransferPayload {
   denToCongDoanId: string;
   lyDo: string;
   ngayHieuLuc: string;
+  fileMinhChungUrl?: string;
 }
 
 export async function transferMember(memberId: string, payload: TransferPayload) {
@@ -200,18 +297,17 @@ export async function transferMember(memberId: string, payload: TransferPayload)
 }
 
 // ==================== Union Activities ====================
-export async function getActivitiesApi(params?: any) {
-  const res = await api.get('/activities', { params });
-  return res.data?.data ?? [];
+export function getActivitiesApi(params?: ListParams, signal?: AbortSignal) {
+  return getPage<ActivityDto>("/activities", params, signal);
 }
 
-export async function createActivityApi(payload: any) {
+export async function createActivityApi(payload: ActivityInput) {
   const res = await api.post('/activities', payload);
   return res.data;
 }
 
-export async function updateActivityApi(id: string, payload: any) {
-  const res = await api.put(`/activities/${id}`, payload);
+export async function updateActivityApi(id: string, payload: ActivityInput) {
+  const res = await api.put(`/activities/${id}`, { ...payload, id });
   return res.data;
 }
 
@@ -221,18 +317,22 @@ export async function deleteActivityApi(id: string) {
 }
 
 // ==================== Union Finance ====================
-export async function getFinanceApi(params?: any) {
-  const res = await api.get('/finance', { params });
-  return res.data?.data ?? [];
+export interface FinancePage extends PageSlice<FinanceDto> {
+  totals: { receipt: number; expense: number };
 }
 
-export async function createFinanceApi(payload: any) {
+export async function getFinanceApi(params?: ListParams, signal?: AbortSignal): Promise<FinancePage> {
+  const response = await api.get<FinancePage>("/finance", { params, signal });
+  return response.data;
+}
+
+export async function createFinanceApi(payload: FinanceInput) {
   const res = await api.post('/finance', payload);
   return res.data;
 }
 
-export async function updateFinanceApi(id: string, payload: any) {
-  const res = await api.put(`/finance/${id}`, payload);
+export async function updateFinanceApi(id: string, payload: FinanceInput) {
+  const res = await api.put(`/finance/${id}`, { ...payload, id });
   return res.data;
 }
 
@@ -242,34 +342,32 @@ export async function deleteFinanceApi(id: string) {
 }
 
 // ==================== Union Welfare ====================
-export async function getWelfareApi(params?: any) {
-  const res = await api.get('/welfare', { params });
-  return res.data?.data ?? [];
+export function getWelfareApi(params?: ListParams, signal?: AbortSignal) {
+  return getPage<WelfareDto>("/welfare", params, signal);
 }
 
-export async function createWelfareApi(payload: any) {
+export async function createWelfareApi(payload: WelfareInput) {
   const res = await api.post('/welfare', payload);
   return res.data;
 }
 
-export async function updateWelfareApi(id: string, payload: any) {
-  const res = await api.put(`/welfare/${id}`, payload);
+export async function updateWelfareApi(id: string, payload: WelfareInput) {
+  const res = await api.put(`/welfare/${id}`, { ...payload, id });
   return res.data;
 }
 
 // ==================== Emulation Initiatives ====================
-export async function getInitiativesApi(params?: any) {
-  const res = await api.get('/initiatives', { params });
-  return res.data?.data ?? [];
+export function getInitiativesApi(params?: ListParams, signal?: AbortSignal) {
+  return getPage<InitiativeDto>("/initiatives", params, signal);
 }
 
-export async function createInitiativeApi(payload: any) {
+export async function createInitiativeApi(payload: InitiativeInput) {
   const res = await api.post('/initiatives', payload);
   return res.data;
 }
 
-export async function updateInitiativeApi(id: string, payload: any) {
-  const res = await api.put(`/initiatives/${id}`, payload);
+export async function updateInitiativeApi(id: string, payload: InitiativeInput) {
+  const res = await api.put(`/initiatives/${id}`, { ...payload, id });
   return res.data;
 }
 
@@ -279,18 +377,17 @@ export async function deleteInitiativeApi(id: string) {
 }
 
 // ==================== Union Emulations ====================
-export async function getEmulationsApi(params?: any) {
-  const res = await api.get('/emulations', { params });
-  return res.data?.data ?? [];
+export function getEmulationsApi(params?: ListParams, signal?: AbortSignal) {
+  return getPage<EmulationDto>("/emulations", params, signal);
 }
 
-export async function createEmulationApi(payload: any) {
+export async function createEmulationApi(payload: EmulationInput) {
   const res = await api.post('/emulations', payload);
   return res.data;
 }
 
-export async function updateEmulationApi(id: string, payload: any) {
-  const res = await api.put(`/emulations/${id}`, payload);
+export async function updateEmulationApi(id: string, payload: EmulationInput) {
+  const res = await api.put(`/emulations/${id}`, { ...payload, id });
   return res.data;
 }
 
@@ -334,11 +431,60 @@ export interface UnionStatsDto {
   soKetQuaThiDua: number;
 }
 
-export async function getStats(): Promise<UnionStatsDto | null> {
-  try {
-    const res = await api.get('/union-units/stats');
-    return res.data?.data ?? null;
-  } catch { return null; }
+export async function getStats(signal?: AbortSignal): Promise<UnionStatsDto> {
+  const response = await api.get<{ data: UnionStatsDto }>("/union-units/stats", { signal });
+  return response.data.data;
+}
+
+export interface EmulationSummary {
+  year: number;
+  registered: number;
+  evaluated: number;
+  awarded: number;
+  ratings: { code: string; name: string; count: number }[];
+}
+
+export async function getEmulationSummary(year: number, signal?: AbortSignal): Promise<EmulationSummary> {
+  const response = await api.get<{ data: EmulationSummary }>("/emulations/summary", { params: { nam: year }, signal });
+  return response.data.data;
+}
+
+// ==================== Evidence Files (Minh chứng) ====================
+export interface EvidenceFileDto {
+  id: string;
+  originalFileName: string;
+  downloadUrl: string;
+}
+
+export async function uploadEvidenceFile(file: File, moduleName: string, organizationId: string): Promise<EvidenceFileDto> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await api.post(`/evidence-files/upload`, formData, {
+    params: { moduleName, organizationId }
+  });
+  return res.data?.data;
+}
+
+export async function deleteEvidenceFile(id: string) {
+  const res = await api.delete(`/evidence-files/${id}`);
+  return res.data;
+}
+
+export async function getFlattenedUnits(signal?: AbortSignal): Promise<{ id: string; tenDonVi: string }[]> {
+  const tree = await getUnionTree(signal);
+  if (!tree) return [];
+  const list: { id: string; tenDonVi: string }[] = [];
+  function recurse(node: UnionUnitDto) {
+    list.push({ id: node.id, tenDonVi: node.tenDonVi });
+    if (node.children) {
+      for (const child of node.children) {
+        recurse(child);
+      }
+    }
+  }
+  recurse(tree);
+  return list;
 }
 
 export default api;

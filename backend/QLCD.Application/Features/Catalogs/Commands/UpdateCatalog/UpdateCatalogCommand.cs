@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,9 +11,11 @@ namespace QLCD.Application.Features.Catalogs.Commands.UpdateCatalog;
 public record UpdateCatalogCommand : IRequest<bool>
 {
     public Guid Id { get; init; }
+    [Required, StringLength(250)]
     public required string Ten { get; init; }
     public int ThuTu { get; init; }
     public bool TrangThai { get; init; }
+    [StringLength(500)]
     public string? GhiChu { get; init; }
 }
 

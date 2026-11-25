@@ -1,0 +1,94 @@
+name: Security and regression checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+
+      - name: Scan the current checkout for secrets
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location 'https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz' -o "$RUNNER_TEMP/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" dir . --redact=100
+
+      - name: Analyze application security patterns locally
+        run: pipx run --spec 'semgrep==1.185.0' semgrep scan --metrics=off --disable-version-check --error --config tools/security-rules.yml backend frontend/qlcd-web/src
+
+      - name: Match locked dependencies against public data locally
+        shell: bash
+        run: |
+          catalog="$RUNNER_TEMP/advisories"
+          for ecosystem in npm NuGet; do
+            mkdir -p "$catalog/osv-scalibr/$ecosystem"
+            curl --fail --silent --show-error --location "https://osv-vulnerabilities.storage.googleapis.com/$ecosystem/all.zip" -o "$catalog/osv-scalibr/$ecosystem/all.zip"
+          done
+          image="ghcr.io/google/osv-scanner@sha256:a70ffffc2bfd33482953e5d6b64c6fcdb30239717a07b0f0d3ab2859ce3e4cde"
+          docker pull "$image"
+          docker run --rm --network=none -v "$PWD:/src:ro" -v "$catalog:/advisories:ro" -w /src \
+            -e OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=/advisories "$image" scan source --offline --recursive backend frontend/qlcd-web
+          docker run --rm --network=none -v "$PWD:/src:ro" -v "$catalog:/advisories:ro" -w /src \
+            -e OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY=/advisories "$image" scan source --offline --recursive \
+            --all-packages --format cyclonedx-1-6 backend frontend/qlcd-web > "$RUNNER_TEMP/qlcd-components.cdx.json"
+
+      - name: Retain dependency inventory
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: qlcd-components
+          path: ${{ runner.temp }}/qlcd-components.cdx.json
+          retention-days: 7
+
+      - name: Build and test backend
+        shell: bash
+        run: |
+          dotnet restore backend/QLCD.sln --locked-mode -p:NuGetAuditMode=all
+          dotnet build backend/QLCD.sln --no-restore
+          dotnet test backend/QLCD.sln --no-build --no-restore
+          node tools/test-security-smoke.mjs
+
+      - name: Build frontend from lockfile
+        working-directory: frontend/qlcd-web
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint -- --max-warnings 0
+          npm run build
+          npm run typecheck
+
+      - name: Verify browser flows and responsive layouts
+        working-directory: frontend/qlcd-web
+        shell: bash
+        run: |
+          npx playwright-core install --with-deps chromium
+          npm run test:browser
+
+      - name: Retain browser evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: qlcd-browser
+          path: artifacts/browser/after
+          retention-days: 7

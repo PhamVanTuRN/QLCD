@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,8 +12,10 @@ namespace QLCD.Application.Features.UnionUnits.Commands.UpdateUnionUnit;
 public record UpdateUnionUnitCommand : IRequest<bool>
 {
     public Guid Id { get; init; }
+    [Required, StringLength(150)]
     public required string TenDonVi { get; init; }
     public Guid? MaKhoi { get; init; }
+    [Range(0, 1)]
     public int TrangThai { get; init; }
 }
 
@@ -39,13 +42,13 @@ public class UpdateUnionUnitCommandHandler : IRequestHandler<UpdateUnionUnitComm
         unit.MaKhoi = request.MaKhoi;
         unit.TrangThai = request.TrangThai;
 
-        // Cập nhật tên của tài khoản tương ứng nếu có
-        var account = await _context.TaiKhoans
-            .FirstOrDefaultAsync(a => a.OrganizationId == request.Id, cancellationToken);
-        if (account != null)
+        var accounts = await _context.TaiKhoans.Where(account => account.OrganizationId == request.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var account in accounts)
         {
             account.HoTen = $"Quản lý {request.TenDonVi}";
-            account.TrangThai = request.TrangThai == 1;
+            if (request.TrangThai != 1)
+                account.SecurityVersion = Guid.NewGuid();
         }
 
         await _context.SaveChangesAsync(cancellationToken);

@@ -11,5 +11,6 @@ public class AuditLog
     public string? OldValues { get; set; } // JSON string
     public string? NewValues { get; set; } // JSON string
     public string? UserId { get; set; }
+    public string? CorrelationId { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

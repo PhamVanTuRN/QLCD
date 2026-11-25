@@ -1,60 +1,64 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Infrastructure.Data;
 using QLCD.Infrastructure.Interceptors;
+using QLCD.Infrastructure.Services;
 
 namespace QLCD.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddInfrastructureServices(
+        this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment, bool migration = false)
     {
-        // Đăng ký AuditLogInterceptor
-        services.AddSingleton<AuditLogInterceptor>();
-
-        // Đăng ký QLCDDbContext (Sử dụng SQL Server theo cấu hình hoặc fallback sang InMemory nếu SQL Server không khả dụng/không kết nối được)
-        services.AddDbContext<QLCDDbContext>((sp, options) =>
+        var useInMemory = configuration.GetValue<bool>("Data:UseInMemory");
+        string? connectionString = null;
+        if (useInMemory)
         {
-            var auditInterceptor = sp.GetRequiredService<AuditLogInterceptor>();
-            
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
-            bool useInMemory = string.IsNullOrEmpty(connectionString);
-            
-            if (!useInMemory)
+            if (migration || (!environment.IsDevelopment() && !environment.IsEnvironment("Testing")))
+                throw new InvalidOperationException("In-memory data is restricted to Development and Testing.");
+        }
+        else
+        {
+            var connectionName = migration ? "Migration" : "DefaultConnection";
+            connectionString = configuration.GetConnectionString(connectionName);
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new InvalidOperationException($"Configure ConnectionStrings:{connectionName} before starting QLCD.");
+            try
             {
-                try
-                {
-                    var cb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString)
-                    {
-                        ConnectTimeout = 2 // Thử kết nối trong tối đa 2 giây để không làm chậm startup
-                    };
-                    using (var conn = new Microsoft.Data.SqlClient.SqlConnection(cb.ConnectionString))
-                    {
-                        conn.Open();
-                    }
-                }
-                catch
-                {
-                    useInMemory = true;
-                }
+                var connection = new SqlConnectionStringBuilder(connectionString);
+                // A Windows development process can explicitly trust a local SQL Server over shared memory.
+                var isLocalWindowsDevelopment = environment.IsDevelopment() && OperatingSystem.IsWindows()
+                    && connection.IntegratedSecurity && connection.DataSource.StartsWith(@"lpc:.\", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrEmpty(connection.FailoverPartner);
+                connection.Encrypt = SqlConnectionEncryptOption.Mandatory;
+                connection.TrustServerCertificate = isLocalWindowsDevelopment && connection.TrustServerCertificate;
+                connectionString = connection.ConnectionString;
             }
+            catch (ArgumentException)
+            {
+                throw new InvalidOperationException($"Invalid SQL configuration for {connectionName}.");
+            }
+        }
 
+        services.AddScoped<AuditLogInterceptor>();
+        services.AddDbContext<QLCDDbContext>((provider, options) =>
+        {
             if (useInMemory)
-            {
-                options.UseInMemoryDatabase("QLCD_InMemory_Db")
-                       .AddInterceptors(auditInterceptor);
-            }
+                options.UseInMemoryDatabase("QLCD_Development");
             else
-            {
-                options.UseSqlServer(connectionString)
-                       .AddInterceptors(auditInterceptor);
-            }
+                options.UseSqlServer(connectionString!);
+            options.AddInterceptors(provider.GetRequiredService<AuditLogInterceptor>());
         });
-
-        // Đăng ký interface IQLCDDbContext để Application có thể sử dụng
         services.AddScoped<IQLCDDbContext>(provider => provider.GetRequiredService<QLCDDbContext>());
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IOrganizationScopeService, OrganizationScopeService>();
+        services.AddSingleton<ICertificateLinkPolicy, CertificateLinkPolicy>();
 
         return services;
     }

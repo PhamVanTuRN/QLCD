@@ -10,7 +10,14 @@ public class TaiKhoan : BaseEntity
     public required string HoTen { get; set; }
     public required string VaiTro { get; set; } // ADMIN, CDCS, CDBP, TOCD, DOANVIEN
     public Guid? OrganizationId { get; set; }    // NULL context for ADMIN, otherwise linked to DonViCongDoan
-    public string? PasswordRaw { get; set; }      // Tmp raw password visible on creation
+    public Guid SecurityVersion { get; set; } = Guid.NewGuid();
+    public bool MustChangePassword { get; set; }
+    public DateTime? TemporaryPasswordExpiresUtc { get; set; }
+    public string? ProtectedMfaSecret { get; set; }
+    public string? ActivationCodeHash { get; set; }
+    public DateTime? ActivationCodeExpiresUtc { get; set; }
+    public string? RecoveryCodeHashes { get; set; }
+    public long? LastMfaStep { get; set; }
     public bool TrangThai { get; set; } = true;
     
     // Navigation properties

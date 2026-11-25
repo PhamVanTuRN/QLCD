@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,16 +15,22 @@ namespace QLCD.Application.Features.UnionMembers.Commands.UpdateUnionMember;
 public record UpdateUnionMemberCommand : IRequest<bool>
 {
     public Guid Id { get; init; }
+    [Required, StringLength(100)]
     public required string HoTen { get; init; }
     public DateTime NgaySinh { get; init; }
+    [Range(0, 2)]
     public int GioiTinh { get; init; }
     public string? QueQuan { get; init; }
     public string? DanToc { get; init; }
     public string? TonGiao { get; init; }
+    [Required, StringLength(12)]
     public required string SoCCCD { get; init; }
+    [StringLength(30)]
     public string? DienThoai { get; init; }
+    [StringLength(254), EmailAddress]
     public string? Email { get; init; }
     public string? DiaChiLienHe { get; init; }
+    [Required, StringLength(20)]
     public required string MaNhanVien { get; init; }
     public QuanHam? CapBacQuanHam { get; init; }
     public string? ChucVu { get; init; }
@@ -33,6 +40,7 @@ public record UpdateUnionMemberCommand : IRequest<bool>
     public Guid MaToCongDoan { get; init; }
     public DateTime NgayVaoCongDoan { get; init; }
     public string? SoTheDoanVien { get; init; }
+    [EnumDataType(typeof(VaiTroCongDoan))]
     public VaiTroCongDoan VaiTro { get; init; }
     public string? TrinhDoHocVan { get; init; }
     public string? TrinhDoChuyenMon { get; init; }
@@ -41,28 +49,38 @@ public record UpdateUnionMemberCommand : IRequest<bool>
     public string? ChuyenNganhDaoTao { get; init; }
     public string? TrinhDoLyLuanChinhTri { get; init; }
     public bool DangVien { get; init; }
+    [EnumDataType(typeof(TrangThaiDoanVien))]
     public TrangThaiDoanVien TrangThai { get; init; }
+    [StringLength(500)]
     public string? GhiChu { get; init; }
+    [MaxLength(20)]
     public List<UpdateMemberLanguageDto>? NgoaiNgus { get; init; }
 }
 
 public class UpdateMemberLanguageDto
 {
+    [Required, StringLength(100)]
     public required string NgoaiNgu { get; set; }
+    [Required, StringLength(50)]
     public required string TrinhDo { get; set; }
     public decimal DiemSo { get; set; }
     public DateTime NgayCap { get; set; }
     public string? DonViCap { get; set; }
+    [StringLength(500)]
     public string? FileChungChiUrl { get; set; }
 }
 
 public class UpdateUnionMemberCommandHandler : IRequestHandler<UpdateUnionMemberCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
+    private readonly ICertificateLinkPolicy _certificateLinks;
 
-    public UpdateUnionMemberCommandHandler(IQLCDDbContext context)
+    public UpdateUnionMemberCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService, ICertificateLinkPolicy certificateLinks)
     {
         _context = context;
+        _scopeService = scopeService;
+        _certificateLinks = certificateLinks;
     }
 
     public async Task<bool> Handle(UpdateUnionMemberCommand request, CancellationToken cancellationToken)
@@ -74,6 +92,15 @@ public class UpdateUnionMemberCommandHandler : IRequestHandler<UpdateUnionMember
         {
             throw new ArgumentException("Đoàn viên không tồn tại.");
         }
+
+        // Scope validation - original unit
+        if (!await _scopeService.IsInScopeAsync(member.MaToCongDoan, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chỉnh sửa đoàn viên ngoài phạm vi quản lý.");
+        }
+
+        if (request.MaToCongDoan != member.MaToCongDoan)
+            throw new ArgumentException("Đổi đơn vị phải thực hiện qua chức năng chuyển sinh hoạt.");
 
         // Kiểm tra trùng CCCD
         var existsCccd = await _context.DoanViens.AnyAsync(d => d.SoCCCD == request.SoCCCD && d.Id != request.Id, cancellationToken);
@@ -113,7 +140,6 @@ public class UpdateUnionMemberCommandHandler : IRequestHandler<UpdateUnionMember
         member.ChucDanhChuyenMon = request.ChucDanhChuyenMon;
         member.DonViCongTac = request.DonViCongTac;
         member.LoaiCanBo = request.LoaiCanBo;
-        member.MaToCongDoan = request.MaToCongDoan;
         member.NgayVaoCongDoan = request.NgayVaoCongDoan;
         member.SoTheDoanVien = request.SoTheDoanVien;
         member.VaiTro = request.VaiTro;
@@ -141,7 +167,7 @@ public class UpdateUnionMemberCommandHandler : IRequestHandler<UpdateUnionMember
                     DiemSo = lang.DiemSo,
                     NgayCap = lang.NgayCap,
                     DonViCap = lang.DonViCap,
-                    FileChungChiUrl = lang.FileChungChiUrl
+                    FileChungChiUrl = _certificateLinks.RequireAllowedUrl(lang.FileChungChiUrl)
                 });
             }
         }

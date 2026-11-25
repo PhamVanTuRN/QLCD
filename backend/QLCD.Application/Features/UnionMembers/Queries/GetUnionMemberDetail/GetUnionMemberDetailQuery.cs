@@ -47,7 +47,11 @@ public class UnionMemberDetailDto
     public bool DangVien { get; set; }
     public string? GhiChu { get; set; }
     public List<MemberLanguageDetailDto> NgoaiNgus { get; set; } = new();
+    public List<MemberHistoryDto> LichSuBienDong { get; set; } = new();
 }
+
+public sealed record MemberHistoryDto(Guid Id, LoaiBienDong LoaiBienDong, DateTime NgayHieuLuc,
+    string? TuToCongDoan, string? DenToCongDoan, string LyDo);
 
 public class MemberLanguageDetailDto
 {
@@ -63,20 +67,44 @@ public class MemberLanguageDetailDto
 public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDetailQuery, UnionMemberDetailDto?>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
+    private readonly ICertificateLinkPolicy _certificateLinks;
 
-    public GetUnionMemberDetailQueryHandler(IQLCDDbContext context)
+    public GetUnionMemberDetailQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService, ICertificateLinkPolicy certificateLinks)
     {
         _context = context;
+        _scopeService = scopeService;
+        _certificateLinks = certificateLinks;
     }
 
     public async Task<UnionMemberDetailDto?> Handle(GetUnionMemberDetailQuery request, CancellationToken cancellationToken)
     {
         var member = await _context.DoanViens
+            .AsNoTracking()
             .Include(d => d.ToCongDoan)
             .Include(d => d.DoanVienNgoaiNgus)
             .FirstOrDefaultAsync(d => d.Id == request.Id, cancellationToken);
 
         if (member == null) return null;
+
+        // Scope validation
+        if (!await _scopeService.IsInScopeAsync(member.MaToCongDoan, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền xem chi tiết đoàn viên ngoài phạm vi quản lý.");
+        }
+
+        var allowed = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        var changes = _context.LichSuBienDongs.AsNoTracking().Where(change => change.DoanVienId == member.Id);
+        if (allowed is not null)
+            changes = changes.Where(change =>
+                (!change.TuToCongDoanId.HasValue || allowed.Contains(change.TuToCongDoanId.Value)) &&
+                (!change.DenToCongDoanId.HasValue || allowed.Contains(change.DenToCongDoanId.Value)));
+        var history = await changes.OrderByDescending(change => change.NgayHieuLuc).ThenBy(change => change.Id)
+            .Take(50)
+            .Select(change => new MemberHistoryDto(change.Id, change.LoaiBienDong, change.NgayHieuLuc,
+                change.TuToCongDoan == null ? null : change.TuToCongDoan.TenDonVi,
+                change.DenToCongDoan == null ? null : change.DenToCongDoan.TenDonVi, change.LyDo))
+            .ToListAsync(cancellationToken);
 
         return new UnionMemberDetailDto
         {
@@ -112,6 +140,7 @@ public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDe
             TrinhDoLyLuanChinhTri = member.TrinhDoLyLuanChinhTri,
             DangVien = member.DangVien,
             GhiChu = member.GhiChu,
+            LichSuBienDong = history,
             NgoaiNgus = member.DoanVienNgoaiNgus.Select(n => new MemberLanguageDetailDto
             {
                 Id = n.Id,
@@ -120,7 +149,7 @@ public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDe
                 DiemSo = n.DiemSo,
                 NgayCap = n.NgayCap,
                 DonViCap = n.DonViCap,
-                FileChungChiUrl = n.FileChungChiUrl
+                FileChungChiUrl = _certificateLinks.AllowedUrl(n.FileChungChiUrl)
             }).ToList()
         };
     }

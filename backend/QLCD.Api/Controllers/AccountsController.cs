@@ -1,94 +1,77 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using MediatR;
+using QLCD.Application.Common;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using QLCD.Application.Common.Interfaces;
+using QLCD.Application.Features.Accounts.Commands;
 using QLCD.Application.Features.Accounts.Queries.GetAccounts;
-using QLCD.Shared.Security;
+using QLCD.Domain.Security;
+using System.ComponentModel.DataAnnotations;
+using QLCD.Api.Security;
 
 namespace QLCD.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/accounts")]
-public class AccountsController : ControllerBase
+[Authorize(Roles = SecurityRoles.Admin)]
+public sealed class AccountsController(IMediator mediator, LoginThrottle throttle, IAuthorizationService authorization) : ControllerBase
 {
-    private readonly IMediator _mediator;
-    private readonly IQLCDDbContext _context;
-
-    public AccountsController(IMediator mediator, IQLCDDbContext context)
-    {
-        _mediator = mediator;
-        _context = context;
-    }
-
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = PageBounds.DefaultSize)
     {
-        try
-        {
-            var list = await _mediator.Send(new GetAccountsQuery());
-            return Ok(new { success = true, data = list });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        var list = await mediator.Send(new GetAccountsQuery { Page = page, PageSize = pageSize, Search = search }, HttpContext.RequestAborted);
+        var canResetCredentials = (await authorization.AuthorizeAsync(User, CredentialResetPermission.Policy)).Succeeded;
+        return Ok(new { success = true, data = list.Take(pageSize), hasMore = list.Count > pageSize, canResetCredentials });
     }
 
-    [HttpPost("{id}/toggle")]
-    public async Task<IActionResult> ToggleStatus(Guid id)
+    [HttpPost("{id:guid}/toggle")]
+    public async Task<IActionResult> ToggleStatus(Guid id, CancellationToken cancellationToken)
     {
-        try
-        {
-            var account = await _context.TaiKhoans.FirstOrDefaultAsync(a => a.Id == id);
-            if (account == null)
-            {
-                return NotFound(new { success = false, message = "Không tìm thấy tài khoản." });
-            }
-
-            account.TrangThai = !account.TrangThai;
-            await _context.SaveChangesAsync(CancellationToken.None);
-
-            return Ok(new { success = true, data = account.TrangThai });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        var active = await mediator.Send(new ToggleAccount(id), cancellationToken);
+        return Ok(new { success = true, data = active });
     }
 
-    [HttpPost("{id}/reset-password")]
-    public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetPasswordRequest request)
+    [HttpPost("{id:guid}/activate")]
+    [RequestSizeLimit(4096)]
+    public async Task<IActionResult> Activate(Guid id, ActivateAccountRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var account = await _context.TaiKhoans.FirstOrDefaultAsync(a => a.Id == id);
-            if (account == null)
-            {
-                return NotFound(new { success = false, message = "Không tìm thấy tài khoản." });
-            }
-
-            if (string.IsNullOrWhiteSpace(request.NewPassword))
-            {
-                return BadRequest(new { success = false, message = "Mật khẩu không được để trống." });
-            }
-
-            account.PasswordHash = PasswordHasher.Hash(request.NewPassword);
-            account.PasswordRaw = request.NewPassword;
-            await _context.SaveChangesAsync(CancellationToken.None);
-
-            return Ok(new { success = true, message = "Đặt lại mật khẩu thành công." });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        if (!request.IdentityVerified) return BadRequest(new { success = false, message = "Hãy xác minh danh tính chủ tài khoản trước khi tiếp tục." });
+        var activationCode = await mediator.Send(new IssueAccountActivation(id, request.IdentityVerified, HttpContext.TraceIdentifier), cancellationToken);
+        return Ok(new { success = true, data = new { activationCode } });
     }
+
+    [HttpPost("{id:guid}/reset-password")]
+    [Authorize(Policy = CredentialResetPermission.Policy)]
+    [RequestSizeLimit(4096)]
+    public async Task<IActionResult> ResetPassword(Guid id, ResetPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var session = HttpContext.Features.Get<AuthenticatedSession>()!;
+        if (!request.Confirmed) return BadRequest(new { success = false, message = "Hãy xác nhận đặt lại mật khẩu." });
+        if (!AllowResetAttempt(session)) return RateLimited();
+        await mediator.Send(new ResetAccountPassword(id, request.CurrentPassword, request.Code, session.SecurityVersion, HttpContext.TraceIdentifier), cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/reset-2fa")]
+    [Authorize(Policy = CredentialResetPermission.Policy)]
+    [RequestSizeLimit(4096)]
+    public async Task<IActionResult> ResetAuthenticator(Guid id, ResetAccountAuthenticationRequest request, CancellationToken cancellationToken)
+    {
+        var session = HttpContext.Features.Get<AuthenticatedSession>()!;
+        if (!request.IdentityVerified) return BadRequest(new { success = false, message = "Hãy xác minh danh tính chủ tài khoản trước khi tiếp tục." });
+        if (!AllowResetAttempt(session)) return RateLimited();
+        var activationCode = await mediator.Send(new ResetAccountAuthenticator(id, request.CurrentPassword, request.Code,
+            session.SecurityVersion, HttpContext.TraceIdentifier), cancellationToken);
+        return Ok(new { success = true, data = new { activationCode } });
+    }
+
+    private bool AllowResetAttempt(AuthenticatedSession session) => throttle.TryAcquireAuthenticatorChange(session.Profile.Id, "admin-recovery");
+    private ObjectResult RateLimited() => StatusCode(429, new { success = false, message = "Bạn đã thử nhiều lần. Vui lòng thử lại sau." });
 }
 
-public class ResetPasswordRequest
-{
-    public required string NewPassword { get; set; }
-}
+public sealed record ActivateAccountRequest(bool IdentityVerified);
+public sealed record ResetPasswordRequest(bool Confirmed,
+    [Required, StringLength(128)] string CurrentPassword,
+    [Required, RegularExpression(@"\A[0-9]{6}\z")] string Code);
+public sealed record ResetAccountAuthenticationRequest(bool IdentityVerified,
+    [Required, StringLength(128)] string CurrentPassword,
+    [Required, RegularExpression(@"\A[0-9]{6}\z")] string Code);

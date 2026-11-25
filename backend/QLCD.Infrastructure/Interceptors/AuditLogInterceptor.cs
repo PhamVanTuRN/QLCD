@@ -1,116 +1,67 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using QLCD.Application.Common.Interfaces;
 using QLCD.Domain.Common;
 using QLCD.Domain.Entities;
 
 namespace QLCD.Infrastructure.Interceptors;
 
-public class AuditLogInterceptor : SaveChangesInterceptor
+public sealed class AuditLogInterceptor(ICurrentUserService currentUser, IHttpContextAccessor requests) : SaveChangesInterceptor
 {
+    private static readonly HashSet<string> AuditablePropertyNames = new(StringComparer.Ordinal)
+    {
+        "TrangThai", "IsDeleted", "OrganizationId", "DonViId", "MaToCongDoan",
+        "VaiTro", "MaParent", "RelatedEntityId", "MustChangePassword"
+    };
+
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
-        OnBeforeSaveChanges(eventData.Context);
-        return base.SavingChanges(eventData, result);
+        AddEvents(eventData.Context);
+        return result;
     }
 
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+        InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
-        OnBeforeSaveChanges(eventData.Context);
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
+        AddEvents(eventData.Context);
+        return ValueTask.FromResult(result);
     }
 
-    private void OnBeforeSaveChanges(DbContext? context)
+    private void AddEvents(DbContext? context)
     {
-        if (context == null) return;
+        if (context is null)
+            return;
 
-        context.ChangeTracker.DetectChanges();
-        var auditEntries = new List<AuditEntry>();
-
-        foreach (var entry in context.ChangeTracker.Entries())
+        var actor = currentUser.UserId?.ToString() ?? "System";
+        var correlation = requests.HttpContext?.TraceIdentifier ?? Activity.Current?.TraceId.ToString();
+        var entries = context.ChangeTracker.Entries<BaseEntity>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToList();
+        foreach (var entry in entries)
         {
-            if (entry.Entity is AuditLog || entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
-                continue;
-
-            var auditEntry = new AuditEntry(entry)
+            var action = entry.State switch
             {
-                EntityName = entry.Entity.GetType().Name,
-                RecordId = entry.Entity is BaseEntity baseEntity ? baseEntity.Id : Guid.Empty
+                EntityState.Added => "INSERT",
+                EntityState.Deleted => "DELETE",
+                _ when entry.Entity.IsDeleted && entry.Property(e => e.IsDeleted).IsModified => "SOFT_DELETE",
+                _ => "UPDATE"
             };
-
-            auditEntries.Add(auditEntry);
-
-            foreach (var property in entry.Properties)
+            var fields = entry.Properties
+                .Where(property => property.IsModified && AuditablePropertyNames.Contains(property.Metadata.Name))
+                .Select(property => property.Metadata.Name)
+                .ToArray();
+            context.Set<AuditLog>().Add(new AuditLog
             {
-                string propertyName = property.Metadata.Name;
-                if (property.Metadata.IsPrimaryKey())
-                {
-                    auditEntry.KeyValues[propertyName] = property.CurrentValue ?? Guid.Empty;
-                    continue;
-                }
-
-                switch (entry.State)
-                {
-                    case EntityState.Added:
-                        auditEntry.Action = "INSERT";
-                        auditEntry.NewValues[propertyName] = property.CurrentValue;
-                        break;
-
-                    case EntityState.Deleted:
-                        auditEntry.Action = "DELETE";
-                        auditEntry.OldValues[propertyName] = property.OriginalValue;
-                        break;
-
-                    case EntityState.Modified:
-                        if (property.IsModified)
-                        {
-                            auditEntry.Action = "UPDATE";
-                            auditEntry.OldValues[propertyName] = property.OriginalValue;
-                            auditEntry.NewValues[propertyName] = property.CurrentValue;
-                        }
-                        break;
-                }
-            }
+                EntityName = entry.Metadata.ClrType.Name,
+                RecordId = entry.Entity.Id,
+                Action = action,
+                UserId = actor,
+                CorrelationId = correlation,
+                NewValues = fields.Length == 0 ? null : JsonSerializer.Serialize(fields)
+            });
         }
-
-        foreach (var auditEntry in auditEntries)
-        {
-            context.Set<AuditLog>().Add(auditEntry.ToAuditLog());
-        }
-    }
-}
-
-internal class AuditEntry
-{
-    public AuditEntry(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
-    {
-        Entry = entry;
-    }
-
-    public Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry Entry { get; }
-    public string EntityName { get; set; } = string.Empty;
-    public Guid RecordId { get; set; }
-    public string Action { get; set; } = string.Empty;
-    public Dictionary<string, object> KeyValues { get; } = new();
-    public Dictionary<string, object?> OldValues { get; } = new();
-    public Dictionary<string, object?> NewValues { get; } = new();
-
-    public AuditLog ToAuditLog()
-    {
-        return new AuditLog
-        {
-            EntityName = EntityName,
-            RecordId = RecordId,
-            Action = Action,
-            OldValues = OldValues.Count == 0 ? null : JsonSerializer.Serialize(OldValues),
-            NewValues = NewValues.Count == 0 ? null : JsonSerializer.Serialize(NewValues),
-            Timestamp = DateTime.UtcNow,
-            UserId = "System" // Có thể tích hợp thêm ICurrentUserService để lấy User thực tế
-        };
     }
 }

@@ -1,26 +1,175 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --background: #f4f7fc;
+  --foreground: #142d4e;
+  --surface: #fff;
+  --outline: #dce5f0;
+  --font-app-sans: "Segoe UI", system-ui, sans-serif;
+  --font-app-mono: ui-monospace, monospace;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-line: var(--outline);
+  --font-sans: var(--font-app-sans);
+  --font-mono: var(--font-app-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-ink: #142d4e;
+  --color-copy: #354e6b;
+  --color-muted: #526781;
+  --color-edge: #8799af;
+  --color-soft: #edf3fa;
+  --color-soft-strong: #dfe9f7;
+  --color-brand: #1457ad;
+  --color-brand-hover: #0b408a;
+  --color-brand-strong: #0e3872;
+  --color-brand-soft: #e8f1ff;
+  --color-brand-line: #b8d0f2;
+  --color-gold: #f4c567;
+  --color-gold-ink: #81500d;
+  --color-gold-soft: #fff3dc;
+  --color-gold-line: #e9cd91;
+  --color-danger: #a0273a;
+  --color-danger-strong: #82182b;
+  --color-danger-soft: #fcecf0;
+  --color-danger-line: #edc1cb;
+  --color-success: #226746;
+  --color-success-soft: #e9f6ef;
+  --color-success-line: #afd8c2;
+  --color-violet-ink: #604a9d;
+  --color-teal-ink: #126971;
+  --color-teal-soft: #e3f4f5;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-app-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand) !important;
+  outline-offset: 3px;
+}
+
+[role="region"][tabindex]:focus-visible {
+  outline-offset: -3px;
+}
+
+#main-content:focus {
+  outline: none !important;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: 1rem;
+  box-shadow: 0 2px 6px rgb(19 60 102 / 4%);
+}
+
+.sidebar {
+  background: linear-gradient(156deg, #123d78 0%, #102f60 42%, #0a2449 100%);
+  color: #e7effc;
+}
+
+.sidebar :focus-visible,
+.login-cover :focus-visible,
+.dashboard-hero :focus-visible,
+.mobile-navigation > button:focus-visible {
+  outline-color: var(--color-gold) !important;
+}
+
+.dashboard-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(112deg, #103974 5%, #1657ac 78%, #1a67bf);
+  border-radius: 1.15rem;
+  box-shadow: 0 10px 24px rgb(13 53 108 / 14%);
+}
+
+.dashboard-hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse at 92% 90%, rgb(81 154 241 / 28%), transparent 55%);
+  content: "";
+}
+
+.dashboard-hero-photo {
+  position: absolute;
+  inset: 0 0 0 51%;
+  z-index: -1;
+  background: linear-gradient(90deg, #153f7c 0%, rgb(21 64 125 / 10%) 70%),
+    linear-gradient(0deg, rgb(12 44 93 / 32%), rgb(37 93 157 / 23%)),
+    url("/brand/healthcare-team.webp") 50% 39% / cover no-repeat;
+  mask-image: linear-gradient(90deg, transparent, #000 35%);
+}
+
+.login-cover {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #154480;
+  color: #fff;
+}
+
+.login-cover::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(0deg, #092958 4%, rgb(12 43 89 / 85%) 23%, rgb(16 60 113 / 8%) 66%),
+    url("/brand/healthcare-team.webp") 52% 46% / cover no-repeat;
+  content: "";
+}
+
+.mobile-navigation {
+  position: fixed;
+  inset: 0 auto 0 0;
+  margin: 0;
+  width: min(18rem, 92vw);
+  height: 100dvh;
+  max-height: none;
+  color: var(--foreground);
+  background: #12386e;
+}
+
+.mobile-navigation::backdrop {
+  background: rgb(2 6 23 / 65%);
+}
+
+.form-dialog {
+  position: fixed;
+  inset: 0;
+  width: calc(100% - 2rem);
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  overflow: auto;
+  color: var(--foreground);
+  border-color: var(--color-brand-line);
+  box-shadow: 0 24px 80px rgb(7 29 64 / 22%);
+}
+
+.form-dialog::backdrop {
+  background: rgb(10 34 70 / 55%);
+}
+
+@media (max-width: 639px) {
+  .dashboard-hero-photo {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

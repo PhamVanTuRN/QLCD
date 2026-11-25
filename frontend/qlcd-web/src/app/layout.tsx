@@ -1,23 +1,22 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { connection } from "next/server";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Hệ thống Công đoàn số - Bệnh viện TWQĐ 108",
   description: "Phần mềm Quản lý Công tác Công đoàn Bệnh viện Trung ương Quân đội 108",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   return (
-    <html lang="vi" className="h-full bg-slate-900 text-slate-100">
-      <body className={`${inter.className} h-full`}>
+    <html lang="vi" className="h-full bg-background text-foreground">
+      <body className="h-full font-sans">
         <AppShell>{children}</AppShell>
       </body>
     </html>

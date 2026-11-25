@@ -1,9 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getAccountsApi, toggleAccountApi, resetAccountPasswordApi } from "@/lib/api";
+import FormDialog from "@/components/FormDialog";
+import { OtpField, securityInput } from "@/components/AuthenticatorFields";
+
+import { useResource } from "@/lib/use-resource";
+import LoadState from "@/components/LoadState";
+import Notice, { useNotice } from "@/components/Notice";
+import ListPager from "@/components/ListPager";
+
+import { useState, useCallback } from "react";
+import { Search } from "lucide-react";
+import { apiMessage, getAccountsApi, toggleAccountApi, issueAccountActivation, resetAccountAuthenticator, resetAccountPassword } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useRouter } from "next/navigation";
+
+const credentialLabels = { activate: "Cấp mã kích hoạt", password: "Reset mật khẩu", authenticator: "Reset 2FA" };
+const credentialButton = "min-h-8 rounded-md border border-brand-line bg-brand-soft px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-brand hover:bg-soft-strong";
+type CredentialAction = keyof typeof credentialLabels;
 
 export interface AccountDto {
   id: string;
@@ -11,210 +23,168 @@ export interface AccountDto {
   hoTen: string;
   vaiTro: string;
   organizationId: string | null;
-  organizationName: string | null;
-  passwordRaw: string | null;
+  donViTen: string | null;
+  mustChangePassword: boolean;
   trangThai: boolean;
+  authenticatorEnabled: boolean;
+  activationPending: boolean;
+  canIssueActivation: boolean;
 }
 
 export default function AccountsPage() {
   const { user } = useAuth();
-  const router = useRouter();
 
-  // Chỉ cho phép CDCS/ADMIN vào xem tài khoản
-  useEffect(() => {
-    if (user && user.phamVi !== "CDCS") {
-      router.push("/");
-    }
-  }, [user, router]);
-
-  const [accounts, setAccounts] = useState<AccountDto[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const { notice, dismiss, showAlert } = useNotice();
 
-  // Password Reset Modal State
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [selectedUsername, setSelectedUsername] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState<AccountDto | null>(null);
+  const [action, setAction] = useState<CredentialAction>("activate");
+  const [confirmed, setConfirmed] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [activation, setActivation] = useState("");
+  const [activationError, setActivationError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const loadAccounts = async () => {
-    setLoading(true);
-    try {
-      const data = await getAccountsApi();
-      setAccounts(data);
-    } catch (err) {
-      console.error(err);
-      showAlert("error", "Lỗi tải danh sách tài khoản");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAccounts();
-  }, []);
-
-  const showAlert = (type: "success" | "error", message: string) => {
-    setAlert({ type, message });
-    setTimeout(() => setAlert(null), 4000);
-  };
+  const readPage = useCallback((signal: AbortSignal) => getAccountsApi<AccountDto>({ search: search.trim() || undefined, page }, signal), [search, page]);
+  const { data: list, loading, error: listError, reload: loadAccounts } = useResource(readPage, search ? 200 : 0);
+  const accounts = list?.data ?? [];
+  const hasMore = list?.hasMore ?? false;
 
   const handleToggleStatus = async (id: string) => {
     try {
       await toggleAccountApi(id);
       showAlert("success", "Thay đổi trạng thái tài khoản thành công");
       loadAccounts();
-    } catch (err: any) {
-      console.error(err);
-      showAlert("error", err.response?.data?.message || "Lỗi thay đổi trạng thái tài khoản");
+    } catch (err) {
+      showAlert("error", apiMessage(err, "Lỗi thay đổi trạng thái tài khoản"));
     }
   };
 
-  const handleOpenReset = (acc: AccountDto) => {
-    setSelectedAccountId(acc.id);
-    setSelectedUsername(acc.username);
-    setNewPassword("");
-    setIsResetModalOpen(true);
+  const openActivation = (account: AccountDto, selectedAction: CredentialAction) => {
+    setSelectedAccount(account);
+    setAction(selectedAction);
+    setConfirmed(false);
+    setCurrentPassword("");
+    setOtp("");
+    setActivation("");
+    setActivationError("");
   };
 
-  const handleResetSubmit = async (e: React.FormEvent) => {
+  const handleActivation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      showAlert("error", "Mật khẩu mới phải từ 6 ký tự trở lên");
-      return;
-    }
+    if (submitting || !selectedAccount || !confirmed) return;
 
+    setActivationError("");
+    setSubmitting(true);
     try {
-      await resetAccountPasswordApi(selectedAccountId!, { password: newPassword });
-      showAlert("success", `Đặt lại mật khẩu cho tài khoản ${selectedUsername} thành công`);
-      setIsResetModalOpen(false);
+      if (action === "password") {
+        await resetAccountPassword(selectedAccount.id, confirmed, currentPassword, otp);
+        setSelectedAccount(null);
+        showAlert("success", "Đã đặt lại mật khẩu. Chủ tài khoản phải đổi mật khẩu ở lần đăng nhập tiếp theo.");
+      } else {
+        const code = action === "activate"
+          ? await issueAccountActivation(selectedAccount.id, confirmed)
+          : await resetAccountAuthenticator(selectedAccount.id, confirmed, currentPassword, otp);
+        setActivation(code);
+      }
+      setCurrentPassword("");
+      setOtp("");
       loadAccounts();
-    } catch (err: any) {
-      console.error(err);
-      showAlert("error", err.response?.data?.message || "Lỗi đặt lại mật khẩu");
-    }
+    } catch (err) {
+      setActivationError(apiMessage(err, "Không thể cập nhật thông tin xác thực."));
+    } finally { setSubmitting(false); }
   };
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
-      case "ADMIN": return "bg-red-500/10 text-red-400 border-red-500/20";
-      case "CDCS": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-      case "CDBP": return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-      case "TOCD": return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-      default: return "bg-slate-800 text-slate-400 border-slate-700";
+      case "ADMIN": return "bg-danger-soft text-danger border-danger-line";
+      case "CDCS": return "bg-brand-soft text-brand border-brand-line";
+      case "CDBP": return "bg-teal-soft text-teal-ink border-teal-ink/20";
+      case "TOCD": return "bg-gold-soft text-gold-ink border-gold-line";
+      default: return "bg-soft text-muted border-line";
     }
   };
-
-  const filteredAccounts = accounts.filter(
-    (a) =>
-      a.username.toLowerCase().includes(search.toLowerCase()) ||
-      a.hoTen.toLowerCase().includes(search.toLowerCase()) ||
-      (a.organizationName && a.organizationName.toLowerCase().includes(search.toLowerCase()))
-  );
 
   return (
     <div className="space-y-6">
       {/* Alert Banner */}
-      {alert && (
-        <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-bounce ${
-            alert.type === "success"
-              ? "bg-emerald-950 border-emerald-800 text-emerald-400"
-              : "bg-red-950 border-red-900 text-red-400"
-          }`}
-        >
-          <span>{alert.type === "success" ? "✅" : "⚠️"}</span>
-          <span className="text-sm font-semibold">{alert.message}</span>
-        </div>
-      )}
+      <Notice value={notice} dismiss={dismiss} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Tài khoản & Phân quyền Truy cập</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Xem danh sách tài khoản được tự động cấp cho các đơn vị Công đoàn trực thuộc
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Tài khoản và phân quyền</h1>
+          <p className="mt-1 text-sm text-muted">Quản lý truy cập và mật khẩu của tài khoản công đoàn.</p>
         </div>
-        <input
+        <div className="relative w-full md:max-w-70">
+          <Search size={17} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input
           type="text"
+          aria-label="Tìm kiếm" maxLength={100}
           placeholder="Tìm kiếm tài khoản, đơn vị..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all min-w-[250px]"
-        />
-      </div>
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          className="min-h-11 w-full rounded-xl border border-edge bg-surface py-2.5 pr-3 pl-10 text-sm text-ink placeholder:text-muted focus:border-brand"
+          />
+        </div>
+      </header>
 
       {/* Main card */}
-      <div className="bg-slate-950/20 border border-slate-800 rounded-2xl p-6">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold">
-                <th className="py-3 px-4">Tên đăng nhập</th>
-                <th className="py-3 px-4">Họ và tên quản lý</th>
-                <th className="py-3 px-4">Vai trò (Cấp)</th>
-                <th className="py-3 px-4">Đơn vị liên kết</th>
-                <th className="py-3 px-4">Mật khẩu ban đầu</th>
-                <th className="py-3 px-4 text-center">Trạng thái</th>
-                <th className="py-3 px-4 text-right">Thao tác</th>
+      <div className="panel overflow-hidden">
+        <div className="overflow-x-auto" role="region" aria-label="Bảng tài khoản" tabIndex={0}>
+          <table className="w-full min-w-[52rem] border-collapse text-left text-sm">
+            <thead className="bg-soft">
+              <tr className="border-b border-line font-semibold text-copy">
+                <th scope="col" className="py-3 px-4">Tên đăng nhập</th>
+                <th scope="col" className="py-3 px-4">Họ và tên quản lý</th>
+                <th scope="col" className="py-3 px-4">Vai trò</th>
+                <th scope="col" className="py-3 px-4">Đơn vị liên kết</th>
+                <th scope="col" className="py-3 px-4">Authenticator</th>
+                <th scope="col" className="py-3 px-4 text-center">Trạng thái</th>
+                <th scope="col" className="py-3 px-4 text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {loading ? (
+            <tbody className="divide-y divide-line">
+              {listError ? (
+                <tr><td colSpan={7}><LoadState retry={loadAccounts} /></td></tr>
+              ) : loading ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">
-                    <span className="inline-block w-4 h-4 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin mr-2" />
+                  <td colSpan={7} className="py-8 text-center text-muted">
+                    <span className="inline-block w-4 h-4 border-2 border-edge border-t-brand rounded-full animate-spin mr-2" />
                     Đang tải danh sách tài khoản...
                   </td>
                 </tr>
-              ) : filteredAccounts.length === 0 ? (
+              ) : accounts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">
+                  <td colSpan={7} className="py-8 text-center text-muted">
                     Không tìm thấy tài khoản nào.
                   </td>
                 </tr>
               ) : (
-                filteredAccounts.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
-                    <td className="py-3 px-4 font-mono font-bold text-white">{item.username}</td>
-                    <td className="py-3 px-4 font-medium text-slate-200">{item.hoTen}</td>
+                accounts.map((item) => (
+                  <tr key={item.id} className="hover:bg-soft text-copy">
+                    <td className="py-3 px-4 font-mono font-bold text-ink">{item.username}</td>
+                    <td className="py-3 px-4 font-medium text-ink">{item.hoTen}</td>
                     <td className="py-3 px-4">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold border ${getRoleBadgeColor(item.vaiTro)}`}>
+                      <span className={`inline-block rounded-full border px-2.5 py-1 text-xs font-semibold ${getRoleBadgeColor(item.vaiTro)}`}>
                         {item.vaiTro}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-semibold text-emerald-400">
-                      {item.organizationName || "Hệ thống chung"}
+                    <td className="py-3 px-4 font-semibold text-brand">
+                      {item.donViTen || "Hệ thống chung"}
                     </td>
                     <td className="py-3 px-4">
-                      {item.passwordRaw ? (
-                        <div className="flex items-center gap-2">
-                          <code className="bg-slate-950 px-2 py-1 rounded text-amber-400 font-bold border border-slate-800 text-[10px]">
-                            {item.passwordRaw}
-                          </code>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(item.passwordRaw || "");
-                              showAlert("success", "Đã sao chép mật khẩu");
-                            }}
-                            title="Copy mật khẩu"
-                            className="text-slate-500 hover:text-white"
-                          >
-                            📋
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-slate-600 italic">Đã đổi / Đã mã hóa</span>
-                      )}
+                      {item.authenticatorEnabled ? "Đang bật" : item.activationPending ? "Đã cấp mã" : "Chưa thiết lập"}
+                      {item.mustChangePassword && <span className="block text-xs text-muted">Cần đổi mật khẩu</span>}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        className={`inline-block rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${
                           item.trangThai
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : "bg-red-500/10 text-red-400 border-red-500/20"
+                            ? "bg-success-soft text-success border-success-line"
+                            : "bg-danger-soft text-danger border-danger-line"
                         }`}
                       >
                         {item.trangThai ? "Hoạt động" : "Bị khóa"}
@@ -223,21 +193,24 @@ export default function AccountsPage() {
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          disabled={item.vaiTro === "ADMIN"}
                           onClick={() => handleToggleStatus(item.id)}
-                          className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-all ${
+                          className={`min-h-8 rounded-md border px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-45 ${
                             item.trangThai
-                              ? "bg-amber-600/10 hover:bg-amber-600/20 border-amber-500/20 text-amber-400"
-                              : "bg-emerald-600/10 hover:bg-emerald-600/20 border-emerald-500/20 text-emerald-400"
+                              ? "bg-gold-soft hover:bg-gold-soft border-gold-line text-gold-ink"
+                              : "bg-brand-soft hover:bg-soft-strong border-brand-line text-brand"
                           }`}
                         >
                           {item.trangThai ? "Khóa" : "Mở khóa"}
                         </button>
-                        <button
-                          onClick={() => handleOpenReset(item)}
-                          className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 hover:text-blue-300 px-2 py-1 rounded text-[10px] font-bold transition-all"
-                        >
-                          Đổi MK
-                        </button>
+                        {item.canIssueActivation && item.vaiTro !== "ADMIN" && <button type="button" className={credentialButton}
+                          onClick={() => openActivation(item, "activate")}>{credentialLabels.activate}</button>}
+                        {list?.canResetCredentials && user && user.id !== item.id && <>
+                          <button type="button" className={credentialButton}
+                            onClick={() => openActivation(item, "password")}>{credentialLabels.password}</button>
+                          <button type="button" className={credentialButton}
+                            onClick={() => openActivation(item, "authenticator")}>{credentialLabels.authenticator}</button>
+                        </>}
                       </div>
                     </td>
                   </tr>
@@ -245,52 +218,42 @@ export default function AccountsPage() {
               )}
             </tbody>
           </table>
+          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
         </div>
       </div>
 
-      {/* Password Reset Modal */}
-      {isResetModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsResetModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-white">Đặt lại mật khẩu</h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">Tài khoản: <span className="text-emerald-400 font-semibold">{selectedUsername}</span></p>
-            </div>
-
-            <form onSubmit={handleResetSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Mật khẩu mới <span className="text-red-500">*</span>
+      {selectedAccount && (
+        <FormDialog label={credentialLabels[action]} onClose={() => { setActivation(""); setSelectedAccount(null); }} busy={submitting}>
+          <h2 className="text-lg font-bold text-ink">{credentialLabels[action]}</h2>
+          <p className="break-all text-sm text-muted">{selectedAccount.username}</p>
+          {activation ? <div className="space-y-3 text-sm text-copy">
+            <p>Gửi mã này cho đúng chủ tài khoản qua kênh riêng đã xác minh. Mã chỉ hiển thị ở đây và có hiệu lực trong 24 giờ.</p>
+            <code className="block rounded-lg bg-soft p-3 break-all text-ink">{activation}</code>
+            <button type="button" className="rounded-lg bg-brand px-4 py-2 font-bold text-white" onClick={() => { setActivation(""); setSelectedAccount(null); }}>Đã lưu mã</button>
+          </div> : <form onSubmit={handleActivation} className="space-y-4 text-sm">
+            <fieldset disabled={submitting} className="space-y-4">
+              {action === "password" && <p className="text-muted">Mật khẩu sẽ trở về giá trị khởi tạo trong 24 giờ. Chủ tài khoản phải đổi mật khẩu và tiếp tục dùng Authenticator đã đăng ký.</p>}
+              {action === "authenticator" && <p className="text-muted">Authenticator và mã khôi phục cũ sẽ hết hiệu lực. Chủ tài khoản dùng mật khẩu hiện tại và mã kích hoạt mới để đăng ký lại.</p>}
+              <label className="flex items-start gap-2">
+                <input type="checkbox" required checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />
+                <span>{action === "password" ? "Tôi xác nhận đặt lại mật khẩu và thu hồi các phiên của tài khoản này."
+                  : "Tôi đã đối chiếu danh tính chủ tài khoản qua hồ sơ và kênh liên hệ nội bộ."}</span>
+              </label>
+              {action !== "activate" && <>
+                <label className="block space-y-1">
+                  <span>Mật khẩu quản trị viên</span>
+                  <input className={securityInput} type="password" autoComplete="current-password" maxLength={128} required
+                    value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} />
                 </label>
-                <input
-                  type="text"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Nhập tối thiểu 6 ký tự"
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsResetModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
-                >
-                  Xác nhận đặt
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+                <OtpField value={otp} onChange={setOtp} />
+              </>}
+              {activationError && <p role="alert" className="rounded-lg bg-danger-soft p-3 text-danger-strong">{activationError}</p>}
+              <button type="submit" className="rounded-lg bg-brand px-4 py-2 font-bold text-white">
+                {submitting ? "Đang xử lý…" : action === "activate" ? "Xác nhận cấp mã" : "Xác nhận reset"}
+              </button>
+            </fieldset>
+          </form>}
+        </FormDialog>
       )}
     </div>
   );

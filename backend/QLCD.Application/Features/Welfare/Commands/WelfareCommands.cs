@@ -1,9 +1,12 @@
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
+using QLCD.Domain.Security;
 using QLCD.Domain.Entities;
 
 namespace QLCD.Application.Features.Welfare.Commands;
@@ -12,25 +15,33 @@ namespace QLCD.Application.Features.Welfare.Commands;
 public record CreateWelfareCommand : IRequest<Guid>
 {
     public Guid DoanVienId { get; init; }
+    [Required, StringLength(50)]
     public required string LoaiPhucLoi { get; init; }
+    [Range(typeof(decimal), "0", "9999999999999999.99")]
     public decimal KinhPhiHoTro { get; init; }
     public DateTime NgayHoTro { get; init; }
+    [Required, StringLength(500)]
     public required string LyDo { get; init; }
+    [Range(1, 3)]
     public int TrangThai { get; init; } = 1;          // 1: Pending, 2: Approved, 3: Rejected
+    [StringLength(500)]
     public string? FileMinhChungUrl { get; init; }
     
-    // Auth context
-    public Guid? ScopeOrgId { get; init; }
-    public string? UserRole { get; init; }
 }
 
 public class CreateWelfareCommandHandler : IRequestHandler<CreateWelfareCommand, Guid>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
+    private readonly EvidenceLinks _evidence;
+    private readonly ICurrentUserService _currentUser;
 
-    public CreateWelfareCommandHandler(IQLCDDbContext context)
+    public CreateWelfareCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService, EvidenceLinks evidence, ICurrentUserService currentUser)
     {
         _context = context;
+        _scopeService = scopeService;
+        _evidence = evidence;
+        _currentUser = currentUser;
     }
 
     public async Task<Guid> Handle(CreateWelfareCommand request, CancellationToken cancellationToken)
@@ -45,36 +56,13 @@ public class CreateWelfareCommandHandler : IRequestHandler<CreateWelfareCommand,
         var donViId = member.MaToCongDoan;
 
         // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(donViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (donViId != orgId && !childOrgIds.Contains(donViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền đề xuất phúc lợi cho đoàn viên ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (donViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền đề xuất phúc lợi cho đoàn viên ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền truy cập.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền đề xuất phúc lợi cho đoàn viên ngoài phạm vi quản lý.");
         }
+
+        if (_currentUser.Role != SecurityRoles.Central && request.TrangThai != 1)
+            throw new UnauthorizedAccessException("Final approval is restricted.");
 
         var record = new PhucLoiDoanVien
         {
@@ -89,7 +77,9 @@ public class CreateWelfareCommandHandler : IRequestHandler<CreateWelfareCommand,
         };
 
         _context.PhucLoiDoanViens.Add(record);
+        await _evidence.AttachAsync(request.FileMinhChungUrl, "Welfare", record.Id, record.DonViId, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+
         return record.Id;
     }
 }
@@ -99,25 +89,33 @@ public record UpdateWelfareCommand : IRequest<bool>
 {
     public Guid Id { get; init; }
     public Guid DoanVienId { get; init; }
+    [Required, StringLength(50)]
     public required string LoaiPhucLoi { get; init; }
+    [Range(typeof(decimal), "0", "9999999999999999.99")]
     public decimal KinhPhiHoTro { get; init; }
     public DateTime NgayHoTro { get; init; }
+    [Required, StringLength(500)]
     public required string LyDo { get; init; }
+    [Range(1, 3)]
     public int TrangThai { get; init; }
+    [StringLength(500)]
     public string? FileMinhChungUrl { get; init; }
     
-    // Auth context
-    public Guid? ScopeOrgId { get; init; }
-    public string? UserRole { get; init; }
 }
 
 public class UpdateWelfareCommandHandler : IRequestHandler<UpdateWelfareCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
+    private readonly EvidenceLinks _evidence;
+    private readonly ICurrentUserService _currentUser;
 
-    public UpdateWelfareCommandHandler(IQLCDDbContext context)
+    public UpdateWelfareCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService, EvidenceLinks evidence, ICurrentUserService currentUser)
     {
         _context = context;
+        _scopeService = scopeService;
+        _evidence = evidence;
+        _currentUser = currentUser;
     }
 
     public async Task<bool> Handle(UpdateWelfareCommand request, CancellationToken cancellationToken)
@@ -139,42 +137,23 @@ public class UpdateWelfareCommandHandler : IRequestHandler<UpdateWelfareCommand,
         var donViId = member.MaToCongDoan;
 
         // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(record.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (record.DonViId != orgId && !childOrgIds.Contains(record.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa bản ghi phúc lợi này.");
-                    }
-                    if (donViId != orgId && !childOrgIds.Contains(donViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chuyển bản ghi phúc lợi sang đoàn viên ngoài phạm vi quản lý.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (record.DonViId != orgId || donViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền chỉnh sửa ngoài phạm vi tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền chỉnh sửa bản ghi phúc lợi này.");
+        }
+
+        if (!await _scopeService.IsInScopeAsync(donViId, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Không có quyền chuyển bản ghi phúc lợi sang đoàn viên ngoài phạm vi quản lý.");
         }
 
         record.DoanVienId = request.DoanVienId;
+        if (_currentUser.Role != SecurityRoles.Central && request.TrangThai != record.TrangThai)
+            throw new UnauthorizedAccessException("Final approval is restricted.");
+
+        if (_currentUser.Role != SecurityRoles.Central && record.TrangThai != 1)
+            throw new UnauthorizedAccessException("An approved welfare record may not be edited by a proposer.");
+
         record.DonViId = donViId;
         record.LoaiPhucLoi = request.LoaiPhucLoi;
         record.KinhPhiHoTro = request.KinhPhiHoTro;
@@ -183,7 +162,9 @@ public class UpdateWelfareCommandHandler : IRequestHandler<UpdateWelfareCommand,
         record.TrangThai = request.TrangThai;
         record.FileMinhChungUrl = request.FileMinhChungUrl;
 
+        await _evidence.AttachAsync(request.FileMinhChungUrl, "Welfare", record.Id, record.DonViId, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+
         return true;
     }
 }
@@ -193,18 +174,19 @@ public record DeleteWelfareCommand : IRequest<bool>
 {
     public Guid Id { get; init; }
     
-    // Auth context
-    public Guid? ScopeOrgId { get; init; }
-    public string? UserRole { get; init; }
 }
 
 public class DeleteWelfareCommandHandler : IRequestHandler<DeleteWelfareCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
+    private readonly ICurrentUserService _currentUser;
 
-    public DeleteWelfareCommandHandler(IQLCDDbContext context)
+    public DeleteWelfareCommandHandler(IQLCDDbContext context, IOrganizationScopeService scopeService, ICurrentUserService currentUser)
     {
         _context = context;
+        _scopeService = scopeService;
+        _currentUser = currentUser;
     }
 
     public async Task<bool> Handle(DeleteWelfareCommand request, CancellationToken cancellationToken)
@@ -217,36 +199,13 @@ public class DeleteWelfareCommandHandler : IRequestHandler<DeleteWelfareCommand,
         }
 
         // Scope validation
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        if (!await _scopeService.IsInScopeAsync(record.DonViId, cancellationToken))
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    if (record.DonViId != orgId && !childOrgIds.Contains(record.DonViId))
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa bản ghi phúc lợi này.");
-                    }
-                }
-                else // TOCD
-                {
-                    if (record.DonViId != orgId)
-                    {
-                        throw new UnauthorizedAccessException("Không có quyền xóa ngoài tổ công đoàn.");
-                    }
-                }
-            }
-            else
-            {
-                throw new UnauthorizedAccessException("Không có quyền.");
-            }
+            throw new UnauthorizedAccessException("Không có quyền xóa bản ghi phúc lợi này.");
         }
+
+        if (_currentUser.Role != SecurityRoles.Central && record.TrangThai != 1)
+            throw new UnauthorizedAccessException("Deletion of a decided record is restricted.");
 
         record.IsDeleted = true;
         await _context.SaveChangesAsync(cancellationToken);

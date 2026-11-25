@@ -1,0 +1,36 @@
+rules:
+  - id: qlcd-sql-parameterization
+    languages: [csharp]
+    severity: ERROR
+    message: Use typed EF queries or parameterized SQL for application data access.
+    patterns:
+      - pattern-either:
+          - pattern: $DB.FromSqlRaw(...)
+          - pattern: $DB.ExecuteSqlRaw(...)
+          - pattern: $DB.ExecuteSqlRawAsync(...)
+    paths:
+      exclude:
+        - '**/Migrations/**'
+
+  - id: qlcd-tls-verification
+    languages: [csharp]
+    severity: ERROR
+    message: Keep certificate validation enabled for SQL and HTTP clients.
+    pattern-either:
+      - pattern: $CONFIG.TrustServerCertificate = true
+      - pattern: $CLIENT.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+
+  - id: qlcd-browser-session-storage
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Keep credentials out of browser storage and leave session identifiers in HttpOnly cookies.
+    pattern-either:
+      - pattern: localStorage.setItem("qlcd_token", ...)
+      - pattern: sessionStorage.setItem("qlcd_token", ...)
+      - pattern: localStorage.setItem("qlcd_user", ...)
+
+  - id: qlcd-unsafe-html
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Render application input as React text and avoid direct HTML injection.
+    pattern-regex: 'dangerouslySetInnerHTML\s*='

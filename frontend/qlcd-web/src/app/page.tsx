@@ -1,363 +1,126 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getStats, UnionStatsDto } from "@/lib/api";
+import Link from "next/link";
+import { ArrowRight, BadgeCheck, ListTree, UserRoundPlus, Users } from "lucide-react";
+import LoadState from "@/components/LoadState";
+import { getStats } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell
-} from "recharts";
+import { useResource } from "@/lib/use-resource";
 
-const COLORS = ["#3B82F6", "#EF4444", "#10B981"];
-
-// Mock stats mặc định khi chưa có dữ liệu từ DB
-const defaultStats: UnionStatsDto = {
-  tongDoanVien: 2045, doanVienNam: 921, doanVienNu: 1124,
-  doanVienDangSinhHoat: 2045, doanVienDangVien: 620,
-  tiLeDangVien: 30.3, tiLeNu: 55.0,
-  tongCDBP: 15, tongToCongDoan: 35,
-  ketNapMoiThang: 12, chuyenDiThang: 3, nghiHuuThang: 2,
-  
-  // Scoped distributions
-  doanVienTheoCdbp: [],
-  doanVienTheoToCd: [],
-  doanVienTheoKhoi: [],
-  doanVienTheoGioiTinh: [],
-  doanVienTheoTrangThai: [],
-  doanVienTheoChucVu: [],
-  doanVienTheoNgoaiNgu: [],
-  doanVienTheoTrinhDo: [],
-
-  // Scoped sub-modules
-  tongThuDoanPhi: 450000000,
-  tongChi: 120000000,
-  tonQuy: 330000000,
-  soHoatDong: 8,
-  soLuotPhucLoi: 15,
-  soSangKien: 6,
-  soKetQuaThiDua: 12
+const number = new Intl.NumberFormat("vi-VN");
+const currency = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" });
+const percent = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
+const roleLabels: Record<string, string> = {
+  DoanVien: "Đoàn viên", ToTruong: "Tổ trưởng", UyVienBCH: "Ủy viên BCH",
+  ChuTichCDBP: "Chủ tịch CĐBP", PhoChuTichCDBP: "Phó chủ tịch CĐBP",
+  ChuTichCDCS: "Chủ tịch CĐCS", PhoChuTichCDCS: "Phó chủ tịch CĐCS",
 };
+
+function Distribution({ title, rows }: { title: string; rows: { name: string; count: number }[] }) {
+  const maximum = Math.max(1, ...rows.map(row => row.count));
+  return <section className="panel min-w-0 p-4 sm:p-6">
+    <h2 className="flex items-center gap-2.5 text-base font-bold text-ink">
+      <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full bg-brand" />{title}
+    </h2>
+    {rows.length === 0 ? <p className="mt-4 rounded-lg bg-soft px-3 py-3 text-sm text-muted">Chưa có dữ liệu.</p> :
+      <ul className="mt-4 max-h-72 space-y-3 overflow-y-auto pr-1">
+        {rows.map((row, index) => <li key={`${row.name}-${index}`} className="space-y-1">
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="min-w-0 break-words text-copy">{row.name}</span>
+            <strong className="tabular-nums">{number.format(row.count)}</strong>
+          </div>
+          <div aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-soft">
+            <div className="h-full rounded-full bg-brand" style={{ width: `${row.count / maximum * 100}%` }} />
+          </div>
+        </li>)}
+      </ul>}
+  </section>;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [activeLevel, setActiveLevel] = useState<"CDCS" | "CDBP" | "TOCD">("CDCS");
-  const [stats, setStats] = useState<UnionStatsDto>(defaultStats);
-  const [loading, setLoading] = useState(true);
+  const { data, error, loading, reload } = useResource(getStats);
+  const admin = user?.role === "ADMIN";
+  const team = user?.role === "TOCD";
+  const metrics = data ? [
+    { label: "Đoàn viên đang sinh hoạt", value: data.tongDoanVien, detail: `${number.format(data.doanVienNu)} nữ (${percent.format(data.tiLeNu)}%)`,
+      Icon: Users, color: "bg-brand-soft text-brand" },
+    { label: "Tổ công đoàn", value: data.tongToCongDoan, detail: `${number.format(data.tongCDBP)} công đoàn bộ phận`,
+      Icon: ListTree, color: "bg-teal-soft text-teal-ink" },
+    { label: "Đoàn viên là đảng viên", value: data.doanVienDangVien, detail: `${percent.format(data.tiLeDangVien)}% đoàn số`,
+      Icon: BadgeCheck, color: "bg-danger-soft text-danger" },
+    { label: "Kết nạp tháng này", value: data.ketNapMoiThang, detail: `${number.format(data.chuyenDiThang)} chuyển đi · ${number.format(data.nghiHuuThang)} nghỉ hưu`,
+      Icon: UserRoundPlus, color: "bg-gold-soft text-gold-ink" },
+  ] : [];
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const data = await getStats();
-      if (data) {
-        setStats(data);
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (user?.phamVi) {
-      if (user.phamVi === "CDBP") {
-        setActiveLevel("CDBP");
-      } else if (user.phamVi === "TOCD") {
-        setActiveLevel("TOCD");
-      } else {
-        setActiveLevel("CDCS");
-      }
-    }
-  }, [user]);
-
-  // Tổng số lượng đoàn viên ở các cấp phân cấp (phục vụ thống kê động trên các tab)
-  const totalCdbpMembers = stats.doanVienTheoCdbp && stats.doanVienTheoCdbp.length > 0
-    ? stats.doanVienTheoCdbp.reduce((sum, item) => sum + item.count, 0)
-    : 0;
-
-  const totalTocdMembers = stats.doanVienTheoToCd && stats.doanVienTheoToCd.length > 0
-    ? stats.doanVienTheoToCd.reduce((sum, item) => sum + item.count, 0)
-    : 0;
-
-  // Chuyển đổi dữ liệu biểu đồ phân bổ
-  const cdbpChartData = stats.doanVienTheoCdbp && stats.doanVienTheoCdbp.length > 0
-    ? stats.doanVienTheoCdbp.map(x => ({ name: x.name, doanVien: x.count }))
-    : [];
-
-  const tocdChartData = stats.doanVienTheoToCd && stats.doanVienTheoToCd.length > 0
-    ? stats.doanVienTheoToCd.map(x => ({ name: x.name, doanVien: x.count }))
-    : [];
-
-  const barChartData = activeLevel === "CDCS" ? cdbpChartData : tocdChartData;
-  const barChartTitle = activeLevel === "CDCS" 
-    ? "Phân bổ đoàn viên theo Công đoàn bộ phận" 
-    : "Phân bổ đoàn viên theo Tổ Công đoàn";
-
-  // Dữ liệu biểu đồ tài chính
-  const financialData = [
-    { name: "Tổng thu quỹ", value: stats.tongThuDoanPhi || 0 },
-    { name: "Tổng chi quỹ", value: stats.tongChi || 0 },
-    { name: "Tồn quỹ CĐ", value: stats.tonQuy || 0 }
-  ];
-
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard Chỉ đạo & Thống kê</h2>
-          <p className="text-xs text-slate-400">
-            Xin chào <span className="text-emerald-400 font-semibold">{user?.hoTen}</span> — {user?.vaiTro} 
-            {user?.donViTen ? ` • ${user.donViTen}` : ""} • Dữ liệu thời gian thực
-          </p>
-        </div>
-        <div className="bg-slate-950 p-1.5 rounded-xl border border-slate-800 flex gap-1">
-          {(!user || user.phamVi === "CDCS") && (
-            <button onClick={() => setActiveLevel("CDCS")}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeLevel === "CDCS" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40" : "text-slate-400 hover:text-white"
-              }`}>
-              CĐCS (Bệnh viện)
-            </button>
-          )}
-          {(!user || user.phamVi === "CDCS" || user.phamVi === "CDBP") && (
-            <button onClick={() => setActiveLevel("CDBP")}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeLevel === "CDBP" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40" : "text-slate-400 hover:text-white"
-              }`}>
-              CĐBP (Bộ phận)
-            </button>
-          )}
-          <button onClick={() => setActiveLevel("TOCD")}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              activeLevel === "TOCD" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40" : "text-slate-400 hover:text-white"
-            }`}>
-            Tổ Công đoàn
-          </button>
-        </div>
+  return <div className="space-y-5 sm:space-y-6">
+    <header className="dashboard-hero flex min-h-52 items-center px-5 py-7 text-white sm:min-h-60 sm:px-8 lg:px-10">
+      <div className="dashboard-hero-photo" aria-hidden="true" />
+      <div className="min-w-0 sm:max-w-[56%]">
+        <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-blue-50 sm:text-sm">
+          <span className="h-0.5 w-5 shrink-0 rounded-full bg-gold" aria-hidden="true" />
+          {user?.donViTen ?? "Bệnh viện Trung ương Quân đội 108"}
+        </p>
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Tổng quan công đoàn</h1>
+        <Link href="/members" className="mt-5 inline-flex items-center gap-2 rounded-lg bg-white px-3.5 py-2.5 text-sm font-bold text-brand-strong hover:bg-brand-soft">
+          Xem đoàn viên <ArrowRight size={16} aria-hidden="true" />
+        </Link>
       </div>
-
-      {/* KPI Cards */}
-      {activeLevel === "CDCS" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
-          <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tổng Đoàn viên</span>
-            <div className="text-3xl font-extrabold text-white mt-2">{stats.tongDoanVien.toLocaleString()}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Nữ: <span className="text-emerald-400">{stats.doanVienNu} ({stats.tiLeNu}%)</span></p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cấu trúc Tổ chức</span>
-            <div className="text-3xl font-extrabold text-white mt-2">{stats.tongCDBP} CĐBP</div>
-            <p className="text-[10px] text-slate-400 mt-1">Gồm <span className="text-emerald-400">{stats.tongToCongDoan} Tổ CĐ</span> hoạt động</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Đảng viên trong CĐ</span>
-            <div className="text-3xl font-extrabold text-red-400 mt-2">{stats.doanVienDangVien}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Tỉ lệ: <span className="text-red-400">{stats.tiLeDangVien}%</span></p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Hoạt động & Phúc lợi</span>
-            <div className="text-3xl font-extrabold text-emerald-400 mt-2">{stats.soHoatDong} HĐ</div>
-            <p className="text-[10px] text-slate-400 mt-1">Phúc lợi: <span className="text-emerald-400">{stats.soLuotPhucLoi} lượt</span> hỗ trợ</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Biến động (Tháng)</span>
-            <div className="text-3xl font-extrabold text-blue-400 mt-2">+{stats.ketNapMoiThang} mới</div>
-            <p className="text-[10px] text-slate-400 mt-1">Chuyển: <span className="text-red-400">{stats.chuyenDiThang}</span> • Hưu: <span className="text-slate-400">{stats.nghiHuuThang}</span></p>
-          </div>
-        </div>
-      )}
-
-      {activeLevel === "CDBP" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tổng Đoàn viên BP</span>
-            <div className="text-3xl font-extrabold text-white mt-2">{(user?.phamVi === "CDBP" ? stats.tongDoanVien : totalCdbpMembers).toLocaleString()}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Đang hoạt động trong khối</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Hoạt động Công đoàn</span>
-            <div className="text-3xl font-extrabold text-emerald-400 mt-2">{stats.soHoatDong} Phong trào</div>
-            <p className="text-[10px] text-slate-400 mt-1">Đã được ghi nhận triển khai</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tồn quỹ hiện có</span>
-            <div className="text-3xl font-extrabold text-white mt-2">{(stats.tonQuy || 0).toLocaleString()} đ</div>
-            <p className="text-[10px] text-slate-400 mt-1">Thu đoàn phí: {(stats.tongThuDoanPhi || 0).toLocaleString()} đ</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Phúc lợi & Cứu trợ</span>
-            <div className="text-3xl font-extrabold text-amber-500 mt-2">{stats.soLuotPhucLoi} lượt nhận</div>
-            <p className="text-[10px] text-slate-400 mt-1">Được cấp cho đoàn viên khó khăn</p>
-          </div>
-        </div>
-      )}
-
-      {activeLevel === "TOCD" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Đoàn viên thuộc Tổ</span>
-            <div className="text-3xl font-extrabold text-white mt-2">{(user?.phamVi === "TOCD" ? stats.tongDoanVien : totalTocdMembers).toLocaleString()}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Sinh hoạt trực tiếp tại tổ</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sáng kiến cải tiến</span>
-            <div className="text-3xl font-extrabold text-emerald-400 mt-2">{stats.soSangKien} Đăng ký</div>
-            <p className="text-[10px] text-slate-400 mt-1">Được hội đồng nghiệm thu đánh giá</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Thu đoàn phí</span>
-            <div className="text-3xl font-extrabold text-white mt-2">{(stats.tongThuDoanPhi || 0).toLocaleString()} đ</div>
-            <p className="text-[10px] text-slate-400 mt-1">Đã thu nộp lên cấp trên đúng thời hạn</p>
-          </div>
-          <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md hover:border-slate-700 transition-all">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Kết quả thi đua</span>
-            <div className="text-3xl font-extrabold text-blue-400 mt-2">{stats.soKetQuaThiDua} khen thưởng</div>
-            <p className="text-[10px] text-slate-400 mt-1">Phong trào thi đua trực tuyến</p>
-          </div>
-        </div>
-      )}
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md">
-          <h3 className="text-sm font-bold text-white mb-6 uppercase tracking-wider">{barChartTitle}</h3>
-          <div className="h-80 flex items-center justify-center">
-            {barChartData.length === 0 ? (
-              <span className="text-xs text-slate-500 italic">Không có dữ liệu phân bổ đoàn viên</span>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="name" stroke="#64748B" fontSize={10} />
-                  <YAxis stroke="#64748B" fontSize={11} />
-                  <Tooltip contentStyle={{ backgroundColor: "#0F172A", borderColor: "#334155", fontSize: 11 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="doanVien" name="Đoàn viên" fill="#10B981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md flex flex-col">
-          <h3 className="text-sm font-bold text-white mb-6 uppercase tracking-wider">Cơ cấu Tài chính công đoàn</h3>
-          <div className="flex-1 h-60 min-h-[240px] flex items-center justify-center">
-            {stats.tongThuDoanPhi === 0 && stats.tongChi === 0 && stats.tonQuy === 0 ? (
-              <span className="text-xs text-slate-500 italic">Không có dữ liệu giao dịch tài chính</span>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={financialData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                    {financialData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => `${(value as number).toLocaleString()} đ`} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-          <div className="space-y-2 mt-4">
-            {financialData.map((entry, index) => (
-              <div key={entry.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }} />
-                  <span className="text-slate-400">{entry.name}</span>
-                </div>
-                <span className="font-semibold text-white">{entry.value.toLocaleString()} đ</span>
-              </div>
-            ))}
-          </div>
-        </div>
+    </header>
+    {loading || error ? <LoadState loading={loading} retry={reload} /> : data && <>
+      <dl className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        {metrics.map(({ label, value, detail, Icon, color }) => <div key={label} className="panel flex min-w-0 flex-col p-3.5 sm:p-5">
+          <dt className="flex flex-col items-start gap-2 text-sm font-semibold text-copy">
+            <span className={`grid size-9 place-items-center rounded-lg ${color}`}><Icon size={19} aria-hidden="true" /></span>
+            {label}
+          </dt>
+          <dd className="my-1.5 text-3xl font-bold tabular-nums text-ink">{number.format(value)}</dd>
+          <dd className="mt-auto text-xs text-muted sm:text-sm">{detail}</dd>
+        </div>)}
+      </dl>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {(admin || user?.role === "CDCS") &&
+          <Distribution title="Đoàn viên theo công đoàn bộ phận" rows={data.doanVienTheoCdbp} />}
+        <Distribution title="Đoàn viên theo tổ công đoàn" rows={data.doanVienTheoToCd} />
+        <Distribution title="Tình trạng sinh hoạt" rows={data.doanVienTheoTrangThai} />
+        <Distribution title="Trình độ học vấn" rows={data.doanVienTheoTrinhDo} />
       </div>
-
-      {/* Detailed Member Structure Statistics */}
-      <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-6">
-        <div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Thống kê Chi tiết Cơ cấu & Tiêu chí Đoàn viên</h3>
-          <p className="text-xs text-slate-400 mt-1">Dữ liệu thống kê phân tích từ các tiêu chí hồ sơ đoàn viên công đoàn</p>
+      <section className="panel p-4 sm:p-6">
+        <h2 className="text-base font-semibold">Hoạt động và nghiệp vụ</h2>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div><dt className="text-sm text-copy">Hoạt động đã ghi nhận</dt><dd className="mt-1 text-xl font-semibold">{number.format(data.soHoatDong)}</dd></div>
+          {!admin && <>
+            <div><dt className="text-sm text-copy">Hồ sơ phúc lợi</dt><dd className="mt-1 text-xl font-semibold">{number.format(data.soLuotPhucLoi)}</dd></div>
+            <div><dt className="text-sm text-copy">Hồ sơ sáng kiến</dt><dd className="mt-1 text-xl font-semibold">{number.format(data.soSangKien)}</dd></div>
+            <div><dt className="text-sm text-copy">{team ? "Thu đoàn phí" : "Chênh lệch thu chi"}</dt>
+              <dd className="mt-1 text-xl font-semibold">{currency.format(team ? data.tongThuDoanPhi : data.tonQuy)}</dd></div>
+          </>}
+        </dl>
+      </section>
+      <details className="panel p-4 sm:p-6">
+        <summary className="cursor-pointer font-semibold text-ink">Xem phân bổ và số liệu nghiệp vụ</summary>
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {(admin || user?.role === "CDCS") &&
+            <Distribution title="Đoàn viên theo khối chuyên môn" rows={data.doanVienTheoKhoi} />}
+          <Distribution title="Giới tính" rows={data.doanVienTheoGioiTinh.filter(row => row.count > 0)} />
+          <Distribution title="Vai trò công đoàn" rows={data.doanVienTheoChucVu.map(row => ({
+            ...row, name: roleLabels[row.name] ?? row.name,
+          }))} />
+          <Distribution title="Chứng chỉ theo ngoại ngữ" rows={data.doanVienTheoNgoaiNgu} />
+          {!admin && <section className="panel p-4 sm:p-6">
+            <h2 className="text-base font-semibold">Thi đua và tài chính</h2>
+            <dl className="mt-3 space-y-2 text-sm">
+              <div className="flex justify-between gap-3"><dt>Hồ sơ thi đua</dt><dd className="font-semibold">{number.format(data.soKetQuaThiDua)}</dd></div>
+              <div className="flex justify-between gap-3">
+                <dt>{team ? "Thu đoàn phí" : "Tổng thu"}</dt><dd className="font-semibold">{currency.format(data.tongThuDoanPhi)}</dd>
+              </div>
+              {!team && <div className="flex justify-between gap-3">
+                <dt>Tổng chi</dt><dd className="font-semibold">{currency.format(data.tongChi)}</dd>
+              </div>}
+            </dl>
+          </section>}
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          {/* Giới tính */}
-          <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Giới tính</span>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Nam:</span>
-                <span className="font-semibold text-blue-400">{stats.doanVienNam}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Nữ:</span>
-                <span className="font-semibold text-pink-400">{stats.doanVienNu}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Đảng viên */}
-          <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Đảng viên</span>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Đảng viên:</span>
-                <span className="font-semibold text-red-400">★ {stats.doanVienDangVien}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Tỉ lệ:</span>
-                <span className="font-semibold text-slate-200">{stats.tiLeDangVien}%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Trình độ học vấn */}
-          <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Trình độ học vấn</span>
-            <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
-              {stats.doanVienTheoTrinhDo && stats.doanVienTheoTrinhDo.length > 0 ? (
-                stats.doanVienTheoTrinhDo.map(item => (
-                  <div key={item.name} className="flex justify-between text-xs">
-                    <span className="text-slate-400 truncate max-w-[100px]">{item.name}:</span>
-                    <span className="font-semibold text-purple-400">{item.count}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-slate-600 text-[10px] italic">Không có dữ liệu</div>
-              )}
-            </div>
-          </div>
-
-          {/* Ngoại ngữ */}
-          <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ngoại ngữ</span>
-            <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
-              {stats.doanVienTheoNgoaiNgu && stats.doanVienTheoNgoaiNgu.length > 0 ? (
-                stats.doanVienTheoNgoaiNgu.map(item => (
-                  <div key={item.name} className="flex justify-between text-xs">
-                    <span className="text-slate-400 truncate max-w-[100px]">{item.name}:</span>
-                    <span className="font-semibold text-emerald-400">{item.count}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-slate-600 text-[10px] italic">Không có dữ liệu</div>
-              )}
-            </div>
-          </div>
-
-          {/* Trạng thái sinh hoạt */}
-          <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl space-y-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Trạng thái sinh hoạt</span>
-            <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
-              {stats.doanVienTheoTrangThai && stats.doanVienTheoTrangThai.length > 0 ? (
-                stats.doanVienTheoTrangThai.map(item => (
-                  <div key={item.name} className="flex justify-between text-xs">
-                    <span className="text-slate-400 truncate max-w-[100px]">{item.name}:</span>
-                    <span className="font-semibold text-amber-500">{item.count}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-slate-600 text-[10px] italic">Không có dữ liệu</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+      </details>
+    </>}
+  </div>;
 }

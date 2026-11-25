@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,10 +11,14 @@ namespace QLCD.Application.Features.Catalogs.Commands.CreateCatalog;
 
 public record CreateCatalogCommand : IRequest<Guid>
 {
+    [Required]
     public required string Loai { get; init; }
+    [Required]
     public required string Ma { get; init; }
+    [Required]
     public required string Ten { get; init; }
     public int ThuTu { get; init; }
+    [StringLength(500)]
     public string? GhiChu { get; init; }
 }
 

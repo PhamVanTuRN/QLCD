@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getCatalogsApi, createCatalogApi, updateCatalogApi, deleteCatalogApi, CatalogDto } from "@/lib/api";
+import FormDialog from "@/components/FormDialog";
+
+import { useResource } from "@/lib/use-resource";
+import LoadState from "@/components/LoadState";
+import Notice, { useNotice } from "@/components/Notice";
+import ListPager from "@/components/ListPager";
+
+import { useState, useCallback } from "react";
+import { apiMessage, getCatalogsPage, createCatalogApi, updateCatalogApi, deleteCatalogApi, CatalogDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useRouter } from "next/navigation";
 
 const CATALOG_TYPES = [
   { value: "KhoiChuyenMon", label: "Khối chuyên môn" },
@@ -33,20 +39,13 @@ const CATALOG_TYPES = [
 
 export default function CatalogsPage() {
   const { user } = useAuth();
-  const router = useRouter();
-
-  // Chỉ cho phép CDCS (admin/cdcs) vào quản lý danh mục
-  useEffect(() => {
-    if (user && user.phamVi !== "CDCS") {
-      router.push("/");
-    }
-  }, [user, router]);
+  const canManage = user?.role === "ADMIN";
 
   const [selectedType, setSelectedType] = useState(CATALOG_TYPES[0].value);
-  const [catalogs, setCatalogs] = useState<CatalogDto[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const { notice, dismiss, showAlert } = useNotice();
+  const [submitting, setSubmitting] = useState(false);
 
   // Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,27 +58,10 @@ export default function CatalogsPage() {
     ghiChu: ""
   });
 
-  const loadCatalogs = async () => {
-    setLoading(true);
-    try {
-      const data = await getCatalogsApi({ loai: selectedType });
-      setCatalogs(data);
-    } catch (err) {
-      console.error(err);
-      showAlert("error", "Lỗi tải danh sách danh mục");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadCatalogs();
-  }, [selectedType]);
-
-  const showAlert = (type: "success" | "error", message: string) => {
-    setAlert({ type, message });
-    setTimeout(() => setAlert(null), 4000);
-  };
+  const readPage = useCallback((signal: AbortSignal) => getCatalogsPage({ loai: selectedType, search: search.trim() || undefined, page }, signal), [selectedType, search, page]);
+  const { data: list, loading, error: listError, reload: loadCatalogs } = useResource(readPage, search ? 200 : 0);
+  const catalogs = list?.data ?? [];
+  const hasMore = list?.hasMore ?? false;
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -111,20 +93,21 @@ export default function CatalogsPage() {
       await deleteCatalogApi(id);
       showAlert("success", "Xóa danh mục thành công");
       loadCatalogs();
-    } catch (err: any) {
-      console.error(err);
-      const msg = err.response?.data?.message || "Không thể xóa danh mục này do đang có liên kết dữ liệu.";
+    } catch (err) {
+      const msg = apiMessage(err, "Không thể xóa danh mục này do đang có liên kết dữ liệu.");
       showAlert("error", msg);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!formData.ma || !formData.ten) {
       showAlert("error", "Vui lòng nhập Mã và Tên danh mục");
       return;
     }
 
+    setSubmitting(true);
     try {
       const payload = {
         loai: selectedType,
@@ -140,62 +123,47 @@ export default function CatalogsPage() {
       }
       setIsModalOpen(false);
       loadCatalogs();
-    } catch (err: any) {
-      console.error(err);
-      const msg = err.response?.data?.message || "Đã xảy ra lỗi khi lưu danh mục.";
+    } catch (err) {
+      const msg = apiMessage(err, "Đã xảy ra lỗi khi lưu danh mục.");
       showAlert("error", msg);
-    }
+    } finally { setSubmitting(false); }
   };
 
-  const filteredCatalogs = catalogs.filter(
-    (c) =>
-      c.ma.toLowerCase().includes(search.toLowerCase()) ||
-      c.ten.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
     <div className="space-y-6">
       {/* Alert Header */}
-      {alert && (
-        <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-xl flex items-center gap-3 transition-all animate-bounce ${
-            alert.type === "success"
-              ? "bg-emerald-950 border-emerald-800 text-emerald-400"
-              : "bg-red-950 border-red-900 text-red-400"
-          }`}
-        >
-          <span>{alert.type === "success" ? "✅" : "⚠️"}</span>
-          <span className="text-sm font-semibold">{alert.message}</span>
-        </div>
-      )}
+      <Notice value={notice} dismiss={dismiss} />
 
       {/* Title */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Quản lý Danh mục Dùng chung</h2>
-          <p className="text-xs text-slate-400 mt-1">Cấu hình các danh mục và tùy chọn lựa chọn cho toàn hệ thống</p>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">Quản lý Danh mục Dùng chung</h1>
+          <p className="text-xs text-muted mt-1">Cấu hình các danh mục và tùy chọn lựa chọn cho toàn hệ thống</p>
         </div>
+        {canManage && (
         <button
           onClick={handleOpenCreate}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-2 active:scale-95"
+          className="bg-brand hover:bg-brand-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-brand-strong/30 transition-all flex items-center gap-2 active:scale-95"
         >
           ➕ Thêm Danh mục
         </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* Left list of types */}
-        <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-1">
-          <span className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-3">Loại danh mục</span>
+        <div className="bg-surface border border-line rounded-2xl p-4 space-y-1">
+          <span className="px-3 text-[10px] font-bold text-muted uppercase tracking-wider block mb-3">Loại danh mục</span>
           <div className="max-h-[60vh] overflow-y-auto space-y-0.5 pr-1">
             {CATALOG_TYPES.map((type) => (
               <button
                 key={type.value}
-                onClick={() => setSelectedType(type.value)}
+                onClick={() => { setSelectedType(type.value); setPage(1); }}
                 className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                   selectedType === type.value
-                    ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                    : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                    ? "bg-brand-soft text-brand border border-brand-line font-semibold"
+                    : "text-muted hover:bg-surface hover:text-ink"
                 }`}
               >
                 {type.label}
@@ -205,147 +173,152 @@ export default function CatalogsPage() {
         </div>
 
         {/* Right table list */}
-        <div className="lg:col-span-3 bg-slate-950/20 border border-slate-800 rounded-2xl p-6 space-y-4">
+        <div className="lg:col-span-3 bg-surface border border-line rounded-2xl p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-sm font-bold text-ink uppercase tracking-wider flex items-center gap-2">
               <span>🗂️</span> {CATALOG_TYPES.find((t) => t.value === selectedType)?.label}
             </h3>
             <input
               type="text"
+          aria-label="Tìm kiếm" maxLength={100}
               placeholder="Tìm kiếm mã hoặc tên..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all min-w-[200px]"
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="bg-surface border border-line rounded-xl px-4 py-2 text-xs text-ink focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/30 transition-all min-w-[200px]"
             />
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" role="region" aria-label="Bảng danh mục" tabIndex={0}>
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold">
-                  <th className="py-3 px-4">Mã</th>
-                  <th className="py-3 px-4">Tên hiển thị</th>
-                  <th className="py-3 px-4 text-center">Thứ tự</th>
-                  <th className="py-3 px-4 text-center">Trạng thái</th>
-                  <th className="py-3 px-4">Ghi chú</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
+                <tr className="border-b border-line text-muted font-semibold">
+                  <th scope="col" className="py-3 px-4">Mã</th>
+                  <th scope="col" className="py-3 px-4">Tên hiển thị</th>
+                  <th scope="col" className="py-3 px-4 text-center">Thứ tự</th>
+                  <th scope="col" className="py-3 px-4 text-center">Trạng thái</th>
+                  <th scope="col" className="py-3 px-4">Ghi chú</th>
+                  <th scope="col" className="py-3 px-4 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {loading ? (
+              <tbody className="divide-y divide-line">
+                {listError ? (
+                <tr><td colSpan={6}><LoadState retry={loadCatalogs} /></td></tr>
+              ) : loading ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-500">
-                      <span className="inline-block w-4 h-4 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin mr-2" />
+                    <td colSpan={6} className="py-8 text-center text-muted">
+                      <span className="inline-block w-4 h-4 border-2 border-edge border-t-brand rounded-full animate-spin mr-2" />
                       Đang tải danh mục...
                     </td>
                   </tr>
-                ) : filteredCatalogs.length === 0 ? (
+                ) : catalogs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-500">
+                    <td colSpan={6} className="py-8 text-center text-muted">
                       Không tìm thấy danh mục nào.
                     </td>
                   </tr>
                 ) : (
-                  filteredCatalogs.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-900/40 text-slate-300">
-                      <td className="py-3 px-4 font-mono font-bold text-emerald-500">{item.ma}</td>
-                      <td className="py-3 px-4 font-medium text-white">{item.ten}</td>
+                  catalogs.map((item) => (
+                    <tr key={item.id} className="hover:bg-soft text-copy">
+                      <td className="py-3 px-4 font-mono font-bold text-brand">{item.ma}</td>
+                      <td className="py-3 px-4 font-medium text-ink">{item.ten}</td>
                       <td className="py-3 px-4 text-center font-mono">{item.thuTu}</td>
                       <td className="py-3 px-4 text-center">
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
                             item.trangThai
-                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                              : "bg-slate-800 text-slate-400 border-slate-700"
+                              ? "bg-brand-soft text-brand border-brand-line"
+                              : "bg-soft text-muted border-line"
                           }`}
                         >
                           {item.trangThai ? "Hoạt động" : "Khóa"}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-400 truncate max-w-[200px]" title={item.ghiChu || ""}>
+                      <td className="py-3 px-4 text-muted truncate max-w-[200px]" title={item.ghiChu || ""}>
                         {item.ghiChu || "—"}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        {canManage ? (
+<div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEdit(item)}
-                            className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-400 hover:text-blue-300 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                            className="bg-brand-soft hover:bg-soft-strong border border-brand-line text-brand hover:text-brand-hover px-2 py-1 rounded text-[10px] font-bold transition-all"
                           >
                             Sửa
                           </button>
                           <button
                             onClick={() => handleDelete(item.id)}
-                            className="bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 hover:text-red-300 px-2 py-1 rounded text-[10px] font-bold transition-all"
+                            className="bg-danger-soft hover:bg-danger-line border border-danger-line text-danger hover:text-danger-strong px-2 py-1 rounded text-[10px] font-bold transition-all"
                           >
                             Xóa
                           </button>
                         </div>
+                        ) : <span className="text-muted">Chỉ xem</span>}
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
           </div>
         </div>
       </div>
 
       {/* Modal Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
+        <FormDialog label="Thông tin danh mục" onClose={() => { setIsModalOpen(false); dismiss(); }} busy={submitting}>
+          {notice?.type === "error" && <Notice value={notice} dismiss={dismiss} />}
             <div>
-              <h3 className="text-base font-bold text-white">{editingId ? "Sửa Danh mục" : "Thêm Danh mục mới"}</h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">
+              <h3 className="text-base font-bold text-ink">{editingId ? "Sửa Danh mục" : "Thêm Danh mục mới"}</h3>
+              <p className="text-[10px] text-muted mt-0.5">
                 Thuộc loại: {CATALOG_TYPES.find((t) => t.value === selectedType)?.label}
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Mã danh mục <span className="text-red-500">*</span>
+                <label htmlFor="catalogs-field-1" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">
+                  Mã danh mục <span className="text-danger">*</span>
                 </label>
-                <input
+                <input id="catalogs-field-1"
                   type="text"
                   value={formData.ma}
                   onChange={(e) => setFormData({ ...formData, ma: e.target.value.toUpperCase() })}
                   disabled={!!editingId}
                   placeholder="e.g. ENG, IELTS_6.5"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                  className="w-full bg-surface border border-line rounded-xl px-4 py-2.5 text-ink placeholder-muted focus:outline-none focus:border-brand disabled:opacity-50"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Tên hiển thị <span className="text-red-500">*</span>
+                <label htmlFor="catalogs-field-2" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">
+                  Tên hiển thị <span className="text-danger">*</span>
                 </label>
-                <input
+                <input id="catalogs-field-2"
                   type="text"
                   value={formData.ten}
                   onChange={(e) => setFormData({ ...formData, ten: e.target.value })}
                   placeholder="e.g. Tiếng Anh, IELTS 6.5"
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-surface border border-line rounded-xl px-4 py-2.5 text-ink placeholder-muted focus:outline-none focus:border-brand"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  <label htmlFor="catalogs-field-3" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">
                     Thứ tự hiển thị
                   </label>
-                  <input
+                  <input id="catalogs-field-3"
                     type="number"
                     value={formData.thuTu}
                     onChange={(e) => setFormData({ ...formData, thuTu: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-surface border border-line rounded-xl px-4 py-2.5 text-ink focus:outline-none focus:border-brand"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1.5">
                     Trạng thái hoạt động
                   </label>
                   <label className="relative inline-flex items-center cursor-pointer mt-1">
@@ -355,41 +328,40 @@ export default function CatalogsPage() {
                       onChange={(e) => setFormData({ ...formData, trangThai: e.target.checked })}
                       className="sr-only peer"
                     />
-                    <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600 peer-checked:after:bg-white" />
-                    <span className="ml-2 text-xs font-semibold text-slate-400">Hoạt động</span>
+                    <div className="w-9 h-5 bg-soft peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-edge after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand peer-checked:after:bg-white" />
+                    <span className="ml-2 text-xs font-semibold text-muted">Hoạt động</span>
                   </label>
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Ghi chú</label>
-                <textarea
+                <label htmlFor="catalogs-field-4" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">Ghi chú</label>
+                <textarea id="catalogs-field-4"
                   value={formData.ghiChu}
                   onChange={(e) => setFormData({ ...formData, ghiChu: e.target.value })}
                   placeholder="Nhập ghi chú thêm..."
                   rows={3}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-surface border border-line rounded-xl px-4 py-2 text-ink placeholder-muted focus:outline-none focus:border-brand"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold transition-all"
+                  onClick={() => { setIsModalOpen(false); dismiss(); }} disabled={submitting}
+                  className="bg-soft hover:bg-soft-strong text-copy px-4 py-2.5 rounded-xl font-bold transition-all"
                 >
                   Hủy
                 </button>
                 <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                  type="submit" disabled={submitting}
+                  className="bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-brand-strong/30 transition-all active:scale-95"
                 >
                   Lưu
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </FormDialog>
       )}
     </div>
   );

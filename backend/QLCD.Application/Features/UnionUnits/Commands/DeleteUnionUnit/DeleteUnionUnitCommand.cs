@@ -49,12 +49,13 @@ public class DeleteUnionUnitCommandHandler : IRequestHandler<DeleteUnionUnitComm
         unit.TrangThai = 0;
 
         // Soft-delete tài khoản quản lý tương ứng
-        var account = await _context.TaiKhoans
-            .FirstOrDefaultAsync(a => a.OrganizationId == request.Id, cancellationToken);
-        if (account != null)
+        var accounts = await _context.TaiKhoans.Where(account => account.OrganizationId == request.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var account in accounts)
         {
             account.IsDeleted = true;
             account.TrangThai = false;
+            account.SecurityVersion = Guid.NewGuid();
         }
 
         await _context.SaveChangesAsync(cancellationToken);

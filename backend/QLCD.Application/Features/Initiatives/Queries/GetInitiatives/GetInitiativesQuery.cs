@@ -5,25 +5,26 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
 
 namespace QLCD.Application.Features.Initiatives.Queries.GetInitiatives;
 
 public record GetInitiativesQuery : IRequest<List<InitiativeDto>>
 {
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = PageBounds.DefaultSize;
     public string? Search { get; init; }
     public string? CapDeTai { get; init; }
     public int? TrangThai { get; init; }
     
     // Auth scope
-    public Guid? ScopeOrgId { get; init; }
-    public string? UserRole { get; init; }
 }
 
 public class InitiativeDto
 {
     public Guid Id { get; set; }
-    public Guid DoanVienId { get; set; }
+    public Guid? DoanVienId { get; set; }
     public string? HoTenDoanVien { get; set; }
     public string? MaNhanVien { get; set; }
     public Guid DonViId { get; set; }
@@ -37,58 +38,47 @@ public class InitiativeDto
     public int NamThucHien { get; set; }
     public string? KetQuaNghiemThu { get; set; }
     public int TrangThai { get; set; }
+    public string? FileMinhChungUrl { get; set; }
+    public Guid? EvidenceFileId { get; set; }
+    public string? EvidenceFileName { get; set; }
+    public long? EvidenceFileSize { get; set; }
+    public string? DownloadUrl { get; set; }
 }
 
 public class GetInitiativesQueryHandler : IRequestHandler<GetInitiativesQuery, List<InitiativeDto>>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetInitiativesQueryHandler(IQLCDDbContext context)
+    public GetInitiativesQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<List<InitiativeDto>> Handle(GetInitiativesQuery request, CancellationToken cancellationToken)
     {
+        var offset = PageBounds.Offset(request.Page, request.PageSize);
         var query = _context.SangKiens
             .Include(i => i.DoanVien)
             .Include(i => i.DonVi)
             .AsNoTracking();
 
         // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
-        if (!string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS")
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
         {
-            if (request.ScopeOrgId.HasValue)
-            {
-                var orgId = request.ScopeOrgId.Value;
-                if (request.UserRole == "CDBP")
-                {
-                    var childOrgIds = await _context.DonViCongDoans
-                        .Where(u => u.MaParent == orgId)
-                        .Select(u => u.Id)
-                        .ToListAsync(cancellationToken);
-                    
-                    query = query.Where(i => i.DonViId == orgId || childOrgIds.Contains(i.DonViId));
-                }
-                else // TOCD
-                {
-                    query = query.Where(i => i.DonViId == orgId);
-                }
-            }
-            else
-            {
-                return new List<InitiativeDto>();
-            }
+            query = query.Where(i => allowedOrgIds.Contains(i.DonViId));
         }
 
         // 2. Lọc & Tìm kiếm
-        if (!string.IsNullOrEmpty(request.Search))
+        var search = PageBounds.Search(request.Search);
+        if (search is not null)
         {
-            var search = request.Search.ToLower();
             query = query.Where(i => 
                 i.TenDeTai.ToLower().Contains(search) || 
-                i.DoanVien.HoTen.ToLower().Contains(search) || 
-                i.DoanVien.MaNhanVien.ToLower().Contains(search) ||
+                (i.DoanVien != null && i.DoanVien.MaToCongDoan == i.DonViId && i.DoanVien.HoTen.ToLower().Contains(search)) ||
+                (i.DoanVien != null && i.DoanVien.MaToCongDoan == i.DonViId && i.DoanVien.MaNhanVien.ToLower().Contains(search)) ||
                 i.LinhVuc.ToLower().Contains(search));
         }
 
@@ -109,38 +99,50 @@ public class GetInitiativesQueryHandler : IRequestHandler<GetInitiativesQuery, L
 
         var list = await query
             .OrderByDescending(i => i.NamThucHien)
-            .Select(i => new InitiativeDto
+            .ThenBy(i => i.Id)
+            .Skip(offset).Take(request.PageSize + 1)
+            .Select(i => new
+            {
+                Initiative = i,
+                File = _context.EvidenceFiles
+                    .Where(f => f.RelatedEntityId == i.Id && f.ModuleName == "Initiatives" && f.OrganizationId == i.DonViId && !f.IsDeleted)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        var dtoList = new List<InitiativeDto>();
+        foreach (var item in list)
+        {
+            var i = item.Initiative;
+            var f = item.File;
+
+            var dto = new InitiativeDto
             {
                 Id = i.Id,
-                DoanVienId = i.DoanVienId,
-                HoTenDoanVien = i.DoanVien != null ? i.DoanVien.HoTen : "",
-                MaNhanVien = i.DoanVien != null ? i.DoanVien.MaNhanVien : "",
+                DoanVienId = i.DoanVien != null && i.DoanVien.MaToCongDoan == i.DonViId ? i.DoanVienId : null,
+                HoTenDoanVien = i.DoanVien != null && i.DoanVien.MaToCongDoan == i.DonViId ? i.DoanVien.HoTen : "",
+                MaNhanVien = i.DoanVien != null && i.DoanVien.MaToCongDoan == i.DonViId ? i.DoanVien.MaNhanVien : "",
                 DonViId = i.DonViId,
                 TenDonVi = i.DonVi != null ? i.DonVi.TenDonVi : "",
                 TenDeTai = i.TenDeTai,
                 LinhVuc = i.LinhVuc,
                 CapDeTai = i.CapDeTai,
-                TenCapDeTai = "",
+                TenCapDeTai = catalogs.TryGetValue(i.CapDeTai, out var name) ? name : i.CapDeTai,
                 HieuQuaKinhTe = i.HieuQuaKinhTe,
                 NgayNghiemThu = i.NgayNghiemThu,
                 NamThucHien = i.NamThucHien,
                 KetQuaNghiemThu = i.KetQuaNghiemThu,
-                TrangThai = i.TrangThai
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var item in list)
-        {
-            if (catalogs.TryGetValue(item.CapDeTai, out var name))
-            {
-                item.TenCapDeTai = name;
-            }
-            else
-            {
-                item.TenCapDeTai = item.CapDeTai;
-            }
+                TrangThai = i.TrangThai,
+                FileMinhChungUrl = f != null ? f.Id.ToString() : null,
+                EvidenceFileId = f?.Id,
+                EvidenceFileName = f?.OriginalFileName,
+                EvidenceFileSize = f?.FileSize,
+                DownloadUrl = f != null ? $"/api/v1/evidence-files/download/{f.Id}" : null
+            };
+            dtoList.Add(dto);
         }
 
-        return list;
+        return dtoList;
     }
 }

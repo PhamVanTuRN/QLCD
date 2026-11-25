@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Domain.Enums;
 using QLCD.Domain.Entities;
@@ -21,6 +22,8 @@ public class UnionUnitDto
     public int Level { get; set; }
     public Guid? MaParent { get; set; }
     public Guid? MaKhoi { get; set; }
+    public int TrangThai { get; set; }
+    public bool CoTheTiepNhanDoanVien { get; set; }
     public int SoDoanVien { get; set; }
     
     // Thống kê chi tiết
@@ -46,21 +49,42 @@ public class UnitStats
 public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQuery, UnionUnitDto?>
 {
     private readonly IQLCDDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetUnionUnitsTreeQueryHandler(IQLCDDbContext context)
+    public GetUnionUnitsTreeQueryHandler(IQLCDDbContext context, ICurrentUserService currentUserService, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _currentUserService = currentUserService;
+        _scopeService = scopeService;
     }
 
     public async Task<UnionUnitDto?> Handle(GetUnionUnitsTreeQuery request, CancellationToken cancellationToken)
     {
-        // 1. Tải toàn bộ danh sách đơn vị đang hoạt động (Soft delete đã được xử lý bởi Global Query Filter)
-        var allUnits = await _context.DonViCongDoans
-            .ToListAsync(cancellationToken);
+        var allowed = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowed is { Count: 0 })
+            return null;
 
-        // 2. Tải toàn bộ đoàn viên đang sinh hoạt
-        var activeMembers = await _context.DoanViens
-            .Where(d => d.TrangThai == TrangThaiDoanVien.DangSinhHoat)
+        var units = _context.DonViCongDoans.AsNoTracking();
+        var members = _context.DoanViens.AsNoTracking();
+        if (allowed is not null)
+        {
+            units = units.Where(unit => allowed.Contains(unit.Id));
+            members = members.Where(member => allowed.Contains(member.MaToCongDoan));
+        }
+        var eligibleUnits = _context.DonViCongDoans.EligibleUnits();
+        var allDtos = await units.Select(u => new UnionUnitDto
+        {
+            Id = u.Id,
+            TenDonVi = u.TenDonVi,
+            LoaiToChuc = u.LoaiToChuc,
+            Level = u.Level,
+            MaParent = u.MaParent,
+            MaKhoi = u.MaKhoi,
+            TrangThai = u.TrangThai,
+            CoTheTiepNhanDoanVien = eligibleUnits.Any(eligible => eligible.Id == u.Id)
+        }).ToListAsync(cancellationToken);
+        var activeMembers = await members.Where(d => d.TrangThai == TrangThaiDoanVien.DangSinhHoat)
             .Select(d => new 
             { 
                 d.Id, 
@@ -88,34 +112,21 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
                 });
 
         // 3. Xây dựng cây tổ chức
-        var allDtos = allUnits.Select(u => new UnionUnitDto
-        {
-            Id = u.Id,
-            TenDonVi = u.TenDonVi,
-            LoaiToChuc = u.LoaiToChuc,
-            Level = u.Level,
-            MaParent = u.MaParent,
-            MaKhoi = u.MaKhoi,
-            SoDoanVien = 0
-        }).ToList();
-
         var dtoMap = allDtos.ToDictionary(d => d.Id);
 
         // Ghép quan hệ cha-con
         foreach (var dto in allDtos)
         {
-            if (dto.MaParent.HasValue && dtoMap.ContainsKey(dto.MaParent.Value))
-            {
-                dtoMap[dto.MaParent.Value].Children.Add(dto);
-            }
+            if (dto.MaParent is Guid parentId && dtoMap.TryGetValue(parentId, out var parent) && parent.Level < dto.Level)
+                parent.Children.Add(dto);
         }
 
-        // 4. Tính toán số đoàn viên đệ quy từ dưới lên
-        var root = allDtos.FirstOrDefault(d => d.LoaiToChuc == LoaiToChuc.CDCS);
-        if (root == null) return null;
+        var root = allowed is null
+            ? allDtos.FirstOrDefault(unit => unit.LoaiToChuc == LoaiToChuc.CDCS)
+            : allDtos.FirstOrDefault(unit => unit.Id == _currentUserService.OrganizationId);
 
-        CalculateMembersRecursive(root, memberStatsByUnit);
-
+        if (root is not null)
+            CalculateMembersRecursive(root, memberStatsByUnit);
         return root;
     }
 

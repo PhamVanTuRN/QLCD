@@ -18,11 +18,13 @@ public interface IQLCDDbContext
     // Mới bổ sung
     DbSet<DanhMucDungChung> DanhMucDungChungs { get; }
     DbSet<TaiKhoan> TaiKhoans { get; }
+    DbSet<AuthSession> AuthSessions { get; }
     DbSet<HoatDongCongDoan> HoatDongCongDoans { get; }
     DbSet<TaiChinhCongDoan> TaiChinhCongDoans { get; }
     DbSet<PhucLoiDoanVien> PhucLoiDoanViens { get; }
     DbSet<SangKien> SangKiens { get; }
     DbSet<ThiDuaCongDoan> ThiDuaCongDoans { get; }
+    DbSet<EvidenceFile> EvidenceFiles { get; }
     
     DatabaseFacade Database { get; }
 

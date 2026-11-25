@@ -6,14 +6,14 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QLCD.Application.Common.Interfaces;
+using QLCD.Domain.Security;
 using QLCD.Domain.Enums;
+using QLCD.Application.Features.Emulations.Queries.GetEmulations;
 
 namespace QLCD.Application.Features.UnionUnits.Queries.GetUnionStats;
 
 public record GetUnionStatsQuery : IRequest<UnionStatsDto>
 {
-    public Guid? ScopeOrgId { get; init; }
-    public string? UserRole { get; init; }
 }
 
 public class CountPair
@@ -66,36 +66,29 @@ public class UnionStatsDto
 public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, UnionStatsDto>
 {
     private readonly IQLCDDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IOrganizationScopeService _scopeService;
+    private readonly TimeProvider _clock;
 
-    public GetUnionStatsQueryHandler(IQLCDDbContext context)
+    public GetUnionStatsQueryHandler(IQLCDDbContext context, ICurrentUserService currentUserService,
+        IOrganizationScopeService scopeService, TimeProvider clock)
     {
         _context = context;
+        _currentUserService = currentUserService;
+        _scopeService = scopeService;
+        _clock = clock;
     }
 
     public async Task<UnionStatsDto> Handle(GetUnionStatsQuery request, CancellationToken cancellationToken)
     {
-        // 1. Xác định phạm vi Tổ chức để lọc dữ liệu
-        List<Guid> scopedUnitIds = new();
-        bool isScoped = !string.IsNullOrEmpty(request.UserRole) && request.UserRole != "ADMIN" && request.UserRole != "CDCS";
-
-        if (isScoped && request.ScopeOrgId.HasValue)
-        {
-            var orgId = request.ScopeOrgId.Value;
-            scopedUnitIds.Add(orgId);
-            
-            if (request.UserRole == "CDBP")
-            {
-                // Thêm các Tổ công đoàn trực thuộc
-                var children = await _context.DonViCongDoans
-                    .Where(u => u.MaParent == orgId)
-                    .Select(u => u.Id)
-                    .ToListAsync(cancellationToken);
-                scopedUnitIds.AddRange(children);
-            }
-        }
+        var allowed = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        var isScoped = allowed is not null;
+        var scopedUnitIds = allowed ?? [];
+        if (isScoped && scopedUnitIds.Count == 0)
+            return new UnionStatsDto();
 
         // 2. Lấy dữ liệu Đơn vị
-        var unitsQuery = _context.DonViCongDoans.AsQueryable();
+        var unitsQuery = _context.DonViCongDoans.AsNoTracking();
         if (isScoped)
         {
             unitsQuery = unitsQuery.Where(u => scopedUnitIds.Contains(u.Id));
@@ -103,64 +96,78 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
         var allUnits = await unitsQuery.ToListAsync(cancellationToken);
 
         // 3. Lấy dữ liệu Đoàn viên
-        var membersQuery = _context.DoanViens.AsQueryable();
+        var membersQuery = _context.DoanViens.AsNoTracking();
         if (isScoped)
         {
             membersQuery = membersQuery.Where(d => scopedUnitIds.Contains(d.MaToCongDoan));
         }
         var allMembers = await membersQuery
-            .Include(d => d.ToCongDoan)
-            .Include(d => d.DoanVienNgoaiNgus)
+            .Select(member => new
+            {
+                member.MaToCongDoan, member.TrangThai, member.DangVien, member.GioiTinh,
+                member.VaiTro, member.TrinhDoHocVan,
+                Languages = member.DoanVienNgoaiNgus.Select(language => language.NgoaiNgu).ToList()
+            })
             .ToListAsync(cancellationToken);
 
         var activeMembers = allMembers.Where(d => d.TrangThai == TrangThaiDoanVien.DangSinhHoat).ToList();
         var totalActive = activeMembers.Count;
 
         // 4. Lấy dữ liệu Biến động (lọc theo tháng và scope)
-        var now = DateTime.UtcNow;
-        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var changesQuery = _context.LichSuBienDongs.Where(b => b.NgayHieuLuc >= monthStart);
+        var vietnamOffset = TimeSpan.FromHours(7);
+        var now = _clock.GetUtcNow().ToOffset(vietnamOffset);
+        var start = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, vietnamOffset);
+        var monthStart = start.UtcDateTime;
+        var monthEnd = start.AddMonths(1).UtcDateTime;
+        var changesQuery = _context.LichSuBienDongs.AsNoTracking()
+            .Where(change => change.NgayHieuLuc >= monthStart && change.NgayHieuLuc < monthEnd);
         if (isScoped)
         {
-            changesQuery = changesQuery.Where(b => 
-                (b.TuToCongDoanId.HasValue && scopedUnitIds.Contains(b.TuToCongDoanId.Value)) || 
-                (b.DenToCongDoanId.HasValue && scopedUnitIds.Contains(b.DenToCongDoanId.Value)));
+            changesQuery = changesQuery.Where(change =>
+                change.LoaiBienDong == LoaiBienDong.KetNapMoi
+                    ? change.DenToCongDoanId.HasValue && scopedUnitIds.Contains(change.DenToCongDoanId.Value)
+                    : change.TuToCongDoanId.HasValue && scopedUnitIds.Contains(change.TuToCongDoanId.Value));
         }
-        var monthChanges = await changesQuery.ToListAsync(cancellationToken);
+        var monthChanges = await changesQuery.GroupBy(change => change.LoaiBienDong)
+            .Select(group => new { Kind = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(group => group.Kind, group => group.Count, cancellationToken);
 
         // 5. Lấy dữ liệu Tài chính
-        var financeQuery = _context.TaiChinhCongDoans.AsQueryable();
+        var financeQuery = _context.TaiChinhCongDoans.AsNoTracking();
         if (isScoped)
         {
             financeQuery = financeQuery.Where(t => scopedUnitIds.Contains(t.DonViId));
         }
-        var finances = await financeQuery.ToListAsync(cancellationToken);
+        financeQuery = _currentUserService.Role switch
+        {
+            SecurityRoles.Central or SecurityRoles.Department => financeQuery,
+            SecurityRoles.Team => financeQuery.Where(transaction => transaction.LoaiGiaoDich == "THU_DOAN_PHI"),
+            _ => financeQuery.Where(_ => false)
+        };
 
         // 6. Lấy dữ liệu các phân hệ
-        var activitiesQuery = _context.HoatDongCongDoans.AsQueryable();
-        var welfareQuery = _context.PhucLoiDoanViens.AsQueryable();
-        var initiativesQuery = _context.SangKiens.AsQueryable();
-        var emulationsQuery = _context.ThiDuaCongDoans.AsQueryable();
+        var activitiesQuery = _context.HoatDongCongDoans.AsNoTracking();
+        var welfareQuery = _context.PhucLoiDoanViens.AsNoTracking();
+        var initiativesQuery = _context.SangKiens.AsNoTracking();
+        var emulationsQuery = EmulationScope.Apply(_context.ThiDuaCongDoans.AsNoTracking(), allowed);
 
         if (isScoped)
         {
             activitiesQuery = activitiesQuery.Where(a => scopedUnitIds.Contains(a.DonViId));
             welfareQuery = welfareQuery.Where(w => scopedUnitIds.Contains(w.DonViId));
             initiativesQuery = initiativesQuery.Where(i => scopedUnitIds.Contains(i.DonViId));
-            emulationsQuery = emulationsQuery.Where(e => 
-                (e.DonViId.HasValue && scopedUnitIds.Contains(e.DonViId.Value)) ||
-                (e.DoanVienId.HasValue && e.DoanVien != null && scopedUnitIds.Contains(e.DoanVien.MaToCongDoan)));
         }
 
         var soHoatDong = await activitiesQuery.CountAsync(cancellationToken);
-        var soWelfare = await welfareQuery.CountAsync(cancellationToken);
-        var soInitiative = await initiativesQuery.CountAsync(cancellationToken);
-        var soEmulation = await emulationsQuery.CountAsync(cancellationToken);
+        var canViewBusiness = _currentUserService.Role is SecurityRoles.Central or SecurityRoles.Department or SecurityRoles.Team;
+        var soWelfare = canViewBusiness ? await welfareQuery.CountAsync(cancellationToken) : 0;
+        var soInitiative = canViewBusiness ? await initiativesQuery.CountAsync(cancellationToken) : 0;
+        var soEmulation = canViewBusiness ? await emulationsQuery.CountAsync(cancellationToken) : 0;
 
         // 7. Tính toán Tài chính
         // Thu đoàn phí (THU_DOAN_PHI)
-        var tongThu = finances.Where(t => t.LoaiGiaoDich.StartsWith("THU_")).Sum(t => t.SoTien);
-        var tongChi = finances.Where(t => t.LoaiGiaoDich.StartsWith("CHI_")).Sum(t => t.SoTien);
+        var tongThu = await financeQuery.Where(t => t.LoaiGiaoDich.StartsWith("THU_")).SumAsync(t => t.SoTien, cancellationToken);
+        var tongChi = await financeQuery.Where(t => t.LoaiGiaoDich.StartsWith("CHI_")).SumAsync(t => t.SoTien, cancellationToken);
 
         // 8. Tính toán các phân bổ (distributions)
         // Dưới CĐCS: Phân bổ theo CĐBP
@@ -169,17 +176,14 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
         var listKhoi = new List<CountPair>();
         var listGioiTinh = new List<CountPair>();
         var listTrangThai = new List<CountPair>();
-        var listChatLuong = new List<CountPair>();
         var listChucVu = new List<CountPair>();
         var listNgoaiNgu = new List<CountPair>();
 
         // Lấy danh mục để giải nghĩa tên
-        var allCatalogs = await _context.DanhMucDungChungs.AsNoTracking().ToListAsync(cancellationToken);
-        var genderMap = allCatalogs.Where(c => c.Loai == "GioiTinh").ToDictionary(c => c.Ma, c => c.Ten);
-        var statusMap = allCatalogs.Where(c => c.Loai == "TrangThaiDoanVien").ToDictionary(c => c.Ma, c => c.Ten);
-        var qualityMap = allCatalogs.Where(c => c.Loai == "ChatLuongDoanVien").ToDictionary(c => c.Ma, c => c.Ten);
-        var positionMap = allCatalogs.Where(c => c.Loai == "ChucVuCongDoan").ToDictionary(c => c.Ma, c => c.Ten);
-        var langMap = allCatalogs.Where(c => c.Loai == "NgoaiNgu").ToDictionary(c => c.Ma, c => c.Ten);
+        var langMap = await _context.DanhMucDungChungs.AsNoTracking().Where(c => c.Loai == "NgoaiNgu")
+            .ToDictionaryAsync(c => c.Ma, c => c.Ten, cancellationToken);
+        var unitCounts = activeMembers.GroupBy(member => member.MaToCongDoan)
+            .ToDictionary(group => group.Key, group => group.Count());
 
         // Group members by CĐBP
         var cdbpUnits = allUnits
@@ -188,12 +192,9 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
 
         foreach (var cdbp in cdbpUnits)
         {
-            var childIds = await _context.DonViCongDoans
-                .Where(u => u.MaParent == cdbp.Id)
-                .Select(u => u.Id)
-                .ToListAsync(cancellationToken);
+            var childIds = allUnits.Where(u => u.MaParent == cdbp.Id).Select(u => u.Id).ToHashSet();
 
-            var count = activeMembers.Count(m => m.MaToCongDoan == cdbp.Id || childIds.Contains(m.MaToCongDoan));
+            var count = unitCounts.GetValueOrDefault(cdbp.Id) + childIds.Sum(id => unitCounts.GetValueOrDefault(id));
             listCdbp.Add(new CountPair { Name = cdbp.TenDonVi, Count = count });
         }
 
@@ -201,29 +202,20 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
         var toCdUnits = allUnits.Where(u => u.LoaiToChuc == LoaiToChuc.TO_CD_THUOC_CDBP || u.LoaiToChuc == LoaiToChuc.TO_CD_TRUC_THUOC_CDCS).ToList();
         foreach (var toCd in toCdUnits)
         {
-            var count = activeMembers.Count(m => m.MaToCongDoan == toCd.Id);
+            var count = unitCounts.GetValueOrDefault(toCd.Id);
             listToCd.Add(new CountPair { Name = toCd.TenDonVi, Count = count });
         }
 
         // Khối chuyên môn (sử dụng KhoiChuyenMon hoặc Danhmuc)
-        var khoiList = await _context.KhoiChuyenMons.ToListAsync(cancellationToken);
+        var khoiList = await _context.KhoiChuyenMons.AsNoTracking().ToListAsync(cancellationToken);
         foreach (var khoi in khoiList)
         {
             // Lấy các đơn vị thuộc khối
-            var unitIdsInKhoi = await _context.DonViCongDoans
-                .Where(u => u.MaKhoi == khoi.Id)
-                .Select(u => u.Id)
-                .ToListAsync(cancellationToken);
-            
-            // Tìm các tổ công đoàn con của những đơn vị thuộc khối đó
-            var childToCdIds = await _context.DonViCongDoans
-                .Where(u => u.MaParent.HasValue && unitIdsInKhoi.Contains(u.MaParent.Value))
-                .Select(u => u.Id)
-                .ToListAsync(cancellationToken);
+            var unitIdsInKhoi = allUnits.Where(u => u.MaKhoi == khoi.Id).Select(u => u.Id).ToHashSet();
+            var childToCdIds = allUnits.Where(u => u.MaParent.HasValue && unitIdsInKhoi.Contains(u.MaParent.Value)).Select(u => u.Id);
+            var combinedIds = unitIdsInKhoi.Concat(childToCdIds).ToHashSet();
 
-            var combinedIds = unitIdsInKhoi.Concat(childToCdIds).Distinct().ToList();
-
-            var count = activeMembers.Count(m => combinedIds.Contains(m.MaToCongDoan));
+            var count = combinedIds.Sum(id => unitCounts.GetValueOrDefault(id));
             listKhoi.Add(new CountPair { Name = khoi.TenKhoi, Count = count });
         }
 
@@ -239,7 +231,16 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
         var statusGroups = allMembers.GroupBy(m => m.TrangThai);
         foreach (var g in statusGroups)
         {
-            string label = statusMap.TryGetValue(g.Key.ToString(), out var name) ? name : g.Key.ToString();
+            var label = g.Key switch
+            {
+                TrangThaiDoanVien.DangSinhHoat => "Đang sinh hoạt",
+                TrangThaiDoanVien.ChuyenDi => "Chuyển đi",
+                TrangThaiDoanVien.NghiHuu => "Nghỉ hưu",
+                TrangThaiDoanVien.RaKhoiCongDoan => "Ra khỏi công đoàn",
+                TrangThaiDoanVien.TamDung => "Tạm dừng",
+                TrangThaiDoanVien.KhoiPhuc => "Khôi phục",
+                _ => g.Key.ToString()
+            };
             listTrangThai.Add(new CountPair { Name = label, Count = g.Count() });
         }
 
@@ -247,13 +248,13 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
         var posGroups = activeMembers.GroupBy(m => m.VaiTro);
         foreach (var g in posGroups)
         {
-            string label = g.Key.ToString(); // Or lookup from positionMap using g.Key.ToString()
+            string label = g.Key.ToString();
             listChucVu.Add(new CountPair { Name = label, Count = g.Count() });
         }
 
         // Nhóm theo ngoại ngữ (tính trên số lượng chứng chỉ ngoại ngữ)
-        var allMemberLanguages = activeMembers.SelectMany(m => m.DoanVienNgoaiNgus).ToList();
-        var langGroups = allMemberLanguages.GroupBy(l => l.NgoaiNgu);
+        var allMemberLanguages = activeMembers.SelectMany(m => m.Languages).ToList();
+        var langGroups = allMemberLanguages.GroupBy(language => language);
         foreach (var g in langGroups)
         {
             string label = langMap.TryGetValue(g.Key, out var name) ? name : g.Key;
@@ -283,9 +284,9 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
             TongCDBP = allUnits.Count(u => u.LoaiToChuc == LoaiToChuc.CDBP),
             TongToCongDoan = allUnits.Count(u => u.LoaiToChuc == LoaiToChuc.TO_CD_THUOC_CDBP || u.LoaiToChuc == LoaiToChuc.TO_CD_TRUC_THUOC_CDCS),
 
-            KetNapMoiThang = monthChanges.Count(b => b.LoaiBienDong == LoaiBienDong.KetNapMoi),
-            ChuyenDiThang = monthChanges.Count(b => b.LoaiBienDong == LoaiBienDong.ChuyenSinhHoat || b.LoaiBienDong == LoaiBienDong.DieuDongCongTac),
-            NghiHuuThang = monthChanges.Count(b => b.LoaiBienDong == LoaiBienDong.NghiHuu),
+            KetNapMoiThang = monthChanges.GetValueOrDefault(LoaiBienDong.KetNapMoi),
+            ChuyenDiThang = monthChanges.GetValueOrDefault(LoaiBienDong.ChuyenSinhHoat) + monthChanges.GetValueOrDefault(LoaiBienDong.DieuDongCongTac),
+            NghiHuuThang = monthChanges.GetValueOrDefault(LoaiBienDong.NghiHuu),
 
             DoanVienTheoCdbp = listCdbp,
             DoanVienTheoToCd = listToCd,

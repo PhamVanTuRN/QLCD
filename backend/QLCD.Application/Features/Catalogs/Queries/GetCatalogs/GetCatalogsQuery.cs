@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Domain.Entities;
 
@@ -12,6 +13,8 @@ namespace QLCD.Application.Features.Catalogs.Queries.GetCatalogs;
 
 public record GetCatalogsQuery : IRequest<List<CatalogDto>>
 {
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = PageBounds.DefaultSize;
     public string? Loai { get; init; }
     public string? Search { get; init; }
     public bool? ActiveOnly { get; init; }
@@ -39,6 +42,7 @@ public class GetCatalogsQueryHandler : IRequestHandler<GetCatalogsQuery, List<Ca
 
     public async Task<List<CatalogDto>> Handle(GetCatalogsQuery request, CancellationToken cancellationToken)
     {
+        var offset = PageBounds.Offset(request.Page, request.PageSize);
         var query = _context.DanhMucDungChungs.AsNoTracking();
 
         if (!string.IsNullOrEmpty(request.Loai))
@@ -46,9 +50,9 @@ public class GetCatalogsQueryHandler : IRequestHandler<GetCatalogsQuery, List<Ca
             query = query.Where(c => c.Loai == request.Loai);
         }
 
-        if (!string.IsNullOrEmpty(request.Search))
+        var search = PageBounds.Search(request.Search);
+        if (search is not null)
         {
-            var search = request.Search.ToLower();
             query = query.Where(c => c.Ten.ToLower().Contains(search) || c.Ma.ToLower().Contains(search));
         }
 
@@ -60,6 +64,8 @@ public class GetCatalogsQueryHandler : IRequestHandler<GetCatalogsQuery, List<Ca
         var list = await query
             .OrderBy(c => c.Loai)
             .ThenBy(c => c.ThuTu)
+            .ThenBy(c => c.Id)
+            .Skip(offset).Take(request.PageSize + 1)
             .Select(c => new CatalogDto
             {
                 Id = c.Id,

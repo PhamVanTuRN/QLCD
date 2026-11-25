@@ -1,25 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, UnionUnitDto } from "@/lib/api";
+import FormDialog from "@/components/FormDialog";
+
+import { useState } from "react";
+import { apiMessage, getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, UnionUnitDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
-// Mock data nếu API trả rỗng
-const mockTree: UnionUnitDto = {
-  id: "cdcs-108", tenDonVi: "Công đoàn Cơ sở Bệnh viện TWQĐ 108", loaiToChuc: "CDCS", level: 1, maParent: null, maKhoi: null, soDoanVien: 2045, trangThai: 1,
-  children: [
-    { id: "cdbp-noi", tenDonVi: "Công đoàn bộ phận Khối Nội 1", loaiToChuc: "CDBP", level: 2, maParent: "cdcs-108", maKhoi: null, soDoanVien: 270, trangThai: 1, children: [
-      { id: "tcd-tieuhoa", tenDonVi: "Tổ CĐ Khoa Tiêu hóa", loaiToChuc: "TO_CD_THUOC_CDBP", level: 3, maParent: "cdbp-noi", maKhoi: null, soDoanVien: 45, trangThai: 1, children: [] },
-      { id: "tcd-tim", tenDonVi: "Tổ CĐ Khoa Tim mạch", loaiToChuc: "TO_CD_THUOC_CDBP", level: 3, maParent: "cdbp-noi", maKhoi: null, soDoanVien: 38, trangThai: 1, children: [] }
-    ]},
-    { id: "cdbp-ngoai", tenDonVi: "Công đoàn bộ phận Khối Ngoại Chấn thương", loaiToChuc: "CDBP", level: 2, maParent: "cdcs-108", maKhoi: null, soDoanVien: 320, trangThai: 1, children: [
-      { id: "tcd-chinhhinh", tenDonVi: "Tổ CĐ Chấn thương chỉnh hình", loaiToChuc: "TO_CD_THUOC_CDBP", level: 3, maParent: "cdbp-ngoai", maKhoi: null, soDoanVien: 60, trangThai: 1, children: [] },
-      { id: "tcd-khop", tenDonVi: "Tổ CĐ Khoa Khớp", loaiToChuc: "TO_CD_THUOC_CDBP", level: 3, maParent: "cdbp-ngoai", maKhoi: null, soDoanVien: 42, trangThai: 1, children: [] }
-    ]},
-    { id: "tcd-tructhuoc1", tenDonVi: "Tổ CĐ trực thuộc CĐCS số 1", loaiToChuc: "TO_CD_TRUC_THUOC_CDCS", level: 2, maParent: "cdcs-108", maKhoi: null, soDoanVien: 25, trangThai: 1, children: [] }
-  ]
-};
-
+import LoadState from "@/components/LoadState";
+import Notice, { useNotice } from "@/components/Notice";
+import { useResource } from "@/lib/use-resource";
 const loaiToChucMap: Record<string, string> = {
   CDCS: "Công đoàn Cơ sở",
   CDBP: "Công đoàn Bộ phận",
@@ -27,13 +16,25 @@ const loaiToChucMap: Record<string, string> = {
   TO_CD_THUOC_CDBP: "Tổ CĐ thuộc CĐBP"
 };
 
+function findUnit(node: UnionUnitDto | null | undefined, id: string | null): UnionUnitDto | undefined {
+  if (!node || !id) return undefined;
+  if (node.id === id) return node;
+  for (const child of node.children) {
+    const match = findUnit(child, id);
+    if (match) return match;
+  }
+}
+
 export default function OrganizationTree() {
   const { user } = useAuth();
-  const [tree, setTree] = useState<UnionUnitDto | null>(null);
-  const [selectedNode, setSelectedNode] = useState<UnionUnitDto | null>(null);
+  const canManageUnits = user?.role === "ADMIN" || user?.role === "CDCS";
+  const { notice, dismiss, showAlert } = useNotice();
+  const { data: tree, loading: treeLoading, error: treeError, reload: loadTree } = useResource(getUnionTree);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedNode = findUnit(tree, selectedId) ?? tree;
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addType, setAddType] = useState<"CDBP" | "TOCD_TRUC_THUOC" | "TOCD_CDBP">("CDBP");
+  const [addType, setAddType] = useState<"CDCS" | "CDBP" | "TOCD_TRUC_THUOC" | "TOCD_CDBP">("CDBP");
   const [addName, setAddName] = useState("");
   const [addError, setAddError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,23 +46,6 @@ export default function OrganizationTree() {
   const [editStatus, setEditStatus] = useState(1);
   const [editError, setEditError] = useState("");
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
-
-  const loadTree = useCallback(async () => {
-    const data = await getUnionTree();
-    if (data) {
-      setTree(data);
-      setSelectedNode(data);
-      setExpandedNodes({ [data.id]: true });
-      // auto-expand level 2
-      data.children?.forEach(c => setExpandedNodes(prev => ({ ...prev, [c.id]: true })));
-    } else {
-      setTree(mockTree);
-      setSelectedNode(mockTree);
-      setExpandedNodes({ "cdcs-108": true, "cdbp-noi": true, "cdbp-ngoai": true });
-    }
-  }, []);
-
-  useEffect(() => { loadTree(); }, [loadTree]);
 
   const openEditModal = (node: UnionUnitDto) => {
     setEditName(node.tenDonVi);
@@ -83,12 +67,10 @@ export default function OrganizationTree() {
         trangThai: Number(editStatus)
       });
       setShowEditModal(false);
-      // Reload and update selected node
-      const updatedNode = { ...selectedNode, tenDonVi: editName.trim(), maKhoi: editKhoi || null, trangThai: Number(editStatus) };
-      setSelectedNode(updatedNode);
-      await loadTree();
-    } catch (err: any) {
-      setEditError(err.response?.data?.message || "Lỗi khi cập nhật tổ chức");
+      loadTree();
+      showAlert("success", "Đã cập nhật đơn vị.");
+    } catch (err) {
+      setEditError(apiMessage(err, "Lỗi khi cập nhật tổ chức"));
     } finally {
       setIsEditSubmitting(false);
     }
@@ -99,57 +81,53 @@ export default function OrganizationTree() {
     if (!confirm(`Bạn có chắc chắn muốn xóa đơn vị "${selectedNode.tenDonVi}"?`)) return;
     try {
       await deleteUnionUnit(selectedNode.id);
-      setSelectedNode(null);
-      await loadTree();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Lỗi khi xóa tổ chức");
+      setSelectedId(null);
+      loadTree();
+    } catch (err) {
+      showAlert("error", apiMessage(err, "Lỗi khi xóa tổ chức"));
     }
-  };
-
-  const toggleExpand = (id: string) => {
-    setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   const getBadgeColor = (type: string) => {
     switch (type) {
-      case "CDCS": return "bg-red-500/10 text-red-400 border-red-500/20";
-      case "CDBP": return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-      case "TO_CD_TRUC_THUOC_CDCS": return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-      default: return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+      case "CDCS": return "bg-danger-soft text-danger border-danger-line";
+      case "CDBP": return "bg-brand-soft text-brand border-brand-line";
+      case "TO_CD_TRUC_THUOC_CDCS": return "bg-gold-soft text-gold-ink border-gold-line";
+      default: return "bg-brand-soft text-brand border-brand-line";
     }
   };
 
   const isLeafNode = (type: string) => type === "TO_CD_THUOC_CDBP" || type === "TO_CD_TRUC_THUOC_CDCS";
 
   const handleAddChild = async () => {
-    if (!selectedNode || !addName.trim()) return;
+    if ((addType !== "CDCS" && !selectedNode) || !addName.trim()) return;
     setIsSubmitting(true);
     setAddError("");
 
-    const loaiMap: Record<string, number> = {
-      CDBP: 2,
-      TOCD_TRUC_THUOC: 3,
-      TOCD_CDBP: 4
-    };
+    const loaiMap = {
+      CDCS: "CDCS",
+      CDBP: "CDBP",
+      TOCD_TRUC_THUOC: "TO_CD_TRUC_THUOC_CDCS",
+      TOCD_CDBP: "TO_CD_THUOC_CDBP"
+    } as const;
 
     try {
       await createUnionUnit({
         tenDonVi: addName.trim(),
         loaiToChuc: loaiMap[addType],
-        maParent: selectedNode.id
+        maParent: selectedNode?.id
       });
       setShowAddModal(false);
       setAddName("");
-      await loadTree();
+      loadTree();
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      setAddError(error?.response?.data?.message || "Lỗi khi tạo tổ chức con");
+      setAddError(apiMessage(err, "Lỗi khi tạo tổ chức con"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const openAddModal = (type: "CDBP" | "TOCD_TRUC_THUOC" | "TOCD_CDBP") => {
+  const openAddModal = (type: "CDCS" | "CDBP" | "TOCD_TRUC_THUOC" | "TOCD_CDBP") => {
     setAddType(type);
     setAddName("");
     setAddError("");
@@ -158,36 +136,37 @@ export default function OrganizationTree() {
 
   const renderNode = (node: UnionUnitDto) => {
     const hasChildren = node.children && node.children.length > 0;
-    const isExpanded = expandedNodes[node.id];
+    const isExpanded = expandedNodes[node.id] ?? node.level <= 2;
     const isSelected = selectedNode?.id === node.id;
 
     return (
-      <div key={node.id} className="ml-6 border-l border-slate-800/80 pl-4 py-1.5 space-y-1.5">
+      <div key={node.id} className="ml-2 space-y-1.5 border-l border-line py-1.5 pl-2 sm:ml-4 sm:pl-3">
         <div
-          onClick={() => setSelectedNode(node)}
-          className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+          className={`flex min-w-0 flex-col items-start gap-2 rounded-xl border p-2 sm:flex-row sm:items-center sm:justify-between sm:p-3 ${
             isSelected
-              ? "bg-slate-800/80 border-emerald-500 shadow-md shadow-emerald-950/20"
-              : "bg-slate-950/20 border-slate-800/60 hover:bg-slate-900 hover:border-slate-700"
+              ? "border-brand bg-brand-soft"
+              : "border-line bg-surface hover:border-brand-line hover:bg-soft"
           }`}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2">
             {hasChildren && (
               <button
-                onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
-                className="w-5 h-5 rounded-md hover:bg-slate-800 text-slate-400 flex items-center justify-center text-xs"
+                type="button" aria-expanded={isExpanded} aria-label={`${isExpanded ? "Thu gọn" : "Mở rộng"} ${node.tenDonVi}`}
+                onClick={() => setExpandedNodes(current => ({ ...current, [node.id]: !isExpanded }))}
+                className="size-7 shrink-0 rounded-md hover:bg-soft text-muted flex items-center justify-center text-xs"
               >
                 {isExpanded ? "▼" : "▶"}
               </button>
             )}
             {!hasChildren && <span className="w-5" />}
-            <span className="font-semibold text-sm text-slate-100">{node.tenDonVi}</span>
+            <button type="button" onClick={() => setSelectedId(node.id)} aria-pressed={isSelected}
+              className="min-w-0 break-words text-left text-sm font-semibold text-ink hover:underline">{node.tenDonVi}</button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getBadgeColor(node.loaiToChuc)}`}>
               Lv.{node.level} • {loaiToChucMap[node.loaiToChuc] || node.loaiToChuc}
             </span>
-            <span className="text-xs text-slate-400 font-medium">({node.soDoanVien} ĐV)</span>
+            <span className="text-xs text-muted font-medium">({node.soDoanVien} ĐV)</span>
           </div>
         </div>
         {hasChildren && isExpanded && (
@@ -199,123 +178,123 @@ export default function OrganizationTree() {
     );
   };
 
-  if (!tree) return <div className="text-slate-400 text-sm p-8">Đang tải cây tổ chức...</div>;
+  if (treeLoading) return <LoadState loading />;
+  if (treeError) return <LoadState message="Không thể tải cây tổ chức." retry={loadTree} />;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6">
+      <Notice value={notice} dismiss={dismiss} />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Sơ đồ Cây Tổ chức Công đoàn</h2>
-          <p className="text-xs text-slate-400">Quản lý và thiết lập phân cấp 3 cấp theo quy chế BV TWQĐ 108 — Đăng nhập: <span className="text-emerald-400">{user?.vaiTro}</span></p>
+          <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Cây tổ chức công đoàn</h1>
+          <p className="mt-1 text-sm text-muted">CĐBP có thể có hoặc không có tổ. Tổ có thể trực thuộc CĐCS hoặc CĐBP.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
         {/* Left Tree */}
-        <div className="lg:col-span-2 bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800/60">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Cấu trúc phân cấp</span>
-            <div className="flex gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 my-auto" />
-              <span className="text-[10px] text-slate-400">Tổ CĐ luôn là cấp cuối cùng</span>
-            </div>
+        <div className="panel p-4 sm:p-6 xl:col-span-2">
+          <div className="mb-4 border-b border-line pb-3">
+            <h2 className="text-base font-bold text-ink">Cấu trúc phân cấp</h2>
           </div>
-          <div className="-ml-6">{renderNode(tree)}</div>
+          <div className="-ml-2 sm:-ml-4">{tree ? renderNode(tree) : (
+            <div className="ml-6 space-y-3 text-sm text-muted">
+              <p>Chưa có đơn vị trong phạm vi này.</p>
+              {user?.role === "ADMIN" &&
+                <button type="button" onClick={() => openAddModal("CDCS")} className="rounded bg-brand-hover px-3 py-2 text-white">Tạo Công đoàn cơ sở</button>}
+            </div>
+          )}</div>
         </div>
 
         {/* Right Detail Panel */}
-        <div className="bg-slate-950/40 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-6">
+        <div className="panel space-y-6 p-4 sm:p-6">
           {selectedNode && (
             <>
               <div>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Chi tiết Đơn vị được chọn</span>
-                <h3 className="text-lg font-bold text-white mt-1">{selectedNode.tenDonVi}</h3>
-                <p className="text-xs text-slate-400 mt-1">Cấp: Level {selectedNode.level} — {loaiToChucMap[selectedNode.loaiToChuc]}</p>
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Chi tiết Đơn vị được chọn</span>
+                <h3 className="text-lg font-bold text-ink mt-1">{selectedNode.tenDonVi}</h3>
+                <p className="text-xs text-muted mt-1">Cấp: Level {selectedNode.level} — {loaiToChucMap[selectedNode.loaiToChuc]}</p>
               </div>
 
               <div className="space-y-3">
-                <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between text-xs">
-                  <span className="text-slate-400">Số lượng đoàn viên:</span>
-                  <span className="font-semibold text-emerald-400">{selectedNode.soDoanVien} (Đếm tự động)</span>
+                <div className="flex flex-wrap justify-between gap-2 rounded-xl border border-line bg-soft p-3 text-xs">
+                  <span className="text-muted">Số lượng đoàn viên:</span>
+                  <span className="font-semibold text-brand">{selectedNode.soDoanVien} (Đếm tự động)</span>
                 </div>
                 
                 {/* Thống kê chi tiết đoàn viên */}
-                <div className="p-3.5 bg-slate-950/40 rounded-xl border border-slate-800 text-xs space-y-2.5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Cơ cấu đoàn viên (Đệ quy)</span>
+                <div className="p-3.5 bg-surface rounded-xl border border-line text-xs space-y-2.5">
+                  <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Cơ cấu đoàn viên (Đệ quy)</span>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
-                    <div className="flex justify-between border-r border-slate-800/80 pr-3">
-                      <span className="text-slate-400">Nam:</span>
-                      <span className="font-semibold text-blue-400">{selectedNode.soDoanVienNam ?? 0}</span>
+                    <div className="flex justify-between border-r border-line pr-3">
+                      <span className="text-muted">Nam:</span>
+                      <span className="font-semibold text-brand">{selectedNode.soDoanVienNam ?? 0}</span>
                     </div>
                     <div className="flex justify-between pl-1">
-                      <span className="text-slate-400">Nữ:</span>
-                      <span className="font-semibold text-pink-400">{selectedNode.soDoanVienNu ?? 0}</span>
+                      <span className="text-muted">Nữ:</span>
+                      <span className="font-semibold text-danger">{selectedNode.soDoanVienNu ?? 0}</span>
                     </div>
-                    <div className="flex justify-between border-r border-slate-800/80 pr-3">
-                      <span className="text-slate-400">Đảng viên:</span>
-                      <span className="font-semibold text-red-400">★ {selectedNode.soDoanVienDangVien ?? 0}</span>
+                    <div className="flex justify-between border-r border-line pr-3">
+                      <span className="text-muted">Đảng viên:</span>
+                      <span className="font-semibold text-danger">★ {selectedNode.soDoanVienDangVien ?? 0}</span>
                     </div>
                     <div className="flex justify-between pl-1">
-                      <span className="text-slate-400">Ngoại ngữ:</span>
-                      <span className="font-semibold text-emerald-400">🌐 {selectedNode.soCoNgoaiNgu ?? 0}</span>
+                      <span className="text-muted">Ngoại ngữ:</span>
+                      <span className="font-semibold text-brand">🌐 {selectedNode.soCoNgoaiNgu ?? 0}</span>
                     </div>
-                    <div className="col-span-2 flex justify-between pt-1.5 border-t border-slate-800/80">
-                      <span className="text-slate-400">Đại học trở lên:</span>
-                      <span className="font-semibold text-purple-400">{selectedNode.soTrinhDoDaiHoc ?? 0}</span>
+                    <div className="col-span-2 flex justify-between pt-1.5 border-t border-line">
+                      <span className="text-muted">Đại học trở lên:</span>
+                      <span className="font-semibold text-violet-ink">{selectedNode.soTrinhDoDaiHoc ?? 0}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between text-xs">
-                  <span className="text-slate-400">Đơn vị con:</span>
-                  <span className="font-semibold text-slate-200">{selectedNode.children?.length || 0} đơn vị</span>
+                <div className="p-3 bg-soft rounded-xl border border-line flex justify-between text-xs">
+                  <span className="text-muted">{selectedNode.loaiToChuc === "CDBP" ? "Tổ trực thuộc" : "Đơn vị trực thuộc"}</span>
+                  <span className="font-semibold text-ink">
+                    {selectedNode.loaiToChuc === "CDBP"
+                      ? selectedNode.children.length === 0 ? "Chưa có tổ công đoàn" : `${selectedNode.children.length} tổ`
+                      : `${selectedNode.children.length} đơn vị`}
+                  </span>
                 </div>
               </div>
 
               {/* Add child actions */}
-              <div className="pt-4 border-t border-slate-800">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-3">Tác vụ Quản lý con</span>
+              {canManageUnits && !isLeafNode(selectedNode.loaiToChuc) && <div className="pt-4 border-t border-line">
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-3">Thêm đơn vị trực thuộc</span>
 
-                {isLeafNode(selectedNode.loaiToChuc) ? (
-                  <div className="space-y-3">
-                    <button disabled className="w-full bg-slate-800 text-slate-500 cursor-not-allowed py-2.5 rounded-xl text-xs font-semibold border border-slate-700/50">
-                      🔒 Thêm Tổ chức con (Đã khóa)
-                    </button>
-                    <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-lg text-[10px] text-red-400 leading-relaxed">
-                      ⚠️ Tổ CĐ là đơn vị cuối cùng. Không cho phép tạo cấp con dưới Tổ CĐ.
-                    </div>
-                  </div>
-                ) : selectedNode.loaiToChuc === "CDCS" ? (
+                {selectedNode.loaiToChuc === "CDCS" ? (
                   <div className="space-y-2">
-                    <button onClick={() => openAddModal("CDBP")} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-semibold transition-all">
-                      ➕ Thêm Công đoàn Bộ phận (Level 2)
+                    <button onClick={() => openAddModal("CDBP")} className="w-full bg-brand hover:bg-brand-hover text-white py-2.5 rounded-xl text-xs font-semibold transition-all">
+                      Thêm Công đoàn Bộ phận
                     </button>
-                    <button onClick={() => openAddModal("TOCD_TRUC_THUOC")} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-xl text-xs font-semibold transition-all border border-slate-700">
-                      ➕ Thêm Tổ CĐ trực thuộc (Level 2)
+                    <button onClick={() => openAddModal("TOCD_TRUC_THUOC")} className="w-full bg-soft hover:bg-soft-strong text-ink py-2.5 rounded-xl text-xs font-semibold transition-all border border-line">
+                      Thêm tổ trực thuộc CĐCS
                     </button>
                   </div>
                 ) : selectedNode.loaiToChuc === "CDBP" ? (
-                  <button onClick={() => openAddModal("TOCD_CDBP")} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-semibold transition-all">
-                    ➕ Thêm Tổ CĐ thuộc CĐBP (Level 3)
+                  <button onClick={() => openAddModal("TOCD_CDBP")} className="w-full bg-brand hover:bg-brand-hover text-white py-2.5 rounded-xl text-xs font-semibold transition-all">
+                    Thêm tổ thuộc CĐBP
                   </button>
                 ) : null}
-              </div>
+              </div>}
 
               {/* Status */}
-              <div className="pt-4 border-t border-slate-800/80">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Trạng thái</span>
-                <span className="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
-                  Đang hoạt động
+              <div className="pt-4 border-t border-line">
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Trạng thái</span>
+                <span className={`rounded px-2.5 py-1 text-xs font-semibold ${selectedNode.trangThai === 1
+                  ? "bg-brand-soft text-brand-hover" : "bg-soft-strong text-ink"}`}>
+                  {selectedNode.trangThai === 1 ? "Đang hoạt động" : "Ngừng hoạt động"}
                 </span>
               </div>
 
               {/* Unit Actions */}
-              <div className="pt-4 border-t border-slate-800">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-3">Tác vụ Đơn vị</span>
+              <div className="pt-4 border-t border-line">
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-3">Tác vụ Đơn vị</span>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => openEditModal(selectedNode)}
-                    className="bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 py-2.5 rounded-xl text-xs font-semibold transition-all text-center"
+                    className="bg-brand-soft hover:bg-soft-strong border border-brand-line text-brand py-2.5 rounded-xl text-xs font-semibold transition-all text-center"
                   >
                     ✏️ Sửa Đơn vị
                   </button>
@@ -324,8 +303,8 @@ export default function OrganizationTree() {
                     disabled={selectedNode.loaiToChuc === "CDCS"}
                     className={`py-2.5 rounded-xl text-xs font-semibold border transition-all text-center ${
                       selectedNode.loaiToChuc === "CDCS"
-                        ? "bg-slate-800 text-slate-500 border-slate-700/50 cursor-not-allowed"
-                        : "bg-red-600/10 hover:bg-red-600/20 border-red-500/20 text-red-400"
+                        ? "bg-soft text-muted border-line cursor-not-allowed"
+                        : "bg-danger-soft hover:bg-danger-line border-danger-line text-danger"
                     }`}
                   >
                     🗑️ Xóa Đơn vị
@@ -339,42 +318,41 @@ export default function OrganizationTree() {
 
       {/* Add Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-6">
+        <FormDialog label="Thêm đơn vị" onClose={() => { setShowAddModal(false); dismiss(); }} busy={isSubmitting}>
             <div>
-              <h3 className="text-base font-bold text-white">Thêm tổ chức công đoàn mới</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Tạo {addType === "CDBP" ? "Công đoàn Bộ phận" : "Tổ Công đoàn"} trực thuộc <span className="text-emerald-400">{selectedNode?.tenDonVi}</span>
+              <h3 className="text-base font-bold text-ink">Thêm tổ chức công đoàn mới</h3>
+              <p className="text-xs text-muted mt-1">
+                {addType === "CDCS" ? "Tạo Công đoàn cơ sở" : `Tạo đơn vị trực thuộc ${selectedNode?.tenDonVi ?? ""}`}
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Loại tổ chức</label>
-                <div className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-emerald-400 font-medium">
-                  {addType === "CDBP" ? "Công đoàn Bộ phận (CĐBP)" : addType === "TOCD_TRUC_THUOC" ? "Tổ CĐ trực thuộc CĐCS" : "Tổ CĐ thuộc CĐBP"}
+                <label className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Loại tổ chức</label>
+                <div className="bg-surface border border-line rounded-xl px-4 py-2.5 text-sm text-brand font-medium">
+                  {addType === "CDCS" ? "Công đoàn cơ sở" : addType === "CDBP" ? "Công đoàn Bộ phận (CĐBP)" : addType === "TOCD_TRUC_THUOC" ? "Tổ CĐ trực thuộc CĐCS" : "Tổ CĐ thuộc CĐBP"}
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Tên đơn vị *</label>
-                <input
+                <label htmlFor="organizations-field-1" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Tên đơn vị *</label>
+                <input id="organizations-field-1"
                   type="text"
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
                   placeholder="VD: Công đoàn bộ phận Khối Gây mê Hồi sức"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-surface border border-line rounded-xl px-4 py-2.5 text-sm text-ink focus:outline-none focus:border-brand transition-all"
                 />
               </div>
             </div>
 
             {addError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
+              <div className="p-3 bg-danger-soft border border-danger-line rounded-xl text-xs text-danger">
                 ⚠️ {addError}
               </div>
             )}
 
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowAddModal(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-700 transition-all">
+              <button onClick={() => { setShowAddModal(false); dismiss(); }} disabled={isSubmitting} className="bg-soft hover:bg-soft-strong text-copy text-xs font-semibold px-4 py-2 rounded-xl border border-line transition-all">
                 Hủy bỏ
               </button>
               <button
@@ -382,46 +360,44 @@ export default function OrganizationTree() {
                 disabled={!addName.trim() || isSubmitting}
                 className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
                   addName.trim() && !isSubmitting
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/20"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50"
+                    ? "bg-brand hover:bg-brand-hover text-white shadow-md shadow-brand-strong/20"
+                    : "bg-soft text-muted cursor-not-allowed border border-line"
                 }`}
               >
                 {isSubmitting ? "Đang tạo..." : "Xác nhận tạo"}
               </button>
             </div>
-          </div>
-        </div>
+        </FormDialog>
       )}
 
       {/* Edit Modal */}
       {showEditModal && selectedNode && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-6">
+        <FormDialog label="Sửa đơn vị" onClose={() => { setShowEditModal(false); dismiss(); }} busy={isEditSubmitting}>
             <div>
-              <h3 className="text-base font-bold text-white">Chỉnh sửa thông tin tổ chức</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Cập nhật thông tin cho đơn vị <span className="text-emerald-400 font-semibold">{selectedNode.tenDonVi}</span>
+              <h3 className="text-base font-bold text-ink">Chỉnh sửa thông tin tổ chức</h3>
+              <p className="text-xs text-muted mt-1">
+                Cập nhật thông tin cho đơn vị <span className="text-brand font-semibold">{selectedNode.tenDonVi}</span>
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Tên đơn vị *</label>
-                <input
+                <label htmlFor="organizations-field-2" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Tên đơn vị *</label>
+                <input id="organizations-field-2"
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="Nhập tên đơn vị..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-surface border border-line rounded-xl px-4 py-2.5 text-sm text-ink focus:outline-none focus:border-brand transition-all"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Trạng thái hoạt động</label>
-                <select
+                <label htmlFor="organizations-field-3" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Trạng thái hoạt động</label>
+                <select id="organizations-field-3"
                   value={editStatus}
                   onChange={(e) => setEditStatus(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 transition-all"
+                  className="w-full bg-surface border border-line rounded-xl px-4 py-2.5 text-sm text-ink focus:outline-none focus:border-brand transition-all"
                 >
                   <option value={1}>Đang hoạt động</option>
                   <option value={0}>Ngừng hoạt động</option>
@@ -430,15 +406,15 @@ export default function OrganizationTree() {
             </div>
 
             {editError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
+              <div className="p-3 bg-danger-soft border border-danger-line rounded-xl text-xs text-danger">
                 ⚠️ {editError}
               </div>
             )}
 
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => setShowEditModal(false)}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-700 transition-all"
+                onClick={() => { setShowEditModal(false); dismiss(); }} disabled={isEditSubmitting}
+                className="bg-soft hover:bg-soft-strong text-copy text-xs font-semibold px-4 py-2 rounded-xl border border-line transition-all"
               >
                 Hủy bỏ
               </button>
@@ -447,15 +423,14 @@ export default function OrganizationTree() {
                 disabled={!editName.trim() || isEditSubmitting}
                 className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
                   editName.trim() && !isEditSubmitting
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/20"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50"
+                    ? "bg-brand hover:bg-brand-hover text-white shadow-md shadow-brand-strong/20"
+                    : "bg-soft text-muted cursor-not-allowed border border-line"
                 }`}
               >
                 {isEditSubmitting ? "Đang lưu..." : "Xác nhận lưu"}
               </button>
             </div>
-          </div>
-        </div>
+        </FormDialog>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Domain.Enums;
 
@@ -53,24 +54,33 @@ public class GetUnionMembersResult
 public class GetUnionMembersQueryHandler : IRequestHandler<GetUnionMembersQuery, GetUnionMembersResult>
 {
     private readonly IQLCDDbContext _context;
+    private readonly IOrganizationScopeService _scopeService;
 
-    public GetUnionMembersQueryHandler(IQLCDDbContext context)
+    public GetUnionMembersQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService)
     {
         _context = context;
+        _scopeService = scopeService;
     }
 
     public async Task<GetUnionMembersResult> Handle(GetUnionMembersQuery request, CancellationToken cancellationToken)
     {
-        var query = _context.DoanViens.AsQueryable();
+        var offset = PageBounds.Offset(request.Page, request.PageSize);
+        var query = _context.DoanViens.AsNoTracking();
+
+        // 1. Phân quyền Phạm vi dữ liệu (Scope Filtering)
+        var allowedOrgIds = await _scopeService.GetAllowedOrganizationIdsAsync(cancellationToken);
+        if (allowedOrgIds != null)
+        {
+            query = query.Where(d => allowedOrgIds.Contains(d.MaToCongDoan));
+        }
 
         // Filter by search term
-        if (!string.IsNullOrWhiteSpace(request.Search))
+        var search = PageBounds.Search(request.Search);
+        if (search is not null)
         {
-            var search = request.Search.ToLower();
             query = query.Where(d =>
                 d.HoTen.ToLower().Contains(search) ||
-                d.MaNhanVien.ToLower().Contains(search) ||
-                d.SoCCCD.Contains(search));
+                d.MaNhanVien.ToLower().Contains(search));
         }
 
         // Filter by Tổ Công đoàn
@@ -95,14 +105,15 @@ public class GetUnionMembersQueryHandler : IRequestHandler<GetUnionMembersQuery,
 
         var items = await query
             .OrderBy(d => d.HoTen)
-            .Skip((request.Page - 1) * request.PageSize)
+            .ThenBy(d => d.Id)
+            .Skip(offset)
             .Take(request.PageSize)
             .Select(d => new UnionMemberDto
             {
                 Id = d.Id,
                 HoTen = d.HoTen,
                 MaNhanVien = d.MaNhanVien,
-                SoCCCD = d.SoCCCD,
+                SoCCCD = d.SoCCCD.Length > 4 ? "********" + d.SoCCCD.Substring(d.SoCCCD.Length - 4) : "****",
                 NgaySinh = d.NgaySinh,
                 GioiTinh = d.GioiTinh,
                 ChucVu = d.ChucVu,
@@ -114,8 +125,6 @@ public class GetUnionMembersQueryHandler : IRequestHandler<GetUnionMembersQuery,
                 TrangThai = d.TrangThai,
                 NgayVaoCongDoan = d.NgayVaoCongDoan,
                 DangVien = d.DangVien,
-                DienThoai = d.DienThoai,
-                Email = d.Email,
                 TrinhDoHocVan = d.TrinhDoHocVan
             })
             .ToListAsync(cancellationToken);

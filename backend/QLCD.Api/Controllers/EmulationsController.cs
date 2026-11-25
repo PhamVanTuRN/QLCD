@@ -1,5 +1,6 @@
+using QLCD.Application.Common;
+using QLCD.Domain.Security;
 using System;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -11,7 +12,7 @@ namespace QLCD.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/emulations")]
-[Authorize]
+[Authorize(Roles = SecurityRoles.Business)]
 public class EmulationsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -21,118 +22,54 @@ public class EmulationsController : ControllerBase
         _mediator = mediator;
     }
 
-    private string? GetUserRole() => User.FindFirst(ClaimTypes.Role)?.Value;
-
-    private Guid? GetScopeOrgId()
+    [HttpGet]
+    public async Task<IActionResult> Get([FromQuery] string? search, [FromQuery] int? nam, [FromQuery] string? xepLoai, [FromQuery] int page = 1, [FromQuery] int pageSize = PageBounds.DefaultSize)
     {
-        var val = User.FindFirst("OrganizationId")?.Value;
-        return Guid.TryParse(val, out Guid orgId) ? orgId : null;
+        var query = new GetEmulationsQuery
+        {
+            Page = page,
+            PageSize = pageSize,
+            Search = search,
+            Nam = nam,
+            XepLoai = xepLoai,
+        };
+        var list = await _mediator.Send(query, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = list.Take(pageSize), hasMore = list.Count > pageSize });
     }
 
-    [HttpGet]
-    public async Task<IActionResult> Get([FromQuery] string? search, [FromQuery] int? nam, [FromQuery] string? xepLoai)
+    [HttpGet("summary")]
+    public async Task<IActionResult> GetSummary([FromQuery] int nam)
     {
-        try
-        {
-            var query = new GetEmulationsQuery
-            {
-                Search = search,
-                Nam = nam,
-                XepLoai = xepLoai,
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            };
-            var list = await _mediator.Send(query);
-            return Ok(new { success = true, data = list });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        var summary = await _mediator.Send(new GetEmulationSummaryQuery(nam), HttpContext.RequestAborted);
+        return Ok(new { success = true, data = summary });
     }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateEmulationCommand command)
     {
-        try
-        {
-            var finalCommand = command with
-            {
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            };
-            var id = await _mediator.Send(finalCommand);
-            return Ok(new { success = true, data = id });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        var id = await _mediator.Send(command, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = id });
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateEmulationCommand command)
     {
-        try
+        if (id != command.Id)
         {
-            if (id != command.Id)
-            {
-                return BadRequest(new { success = false, message = "ID không trùng khớp." });
-            }
-            var finalCommand = command with
-            {
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            };
-            var result = await _mediator.Send(finalCommand);
-            return Ok(new { success = true, data = result });
+            return BadRequest(new { success = false, message = "ID không trùng khớp." });
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+        var result = await _mediator.Send(command, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = result });
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = SecurityRoles.Central + "," + SecurityRoles.Department)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        try
+        var result = await _mediator.Send(new DeleteEmulationCommand
         {
-            var result = await _mediator.Send(new DeleteEmulationCommand
-            {
-                Id = id,
-                ScopeOrgId = GetScopeOrgId(),
-                UserRole = GetUserRole()
-            });
-            return Ok(new { success = true, data = result });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi hệ thống: " + ex.Message });
-        }
+            Id = id,
+        }, HttpContext.RequestAborted);
+        return Ok(new { success = true, data = result });
     }
 }
