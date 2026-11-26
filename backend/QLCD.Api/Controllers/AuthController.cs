@@ -23,6 +23,7 @@ public sealed class AuthController(
     LoginThrottle throttle,
     IDataProtectionProvider protection,
     TotpVerifier totp,
+    TimeProvider clock,
     ILogger<AuthController> logger) : ControllerBase
 {
     [AllowAnonymous]
@@ -52,15 +53,10 @@ public sealed class AuthController(
 
     private async Task<IActionResult> SignIn(LoginCommand command, CancellationToken cancellationToken)
     {
-        if (!(command.VerifiedPassword is { } proofToCheck
-            ? throttle.TryAcquireSecondFactor(proofToCheck.AccountId)
-            : throttle.TryAcquire(command.Username)))
-        {
-            await ApiErrors.WriteAsync(HttpContext, 429, "Vui lòng thử đăng nhập lại sau.", cancellationToken);
-            return new EmptyResult();
-        }
-
-        var result = await mediator.Send(command, cancellationToken);
+        var attempt = await mediator.Send(command with { Trace = HttpContext.TraceIdentifier }, cancellationToken);
+        if (attempt.RetryAfterSeconds(clock.GetUtcNow().UtcDateTime) is int seconds)
+            return AuthLoginResponse.Locked(this, seconds);
+        var result = attempt.Value;
         if (result?.Proof is { } proof)
         {
             var challenge = protection.Protect(AuthenticatorTickets.LoginPurpose,
@@ -70,10 +66,10 @@ public sealed class AuthController(
         logger.LogInformation("Account sign-in {Succeeded} actor {AccountId} trace {Trace}",
             result is not null, result?.Profile.Id, HttpContext.TraceIdentifier);
         if (result is null)
-            return Unauthorized(new { success = false, message = "Thông tin đăng nhập hoặc mã xác thực không hợp lệ." });
+            return Unauthorized(new { success = false, message = AuthLoginResponse.InvalidCredentials });
 
         Response.Cookies.Append(SessionAuthenticationHandler.CookieName(environment), result.SessionToken!,
-            SessionCookie(result.ExpiresAtUtc));
+            SessionAuthenticationHandler.CookieOptions(environment, result.ExpiresAtUtc));
         return Ok(new { success = true, data = result.Profile });
     }
 
@@ -126,6 +122,7 @@ public sealed class AuthController(
         account.LastMfaStep = step;
         account.SecurityVersion = Guid.NewGuid();
         account.MustChangePassword = false;
+        account.RecommendPasswordChange = false;
         account.TemporaryPasswordExpiresUtc = null;
         database.AuditLogs.Add(AccountCredentials.Event(account.Id, account.Id, "PASSWORD_CHANGE", HttpContext.TraceIdentifier));
         await database.SaveChangesAsync(cancellationToken);
@@ -133,17 +130,8 @@ public sealed class AuthController(
         return NoContent();
     }
 
-    private void ClearCookie() => Response.Cookies.Delete(SessionAuthenticationHandler.CookieName(environment), SessionCookie());
-
-    private CookieOptions SessionCookie(DateTime? expiration = null) => new()
-    {
-        Secure = !environment.IsDevelopment() && !environment.IsEnvironment("Testing"),
-        HttpOnly = true,
-        SameSite = SameSiteMode.Strict,
-        Path = "/",
-        IsEssential = true,
-        Expires = expiration,
-    };
+    private void ClearCookie() => Response.Cookies.Delete(SessionAuthenticationHandler.CookieName(environment),
+        SessionAuthenticationHandler.CookieOptions(environment));
 
 }
 

@@ -7,9 +7,9 @@ description: >-
 # Quy trình
 
 
-1. Đọc AGENTS.md, docs/PROJECT_OVERVIEW.md và docs/PROJECT_AUDIT.md từ gốc repo. So sánh working tree với Git để phân biệt thay đổi đã có và phần sửa mới.
-2. Ghi đường cơ sở theo SDK, provider, vai trò, trang và dữ liệu thử. Đối chiếu từng nghiệp vụ với tài liệu và hành vi UI/API có thể chạy.
-3. Ưu tiên chặn mất dữ liệu, sai quyền và lỗi luồng chính. Đánh dấu yêu cầu còn chờ quyết định ở TASK_TRACKER.md.
+1. Đọc [AGENTS](../../../AGENTS.md), [tổng quan](../../../docs/PROJECT_OVERVIEW.md) và [tiến độ](../../../docs/TASK_TRACKER.md). Dùng [kiểm kê ban đầu](../../../docs/PROJECT_AUDIT.md) khi cần so sánh lịch sử. Đối chiếu working tree với Git để nhận diện thay đổi đã có.
+2. Ghi đường cơ sở theo SDK, provider, vai trò, trang, dữ liệu thử và mốc migration quan sát được. Đối chiếu nghiệp vụ với UI, API, handler và dữ liệu. Gắn ngày cho số liệu và xác định môi trường của bằng chứng.
+3. Ưu tiên chặn mất dữ liệu, sai quyền và lỗi luồng chính. Ghi kết quả và yêu cầu chờ quyết định trong `TASK_TRACKER.md`. Dùng [báo cáo bảo mật hiện hành](../../../docs/security-audit/SECURITY_AUDIT.md) khi đối chiếu rủi ro và điều kiện phát hành.
 
 # Kiểm tra
 

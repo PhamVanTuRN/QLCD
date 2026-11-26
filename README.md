@@ -2,6 +2,8 @@
 
 QLCD quản lý cơ cấu công đoàn, hồ sơ đoàn viên, hoạt động, đoàn phí, phúc lợi, sáng kiến và thi đua cho Bệnh viện Trung ương Quân đội 108. Next.js phục vụ giao diện tiếng Việt. ASP.NET Core xử lý API và phân quyền. EF Core lưu nghiệp vụ trên SQL Server.
 
+Tra cứu theo nhiệm vụ. [Tổng quan và quyền](docs/PROJECT_OVERVIEW.md) · [Hợp đồng API v1](docs/10-API-Specification.md) · [Xác thực](docs/AUTHENTICATION.md) · [Vận hành và migration](docs/SECURITY.md) · [Kiểm thử](docs/TESTING.md) · [Kiểm duyệt bảo mật](docs/security-audit/SECURITY_AUDIT.md) · [Hướng dẫn agent](AGENTS.md)
+
 ## Khởi chạy local
 
 Yêu cầu .NET SDK 10 và Node.js 20.9 trở lên. CI dùng Node.js 24. Chạy hai terminal từ thư mục gốc. Phiên local dưới đây dùng cơ sở dữ liệu InMemory và tài khoản quản trị tạm.
@@ -23,7 +25,7 @@ npm ci --no-audit --no-fund
 npm run dev
 ~~~
 
-Mở `http://localhost:3000`, đăng nhập bằng mật khẩu khởi tạo và mã kích hoạt riêng. Quét QR, nhập OTP, lưu mã khôi phục và đổi mật khẩu. Sau đó tạo CĐCS, CĐBP hoặc tổ công đoàn. Trong **Tài khoản**, xác minh người nhận và cấp mã kích hoạt cho tài khoản mới. Dữ liệu InMemory mất khi dừng API. [Thiết lập Authenticator](docs/TWO_FACTOR_AUTHENTICATION.md) · [Khôi phục tài khoản](docs/ACCOUNT_RECOVERY.md)
+Mở `http://localhost:3000`. Lần đầu chọn **Thiết lập Authenticator bằng mã kích hoạt**, nhập tên đăng nhập, mật khẩu khởi tạo và mã kích hoạt riêng. Quét QR và xác nhận OTP để vào phần mềm, sau đó lưu bộ mã khôi phục được hiển thị một lần. Bạn có thể đổi mật khẩu sau. Những lần sau dùng form mặc định và xác nhận OTP. Tạo CĐCS, CĐBP hoặc tổ công đoàn. Trong **Tài khoản**, xác minh người nhận và cấp mã kích hoạt cho tài khoản mới. Dữ liệu InMemory mất khi dừng API. [Thiết lập Authenticator](docs/TWO_FACTOR_AUTHENTICATION.md) · [Khôi phục tài khoản](docs/ACCOUNT_RECOVERY.md)
 
 ### Chạy local với SQL Server Express
 

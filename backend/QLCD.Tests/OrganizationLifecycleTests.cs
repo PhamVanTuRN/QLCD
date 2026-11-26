@@ -129,7 +129,7 @@ public sealed class OrganizationLifecycleTests : IAsyncLifetime
         var scope = new OrganizationScopeService(childUser, db);
         Assert.Empty((await scope.GetAllowedOrganizationIdsAsync())!); Assert.False(await scope.IsInScopeAsync(child.Id));
         var login = new LoginCommandHandler(db, new Mfa(), TimeProvider.System);
-        Assert.Null(await login.Handle(new LoginCommand(account.Username, "FixturePassword1!"), default));
+        Assert.Null((await login.Handle(new LoginCommand(account.Username, "FixturePassword1!"), default)).Value);
         Assert.False((await ListAccounts()).Single(a => a.Id == account.Id).CanSignIn);
         await Assert.ThrowsAsync<OrganizationStateException>(() => Restore(child.Id));
         await Assert.ThrowsAsync<ArgumentException>(() => new CreateUnionUnitCommandHandler(db).Handle(new CreateUnionUnitCommand { TenDonVi = "Rejected", LoaiToChuc = LoaiToChuc.TO_CD_THUOC_CDBP, MaParent = parent.Id }, default));

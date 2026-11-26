@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import BrandMark from "@/components/BrandMark";
 import { AuthenticatorQr, OtpField, RecoveryCodes, securityInput } from "@/components/AuthenticatorFields";
-import { apiMessage, beginAuthenticatorRecovery, confirmAuthenticatorSetup, type AuthenticatorSetup } from "@/lib/api";
+import { beginAuthenticatorRecovery, confirmAuthenticatorSetup, loginErrorMessage, type AuthenticatorSetup } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 const passwordRules = [
@@ -28,6 +28,8 @@ export default function LoginPage() {
   const changing = !!user && !user.needsAuthenticator && (user.mustChangePassword || search.get("change") === "1");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [enrolling, setEnrolling] = useState(false);
+  const [activationCode, setActivationCode] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [code, setCode] = useState("");
@@ -83,7 +85,7 @@ export default function LoginPage() {
       }
 
       const result = changing ? await changePassword(password, nextPassword, confirmation, code)
-        : challenge ? await verifyAuthenticator(challenge, code) : await login(username, password);
+        : challenge ? await verifyAuthenticator(challenge, code) : await login(username, password, enrolling ? activationCode.trim() : undefined);
       setCode("");
       if (!result.success) {
         if ("expired" in result && result.expired) backToPassword();
@@ -91,6 +93,8 @@ export default function LoginPage() {
         return;
       }
       setPassword("");
+      setEnrolling(false);
+      setActivationCode("");
       setNextPassword("");
       setConfirmation("");
       if ("challenge" in result && typeof result.challenge === "string") setChallenge(result.challenge);
@@ -100,7 +104,7 @@ export default function LoginPage() {
         router.replace("/login");
       }
     } catch (failure) {
-      setError(apiMessage(failure, "Không thể khôi phục Authenticator."));
+      setError(loginErrorMessage(failure, "Không thể khôi phục Authenticator."));
       setCode("");
     } finally {
       setBusy(false);
@@ -131,7 +135,7 @@ export default function LoginPage() {
           </div>
           <h1 id="login-title" className="mb-6 text-3xl font-bold tracking-tight text-ink sm:text-4xl">{title}</h1>
           {changing && user?.mustChangePassword && <p role="status" className="mb-4 rounded-lg bg-gold-soft p-3 text-sm text-gold-ink">
-            Bạn đang dùng mật khẩu tạm của tài khoản mới hoặc sau khi được đặt lại. Bạn bắt buộc đổi mật khẩu trước khi sử dụng các chức năng nghiệp vụ; xác nhận bằng Authenticator đã đăng ký.
+            Bạn đang dùng mật khẩu tạm sau khi được đặt lại. Hãy đổi mật khẩu để tiếp tục và xác nhận bằng Authenticator đã đăng ký.
           </p>}
           {replacementCodes ? <RecoveryCodes codes={replacementCodes} onContinue={() => {
             setReplacementCodes(null);
@@ -148,6 +152,12 @@ export default function LoginPage() {
                 <input className={securityInput} type="password" value={password} onChange={e => setPassword(e.target.value)}
                   autoComplete="current-password" maxLength={128} required />
               </label>}
+              {!changing && !challenge && enrolling && <div className="space-y-1 text-sm text-copy">
+                <label htmlFor="login-activation" className="block">Mã kích hoạt</label>
+                <input id="login-activation" className={securityInput} type="password" value={activationCode} onChange={e => setActivationCode(e.target.value)}
+                  autoComplete="off" spellCheck={false} maxLength={32} aria-describedby="activation-help" autoFocus required />
+                <span id="activation-help" className="block text-muted">Nhập khi thiết lập Authenticator lần đầu hoặc sau khi được Reset 2FA.</span>
+              </div>}
               {changing && <>
                 <label className="block space-y-1 text-sm text-copy">
                   <span>Mật khẩu mới</span>
@@ -186,6 +196,14 @@ export default function LoginPage() {
             {!recovering && <button type="button" disabled={busy} onClick={() => { setRecovering(true); setError(""); setCode(""); }}>Dùng mã khôi phục</button>}
             <button type="button" disabled={busy} onClick={backToPassword}>Quay lại đăng nhập</button>
           </div>}
+          {!challenge && !changing && <button type="button" disabled={busy} aria-expanded={enrolling}
+            className="mt-4 text-left text-sm font-semibold text-brand hover:underline" onClick={() => {
+              setEnrolling(!enrolling);
+              setActivationCode("");
+              setError("");
+            }}>
+            {enrolling ? "Quay lại đăng nhập thông thường" : "Thiết lập Authenticator bằng mã kích hoạt"}
+          </button>}
           {!challenge && !changing && <details className="mt-4 text-sm text-copy">
             <summary className="cursor-pointer font-semibold text-brand">Quên mật khẩu hoặc mất Authenticator?</summary>
             <p className="mt-2">Nếu còn mật khẩu và mã khôi phục, hãy nhập mật khẩu trước rồi chọn Dùng mã khôi phục. Trường hợp khác, liên hệ quản trị viên qua kênh nội bộ để xác minh danh tính.</p>

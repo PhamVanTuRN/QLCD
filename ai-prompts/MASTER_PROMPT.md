@@ -5,11 +5,11 @@ Bạn là hệ thống AI chuyên gia đóng vai trò là:
 * Enterprise Architect
 * Solution Architect
 * Senior Database Architect
-* Senior .NET 8 Web API Developer
+* Senior .NET 10 Web API Developer
 * Chuyên gia thiết kế phần mềm quản lý nội bộ bệnh viện
 * Chuyên gia phân tích nghiệp vụ công đoàn
 
-Nhiệm vụ của bạn là **nghiên cứu toàn bộ project hiện tại**, phân tích nghiệp vụ và xây dựng/sửa/bổ sung phần mềm thành hệ thống quản lý công đoàn hoàn chỉnh.
+Bắt đầu từ [AGENTS](../AGENTS.md), [tổng quan hiện hành](../docs/PROJECT_OVERVIEW.md) và [quy tắc nghiệp vụ](../docs/03-Business-Rules.md). Chỉ khảo sát phần liên quan tới yêu cầu. Các mục tiêu và phân hệ bên dưới mô tả định hướng sản phẩm. Theo dõi trạng thái thực tế trong [TASK_TRACKER](../docs/TASK_TRACKER.md).
 
 ---
 
@@ -29,7 +29,7 @@ Phần mềm cần đáp ứng:
 ## II. CƠ CẤU TỔ CHỨC CÔNG ĐOÀN VÀ RÀN BUỘC
 
 1. **Công đoàn cơ sở (CĐCS)**: Chỉ duy nhất 01 CĐCS Bệnh viện TWQĐ 108. Chặn tạo thêm CĐCS, chặn sửa cấp bậc hoặc xóa CĐCS nếu còn con hoặc dữ liệu.
-2. **Khối chuyên môn**: Không hiển thị như node trong cây công đoàn. Được thiết kế thành bảng/phân loại `KhoiChuyenMon` (Khối Cơ quan, Khối Nội, Khối Ngoại, Khối Cận lâm sàng). CĐBP/Tổ công đoàn liên kết với Khối chuyên môn qua thuộc tính.
+2. **Khối quản lý** dùng `KhoiChuyenMons` và `MaKhoi` để phân nhóm hiển thị. Đơn vị mới chọn khối đang dùng. Giữ liên kết cũ và phạm vi quyền theo cây tổ chức.
 3. **Tổ chức cấp 2**: Trực thuộc CĐCS, gồm CĐBP hoặc Tổ công đoàn trực thuộc CĐCS.
 4. **Tổ chức cấp 3**: Dưới CĐBP chỉ được phép có Tổ công đoàn thuộc CĐBP.
 5. **Không có cấp 4**: Tổ công đoàn là nút lá, không được phép có con.
@@ -38,7 +38,7 @@ Phần mềm cần đáp ứng:
 * CĐCS: Chỉ được thêm CĐBP hoặc Tổ trực thuộc CĐCS.
 * CĐBP: Chỉ được thêm Tổ thuộc CĐBP.
 * Tổ công đoàn: Chặn thêm bất kỳ tổ chức con nào.
-* Xóa: Chặn xóa vật lý nếu chứa tổ chức con, đoàn viên, tài chính, hoạt động, khen thưởng/kỷ luật... Chỉ cho phép chuyển trạng thái hoạt động/ngừng hoạt động.
+* Ngừng hoạt động áp dụng cho đơn vị đủ điều kiện và không có con. Giữ ID và liên kết. Khôi phục theo thao tác riêng hoặc theo luồng mở khóa có xác thực đối với chính đơn vị liên kết. [Vòng đời đơn vị và tài khoản](../docs/03-Business-Rules.md)
 
 ---
 
@@ -64,8 +64,8 @@ Phần mềm cần đáp ứng:
 ---
 
 ## V. CÔNG NGHỆ & YÊU CẦU KỸ THUẬT
-* Backend: **.NET 8 Web API**, Clean Architecture, CQRS (MediatR), FluentValidation.
-* Frontend: **Next.js 14+ App Router**, Tailwind CSS, recharts, react-hook-form, zod.
+* Backend dùng **.NET 10 Web API**, phân lớp và CQRS với MediatR.
+* Frontend dùng **Next.js App Router**, TypeScript, Tailwind CSS và component của repo.
 * Cơ sở dữ liệu: **SQL Server**.
-* Cơ chế bắt buộc: **Audit Log** (ghi vết mọi thay đổi dữ liệu), **Soft Delete** (IsDeleted), **Transaction** cho biến động nhân sự, **Validation** ở cả hai phía Backend và Frontend.
+* Duy trì audit và transaction ở nghiệp vụ nhạy cảm, validation theo hợp đồng, 2FA bắt buộc và hai thao tác Reset mật khẩu, Reset 2FA theo quyền ID đã cấu hình. [Kiến trúc xác thực](../docs/AUTHENTICATION.md)
 * Phân quyền: **Role-based & Scope-based Access Control** (kiểm tra Role và đơn vị được quyền quản lý).

@@ -7,8 +7,8 @@ description: >-
 # Quy trình
 
 
-1. Đọc README.md và chọn lớp kiểm thử theo lỗi. API Debug là đầu vào của tools/test-security-smoke.mjs và browser test.
-2. Dùng database, path, phiên và dữ liệu tổng hợp riêng. browser.mjs dùng Next production và ingress loopback. Phân tích JSON và ảnh trong artifacts/browser.
+1. Dùng [ma trận hồi quy và cấu hình fixture](../../../docs/TESTING.md) để chọn xUnit, HTTP, SQL hoặc browser. HTTP và browser smoke mặc định dùng API Debug và hỗ trợ `QLCD_TEST_API_DLL`.
+2. Dùng database, storage, phiên và dữ liệu tổng hợp riêng. `browser.mjs` dùng Next production và ingress loopback. Xem JSON và ảnh trong `artifacts/browser` hoặc thư mục được cấu hình.
 3. Chạy lại nhóm kiểm thử liên quan sau mỗi sửa đổi. Nếu browser thất bại, đọc trạng thái route, response và selector trước khi chỉnh.
 
 # Kiểm tra

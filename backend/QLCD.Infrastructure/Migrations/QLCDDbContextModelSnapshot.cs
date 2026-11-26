@@ -73,8 +73,14 @@ namespace QLCD.Infrastructure.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("ActivationVerified")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("ExpiresAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ProtectedEnrollmentKey")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("SecurityVersion")
                         .HasColumnType("uniqueidentifier");
@@ -114,6 +120,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<string>("Loai")
@@ -226,6 +233,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<bool>("LaThuongBinhBenhBinh")
@@ -346,6 +354,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<DateTime>("NgayCap")
@@ -390,6 +399,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<int>("Level")
@@ -528,6 +538,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(250)");
 
                     b.Property<Guid>("DonViId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("FileMinhChungUrl")
@@ -535,6 +546,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<string>("KetQua")
@@ -596,6 +608,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<string>("TenKhoi")
@@ -645,6 +658,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<int>("LoaiBienDong")
@@ -681,6 +695,29 @@ namespace QLCD.Infrastructure.Migrations
                     b.ToTable("LichSuBienDongs");
                 });
 
+            modelBuilder.Entity("QLCD.Domain.Entities.LoginAttempt", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(66)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(66)");
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LastFailureUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LockoutEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("LastFailureUtc");
+
+                    b.ToTable("LoginAttempts");
+                });
+
             modelBuilder.Entity("QLCD.Domain.Entities.PhucLoiDoanVien", b =>
                 {
                     b.Property<Guid>("Id")
@@ -697,6 +734,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("DonViId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("FileMinhChungUrl")
@@ -704,6 +742,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<decimal>("KinhPhiHoTro")
@@ -724,6 +763,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<int>("TrangThai")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<string>("UpdatedBy")
@@ -762,6 +802,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("DonViId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("HieuQuaKinhTe")
@@ -769,9 +810,11 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<string>("KetQuaNghiemThu")
+                        .IsConcurrencyToken()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -792,6 +835,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(250)");
 
                     b.Property<int>("TrangThai")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<string>("UpdatedBy")
@@ -825,6 +869,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("DonViId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("GhiChu")
@@ -832,9 +877,11 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<string>("LoaiGiaoDich")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -896,6 +943,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<long?>("LastMfaStep")
@@ -916,6 +964,9 @@ namespace QLCD.Infrastructure.Migrations
                     b.Property<string>("ProtectedMfaSecret")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("RecommendPasswordChange")
+                        .HasColumnType("bit");
 
                     b.Property<string>("RecoveryCodeHashes")
                         .HasMaxLength(650)
@@ -971,6 +1022,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("DiemBchDuyet")
+                        .IsConcurrencyToken()
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -979,15 +1031,19 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid?>("DoanVienId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("DonViId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsDeleted")
+                        .IsConcurrencyToken()
                         .HasColumnType("bit");
 
                     b.Property<string>("KhenThuong")
+                        .IsConcurrencyToken()
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
@@ -1000,6 +1056,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("nvarchar(250)");
 
                     b.Property<int>("TrangThai")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<string>("UpdatedBy")
@@ -1009,6 +1066,7 @@ namespace QLCD.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("XepLoai")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");

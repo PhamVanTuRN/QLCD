@@ -1,5 +1,7 @@
 # 03. BUSINESS RULES - QUY ĐỊNH NGHIỆP VỤ
 
+> Tài liệu đặc tả ban đầu. Quy tắc đang áp dụng cho xác thực, tài khoản, Khối quản lý và vòng đời đơn vị được cập nhật tại [Quy tắc nghiệp vụ](03-Business-Rules.md).
+
 Tài liệu này định nghĩa các quy tắc kiểm tra logic (Business Rules) cần áp dụng khi lập trình hệ thống QLCD.
 
 ## 1. Quy định về Đoàn viên (Membership Rules)

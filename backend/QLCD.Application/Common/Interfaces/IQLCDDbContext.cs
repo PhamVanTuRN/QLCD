@@ -19,6 +19,7 @@ public interface IQLCDDbContext
     DbSet<DanhMucDungChung> DanhMucDungChungs { get; }
     DbSet<TaiKhoan> TaiKhoans { get; }
     DbSet<AuthSession> AuthSessions { get; }
+    DbSet<LoginAttempt> LoginAttempts { get; }
     DbSet<HoatDongCongDoan> HoatDongCongDoans { get; }
     DbSet<TaiChinhCongDoan> TaiChinhCongDoans { get; }
     DbSet<PhucLoiDoanVien> PhucLoiDoanViens { get; }

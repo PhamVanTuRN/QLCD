@@ -1,5 +1,7 @@
 # 08. DATABASE DESIGN - THIẾT KẾ CƠ SỞ DỮ LIỆU TOÀN DIỆN
 
+> Thiết kế dữ liệu ban đầu. Schema triển khai lấy từ [EF migrations](../backend/QLCD.Infrastructure/Migrations) và [hướng dẫn nâng schema](SECURITY.md).
+
 Tài liệu này đặc tả chi tiết thiết kế cơ sở dữ liệu vật lý (Physical Schema) và các lớp C# Entity tương ứng cho Hệ thống Quản lý Công đoàn Bệnh viện TWQĐ 108.
 
 ---

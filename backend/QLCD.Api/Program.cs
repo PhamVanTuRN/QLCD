@@ -75,7 +75,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Session", policy => policy.RequireAuthenticatedUser());
     options.AddPolicy(CredentialResetPermission.Policy, policy => policy.RequireAuthenticatedUser().RequireRole(SecurityRoles.Admin)
         .RequireAssertion(context => Guid.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
-            && credentialResetPermission.Allows(id, context.User.FindFirstValue(ClaimTypes.Name), SecurityRoles.Admin)));
+            && credentialResetPermission.Allows(id, SecurityRoles.Admin)));
 });
 
 builder.Services.AddSingleton<LoginThrottle>();
@@ -147,6 +147,9 @@ if (migrate || initialize || bootstrap || provision || issueEnrollment || expire
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var count = await database.AuthSessions.Where(session => session.ExpiresAtUtc <= now).ExecuteDeleteAsync();
         app.Logger.LogInformation("Expired sessions removed: {Count}", count);
+        var expiredUnknownAttempts = await database.LoginAttempts.Where(attempt => attempt.Key.StartsWith("U:")
+            && attempt.LastFailureUtc <= now.AddDays(-1) && attempt.LockoutEndUtc <= now).ExecuteDeleteAsync();
+        app.Logger.LogInformation("Expired anonymous login counters removed: {Count}", expiredUnknownAttempts);
     }
     else if (expireEvidence)
     {
@@ -157,6 +160,9 @@ if (migrate || initialize || bootstrap || provision || issueEnrollment || expire
         await SecurityMaintenance.ProvisionAccountAsync(services, app.Configuration, bootstrap, issueEnrollment);
     return;
 }
+
+if (credentialResetPermission.AccountId is null || credentialResetPermission.AccountId == Guid.Empty)
+    app.Logger.LogWarning("Account credential resets are disabled. Configure Security:CredentialResetAccountId with the verified administrator ID.");
 
 if (local && app.Configuration.GetValue<bool>("Bootstrap:OnDevelopmentStart"))
 {

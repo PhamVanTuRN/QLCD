@@ -12,6 +12,7 @@ public class TaiKhoan : BaseEntity
     public Guid? OrganizationId { get; set; }    // NULL context for ADMIN, otherwise linked to DonViCongDoan
     public Guid SecurityVersion { get; set; } = Guid.NewGuid();
     public bool MustChangePassword { get; set; }
+    public bool RecommendPasswordChange { get; set; }
     public DateTime? TemporaryPasswordExpiresUtc { get; set; }
     public string? ProtectedMfaSecret { get; set; }
     public string? ActivationCodeHash { get; set; }

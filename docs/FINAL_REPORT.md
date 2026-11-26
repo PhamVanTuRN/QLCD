@@ -1,5 +1,7 @@
 # Báo cáo hoàn thiện QLCD
 
+> Báo cáo nghiệm thu theo các mốc ghi bên dưới. Xem [kết quả kiểm chứng gần đây](TASK_TRACKER.md) và [điều kiện phát hành còn mở](security-audit/SECURITY_AUDIT.md).
+
 Ngày 25/11/2026. **Mức sẵn sàng hiện tại là Testing Ready.** Backend và frontend build, các luồng nghiệp vụ cốt lõi đã chọn chạy qua, và migration đã được thử trên SQL Server Express. Nghiệm thu staging và production còn phụ thuộc môi trường đích và phần nghiệp vụ cần phê duyệt.
 
 ## Đường cơ sở và phạm vi
@@ -61,7 +63,7 @@ Mười hai nhóm browser gồm tạo/sửa danh mục, trang từ chối quyề
 
 Workspace giữ nguyên dữ liệu thật và lịch sử Git. Kiểm thử dùng dữ liệu tổng hợp, và chưa có triển khai production. Mức **Testing Ready** áp dụng cho các luồng đã kiểm chứng, với các điều kiện staging/production ghi ở trên.
 
-## Kết quả nghiệm thu local mới nhất
+## Kết quả nghiệm thu local tại thời điểm báo cáo
 
 - Phiên `http://127.0.0.1:3003` chạy với SQL Server Express và database riêng `QLCD_Local`. Đã kiểm chứng tiếp nhận trực tiếp tại CĐBP đang hoạt động chưa có tổ, mở lại hồ sơ sau khi API khởi động lại và tìm tài khoản theo đơn vị trước phân trang.
 - Giao diện dùng xanh cô-ban và nền sáng. Bản hiện tại qua 17 luồng Playwright, gồm kiểm tra bảng và biểu mẫu ở 7 chiều rộng. Axe không ghi nhận vi phạm trên các trang đã quét. Backend qua 14 xUnit mặc định và 6 ca truy vấn trên SQL Express.

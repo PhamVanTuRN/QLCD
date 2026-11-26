@@ -71,7 +71,7 @@ public static class SecurityMaintenance
         }
         else
         {
-            if (!bootstrapAdministrator && !resetPermission.Allows(account.Id, account.Username, account.VaiTro))
+            if (!bootstrapAdministrator && !resetPermission.Allows(account.Id, account.VaiTro))
                 throw new InvalidOperationException("Offline provisioning is reserved for recovery of the designated administrator.");
             AccountCredentials.IssueActivation(account, activation!, now);
             account.TrangThai = true;

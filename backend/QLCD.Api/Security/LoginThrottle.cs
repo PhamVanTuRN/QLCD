@@ -15,23 +15,9 @@ public sealed class LoginThrottle : IDisposable
             SegmentsPerWindow = 5
         }));
 
-    public bool TryAcquire(string? username)
-    {
-        if (string.IsNullOrWhiteSpace(username) || username.Length > 50)
-            return false;
-        using var lease = limiter.AttemptAcquire(username.Trim().ToUpperInvariant());
-        return lease.IsAcquired;
-    }
-
     public bool TryAcquireAuthenticatorChange(Guid accountId, string operation = "setup")
     {
         using var lease = limiter.AttemptAcquire($"mfa-settings:{operation}:{accountId:N}");
-        return lease.IsAcquired;
-    }
-
-    public bool TryAcquireSecondFactor(Guid accountId)
-    {
-        using var lease = limiter.AttemptAcquire($"mfa-login:{accountId:N}");
         return lease.IsAcquired;
     }
 

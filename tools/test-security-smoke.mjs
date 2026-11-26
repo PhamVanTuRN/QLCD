@@ -18,7 +18,8 @@ const tempRoot = await realpath(tmpdir());
 const storage = await mkdtemp(join(tempRoot, "qlcd-security-smoke-"));
 const password = () => "Aa1!" + randomBytes(24).toString("hex");
 const initialPassword = "123456aA@";
-const adminUsername = "qlcd_admin";
+const designatedUsername = "qlcd_admin";
+const adminUsername = useSql ? "renamed_fixture_admin" : designatedUsername;
 const adminId = randomUUID();
 const adminActivation = randomBytes(16).toString("hex");
 const otherAdminActivation = randomBytes(16).toString("hex");
@@ -31,7 +32,7 @@ const env = {
   ...process.env, DOTNET_ENVIRONMENT: environment, ASPNETCORE_ENVIRONMENT: environment,
   Data__UseInMemory: useSql ? "false" : "true", Bootstrap__OnDevelopmentStart: useSql ? "false" : "true",
   ...(useSql ? { ConnectionStrings__DefaultConnection: connection, ConnectionStrings__Migration: connection } : {}),
-  Bootstrap__Username: adminUsername, Bootstrap__ActivationCode: adminActivation,
+  Bootstrap__Username: designatedUsername, Bootstrap__ActivationCode: adminActivation,
   Security__CredentialResetAccountId: adminId,
   Storage__Root: storage, Storage__MalwareScannerHost: ""
 };
@@ -51,6 +52,17 @@ try {
     const other = spawnSync("dotnet", [dll, "--bootstrap-admin"], { cwd: root, windowsHide: true, timeout: 60000,
       env: { ...env, Bootstrap__Username: "other_fixture_admin", Bootstrap__ActivationCode: otherAdminActivation } });
     if (other.status !== 0) throw new Error("Could not provision secondary fixture administrator.");
+    const renamed = spawnSync("sqlcmd", ["-S", "lpc:.\\SQLEXPRESS", "-E", "-C", "-b", "-d", sqlDatabase, "-Q", `
+      SET XACT_ABORT ON;
+      IF DB_NAME() <> N'${sqlDatabase}' THROW 51000, 'Expected the isolated fixture database.', 1;
+      BEGIN TRANSACTION;
+      UPDATE dbo.TaiKhoans SET Username = N'${adminUsername}' WHERE Id = '${adminId}' AND Username = N'${designatedUsername}';
+      IF @@ROWCOUNT <> 1 THROW 51001, 'Expected the designated fixture administrator.', 1;
+      UPDATE dbo.TaiKhoans SET Username = N'${designatedUsername}' WHERE Username = N'other_fixture_admin' AND Id <> '${adminId}';
+      IF @@ROWCOUNT <> 1 THROW 51002, 'Expected the secondary fixture administrator.', 1;
+      COMMIT TRANSACTION;`
+    ], { windowsHide: true, timeout: 60000 });
+    if (renamed.status !== 0) throw new Error("Could not set up the fixture administrator rename.");
   }
   child = spawn("dotnet", [dll, "--urls", "http://127.0.0.1:0"], { cwd: root, env, windowsHide: true });
   child.stdout.on("data", chunk => { logs += chunk.toString(); });
@@ -217,7 +229,6 @@ try {
   assert.equal(completed.data.username, mfaAccount.username);
   assert.equal((await authenticated.client.request("/api/v1/auth/session")).status, 200);
   await fresh.write(finishPath, { challenge, code: loginCode }, 401);
-  await fresh.write(finishPath, { challenge, code: loginCode }, 429);
   await authenticated.client.write(`${mfaPath}/disable`, {}, [404, 405]);
 
   const departmentAccount = allAccounts.data.find(row => row.vaiTro === "CDBP");
@@ -248,16 +259,21 @@ try {
   await admin.write(resetPath, { ...resetBody, identityVerified: false, code: adminOtp.code }, 400);
   await admin.write(`/api/v1/accounts/${adminId}/reset-password`, { ...resetBody, code: adminOtp.code }, 403);
   await mfaUser.write(resetPasswordPath, { ...resetBody, code: adminOtp.code }, 403);
+  await mfaUser.write(resetPath, { ...resetBody, code: adminOtp.code }, 403);
+  const nearbyAdminCodes = [-1, 0, 1, 2].map(offset => fixtureTotp(adminFactor.key, offset));
+  const wrongAdminOtp = ["000000", "000001", "000002", "000003", "000004"].find(code => !nearbyAdminCodes.includes(code));
+  await admin.write(resetPath, { ...resetBody, code: wrongAdminOtp }, 403);
+  assert.equal((await mfaUser.request(`${authPath}/session`)).status, 200);
   const { data: reset } = await admin.json(resetPath, { ...resetBody, code: adminOtp.code }, 200);
   assert.match(reset.activationCode, /^[A-F0-9]{32}$/);
   assert.equal((await mfaUser.request(`${authPath}/session`)).status, 401);
-  const restricted = await fresh.json(`${authPath}/login`, { username: mfaAccount.username, password: teamPassword }, 200);
+  await fresh.write(`${authPath}/login`, { username: mfaAccount.username, password: teamPassword }, 401);
+  const restricted = await fresh.json(`${authPath}/login`, { username: mfaAccount.username, password: teamPassword, activationCode: reset.activationCode }, 200);
   assert.equal(restricted.data.needsAuthenticator, true);
   assert.equal(restricted.data.mustChangePassword, false);
   assert.equal(restricted.data.hasRecoveryCodes, false);
   assert.equal((await fresh.request(`/api/v1/union-members`)).status, 403);
-  await fresh.write(`${mfaPath}/setup`, { currentPassword: teamPassword }, 400);
-  await fresh.write(`${mfaPath}/setup`, { currentPassword: teamPassword, activationCode: reset.activationCode }, 200);
+  await fresh.write(`${mfaPath}/setup`, {}, 200);
 
   const centralFactor = factors.get("CDCS");
   const beforePasswordReset = session(origin);
@@ -282,7 +298,7 @@ try {
     await delay(61_000);
     const otherAdmin = session(origin);
     const otherPassword = password();
-    const otherFactor = await onboard(otherAdmin, "other_fixture_admin", otherAdminActivation, otherPassword);
+    const otherFactor = await onboard(otherAdmin, designatedUsername, otherAdminActivation, otherPassword);
     const grantsResponse = await otherAdmin.request("/api/v1/accounts");
     assert.equal(grantsResponse.status, 200);
     const grants = await grantsResponse.json();
@@ -295,6 +311,15 @@ try {
         ((RecordId = '${centralAccount.id}' AND Action = N'AUTH_PASSWORD_RESET') OR
         (RecordId = '${mfaAccount.id}' AND Action = N'AUTH_MFA_RESET')) AND OldValues IS NULL AND NewValues IS NULL) <> 2
         THROW 51000, 'Credential reset audit missing or contains credential details', 1;
+      IF NOT EXISTS (SELECT 1 FROM dbo.AuditLogs WHERE RecordId = '${adminId}' AND Action = N'AUTH_LOGIN_SUCCESS'
+        AND CorrelationId IS NOT NULL AND OldValues IS NULL AND NewValues IS NULL)
+        THROW 51001, 'Completed login audit missing', 1;
+      IF NOT EXISTS (SELECT 1 FROM dbo.AuditLogs WHERE RecordId = '${member.data}' AND Action = N'MEMBER_DETAIL_READ'
+        AND CorrelationId IS NOT NULL AND OldValues IS NULL AND NewValues IS NULL)
+        THROW 51002, 'Member detail read audit missing', 1;
+      IF (SELECT COUNT(*) FROM dbo.AuditLogs WHERE RecordId = '${uploaded.data.id}' AND Action = N'EVIDENCE_DOWNLOAD'
+        AND CorrelationId IS NOT NULL AND OldValues IS NULL AND NewValues IS NULL) <> 1
+        THROW 51003, 'Evidence download audit missing or includes a denied download', 1;
     `], { windowsHide: true, timeout: 30000 });
     assert.equal(audit.status, 0, audit.stderr?.toString());
   }
@@ -376,31 +401,35 @@ try {
   }
 
   async function onboard(client, username, activationCode, permanentPassword, checkRestrictions = false) {
-    const opened = await client.json(`${authPath}/login`, { username, password: initialPassword }, 200);
+    if (checkRestrictions) await client.write(`${authPath}/login`, { username, password: initialPassword }, 401);
+    const opened = await client.json(`${authPath}/login`, { username, password: initialPassword, activationCode }, 200);
     assert.equal(opened.data.mustChangePassword, true);
     assert.equal(opened.data.needsAuthenticator, true);
     assert.equal(opened.data.organizationId, null);
     assert.equal(opened.data.hoTen, username);
     assert.equal(Object.hasOwn(opened.data, "token"), false);
     assert.equal((await client.request("/api/v1/union-members")).status, 403);
-    if (checkRestrictions)
-      await client.write(`${mfaPath}/setup`, { currentPassword: initialPassword }, 400);
-    const delivered = await client.write(`${mfaPath}/setup`, { currentPassword: initialPassword, activationCode }, 200);
+    const delivered = await client.write(`${mfaPath}/setup`, {}, 200);
     assert.equal(delivered.headers.get("cache-control"), "no-store");
     const { data: setup } = await delivered.json();
     assert.match(setup.key, /^[A-Z2-7]{32}$/);
     assert.match(setup.qrImage, /^data:image\/png;base64,iVBORw0KGgo/);
     if (checkRestrictions) {
       const abandoned = session(origin);
-      await abandoned.json(`${authPath}/login`, { username, password: initialPassword }, 200);
+      await abandoned.json(`${authPath}/login`, { username, password: initialPassword, activationCode }, 200);
       await abandoned.write(`${mfaPath}/confirm`, { setup: setup.setup, code: fixtureTotp(setup.key) }, 400);
       assert.equal((await abandoned.request("/api/v1/union-members")).status, 403);
     }
     await waitForStableTotpWindow();
     const otp = await nextFixtureTotp(setup.key, -1);
+    const limited = client.copy();
     const { data: recovery } = await client.json(`${mfaPath}/confirm`, { setup: setup.setup, code: otp.code }, 200);
     assert.equal(recovery.codes.length, 10);
-    assert.equal((await client.request("/api/v1/union-members")).status, 403);
+    assert.equal((await limited.request(`${authPath}/session`)).status, 401);
+    const current = await (await client.request(`${authPath}/session`)).json();
+    assert.equal(current.data.recommendPasswordChange, true);
+    assert.equal(current.data.mustChangePassword, false);
+    assert.equal((await client.request("/api/v1/union-members")).status, 200);
     const passwordChange = { currentPassword: initialPassword, newPassword: permanentPassword, confirmPassword: permanentPassword };
     if (checkRestrictions) await client.write(`${authPath}/change-password`, passwordChange, 400);
     const modified = await nextFixtureTotp(setup.key, otp.step);

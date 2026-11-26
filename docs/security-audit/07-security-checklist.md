@@ -4,7 +4,7 @@ Các ô chưa đánh dấu là việc cần bằng chứng sau khắc phục ho�
 
 ## Xác thực và phân quyền
 
-- [ ] JWT key có nguồn riêng theo môi trường. Issuer/audience/algorithm/lifetime được validate, khóa cũ và phiên trước xoay hết hiệu lực. [SEC-001](03-security-findings.md#sec-001)
+- [ ] Phiên hiện hành lưu hash trong SQL, cookie HttpOnly/SameSite/Secure ngoài local và ghi yêu cầu CSRF. Kiểm tra thu hồi phiên sau đổi hoặc reset mật khẩu/Authenticator, khóa tài khoản và thay đổi phạm vi. Xác minh credential JWT cũ đã thu hồi nếu từng dùng. [Luồng xác thực](../AUTHENTICATION.md)
 - [ ] Login có giới hạn theo tài khoản và nguồn, thông báo thất bại không phân biệt tài khoản, MFA/rescue flow cho privileged role. Thử kết quả 429 theo giới hạn cấu hình trong fixture. [SEC-014](03-security-findings.md#sec-014)
 - [ ] Logout, reset, disable và đổi vai trò có hiệu lực trong SLA. Refresh rotation/reuse được chặn theo hợp đồng. Nếu có cookie, kiểm HttpOnly, Secure, SameSite và CSRF cho ghi. [SEC-011](03-security-findings.md#sec-011)
 - [ ] Bỏ mật khẩu nguyên văn khỏi reset/seed/provisioning, schema đích, API, UI, audit và bản sao theo retention. KDF thích nghi dùng salt và version. Account demo đã được loại theo kiểm kê. [SEC-002](03-security-findings.md#sec-002) · [SEC-004](03-security-findings.md#sec-004) · [SEC-024](03-security-findings.md#sec-024)
@@ -44,7 +44,14 @@ Các ô chưa đánh dấu là việc cần bằng chứng sau khắc phục ho�
 | Cần thu | Bên giữ thông tin | Mục liên quan |
 | --- | --- | --- |
 | Artifact digest, SBOM, runtime/OS/architecture và audit reachability tính năng hình ảnh | Release/frontend/platform | SEC-012, SEC-022 |
-| JWT/SQL secret lifecycle, lịch rotate và chứng chỉ chỉ ở dạng metadata đã lọc | IAM/vận hành/DBA | SEC-001, SEC-003, SEC-011 |
+| Vòng đời key ring và credential SQL, bằng chứng thu hồi credential lịch sử và metadata chứng chỉ đã lọc | IAM/vận hành/DBA | SEC-001, SEC-003, SEC-011 |
 | Vai trò được cấp, số lượng account theo vai trò và trạng thái, không kèm PII | Chủ nghiệp vụ | SEC-004, SEC-006, SEC-023 |
 | TLS/CORS/header/gateway ingress, network và quyền volume/runtime đã che thông tin | Platform | SEC-008, SEC-013, SEC-021 |
 | Inventory dữ liệu/backup audit, encryption, retention, RPO/RTO và biên bản restore | DBA, quản trị dữ liệu, security | SEC-002, SEC-010, SEC-021 |
+
+## Cổng kiểm tra cho lần sửa hoặc phát hành
+
+- Chốt phạm vi và mốc commit, xác nhận build và kiểm thử luồng cũ/mới. Đối chiếu API, role, scope, phiên, CSRF, trạng thái lỗi và tính nhất quán khi ghi đồng thời.
+- Workflow `security.yml` chạy quét secret, SAST, advisory offline, xuất SBOM, locked restore, build, HTTP và browser smoke. Bảo vệ nhánh đích bằng required check. Xác nhận bằng chứng chạy CI, quyền runtime, TLS, backup và khả năng phục hồi trên staging trước khi phát hành.
+- Chặn phát hành khi có lỗi kiểm thử bắt buộc, bí mật mới, Critical/High chưa xử lý hoặc chưa được chấp nhận bằng văn bản, hồi quy bảo mật, mất chức năng, nguy cơ sai lệch dữ liệu hoặc migration chưa được duyệt.
+- Chủ rủi ro ghi quyết định, phạm vi, kiểm soát thay thế, thời hạn và kế hoạch kiểm lại. Cập nhật tài liệu và công khai giới hạn nghiệm thu trong báo cáo phát hành. [Báo cáo hiện hành](SECURITY_AUDIT.md)

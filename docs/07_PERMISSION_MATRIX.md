@@ -1,5 +1,7 @@
 # 07. PERMISSION MATRIX - MA TRẬN PHÂN QUYỀN
 
+> Ma trận đề xuất ban đầu. Đối chiếu vai trò, phạm vi và quyền thực tế theo [tổng quan](PROJECT_OVERVIEW.md) và [hợp đồng API](10-API-Specification.md).
+
 Hệ thống QLCD áp dụng phân quyền dựa trên Vai trò (Role-based Access Control - RBAC) kết hợp với Phạm vi dữ liệu (Data Scope) để đảm bảo bảo mật thông tin trong môi trường quân đội.
 
 ## 1. Các Vai trò trong Hệ thống (Roles)

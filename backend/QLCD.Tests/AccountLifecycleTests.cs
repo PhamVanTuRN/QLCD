@@ -103,6 +103,7 @@ public sealed class AccountLifecycleTests
     {
         await using var db = Database();
         var actor = Admin();
+        actor.Username = "renamed_fixture_admin";
         var target = new TaiKhoan { Username = "target", HoTen = "Target", VaiTro = role,
             PasswordHash = PasswordHasher.Hash("PreviousPassword1!"), TrangThai = active,
             ProtectedMfaSecret = "mfa-kept", RecoveryCodeHashes = "recovery-kept", LastMfaStep = 17 };
@@ -123,12 +124,19 @@ public sealed class AccountLifecycleTests
         Assert.Single(db.AuditLogs, a => a.RecordId == target.Id && a.Action == "AUTH_PASSWORD_RESET");
         var hash = target.PasswordHash;
         var deadline = target.TemporaryPasswordExpiresUtc;
-        await handler.Handle(new ResetAccountAuthenticator(target.Id, "AdminPassword1!", "123456", LoginCommandHandler.SessionVersion(actor), "fixture"), default);
+        var passwordResetVersion = LoginCommandHandler.SessionVersion(target);
+        var activation = await handler.Handle(new ResetAccountAuthenticator(target.Id, "AdminPassword1!", "123456", LoginCommandHandler.SessionVersion(actor), "fixture"), default);
         Assert.Equal(hash, target.PasswordHash);
         Assert.Equal(deadline, target.TemporaryPasswordExpiresUtc);
+        Assert.True(target.MustChangePassword);
         Assert.Equal(active, target.TrangThai);
+        Assert.Equal(role, target.VaiTro);
         Assert.Null(target.ProtectedMfaSecret);
+        Assert.Null(target.LastMfaStep);
         Assert.Null(target.RecoveryCodeHashes);
+        Assert.True(AccountCredentials.MatchesHash(activation, target.ActivationCodeHash));
+        Assert.NotEqual(passwordResetVersion, LoginCommandHandler.SessionVersion(target));
+        Assert.Single(db.AuditLogs, a => a.RecordId == target.Id && a.UserId == actor.Id.ToString() && a.Action == "AUTH_MFA_RESET");
     }
 
     [Fact]
@@ -146,20 +154,20 @@ public sealed class AccountLifecycleTests
         await db.SaveChangesAsync();
         var handler = Commands(db, actor);
         var login = new LoginCommandHandler(db, new FixtureMfa(), TimeProvider.System);
-        Assert.Null(await login.Handle(new LoginCommand(target.Username, AccountCredentials.InitialPassword), default));
+        Assert.Null((await login.Handle(new LoginCommand(target.Username, AccountCredentials.InitialPassword), default)).Value);
         var legacyHash = legacy.PasswordHash;
-        foreach (var account in new[] { target, legacy })
-            await handler.Handle(new IssueAccountActivation(account.Id, true, "fixture"), default);
+        await handler.Handle(new IssueAccountActivation(legacy.Id, true, "fixture"), default);
+        var activation = await handler.Handle(new IssueAccountActivation(target.Id, true, "fixture"), default);
         Assert.True(target.TrangThai);
         Assert.NotNull(target.TemporaryPasswordExpiresUtc);
-        var session = await login.Handle(new LoginCommand(target.Username, AccountCredentials.InitialPassword), default);
+        var session = (await login.Handle(new LoginCommand(target.Username, AccountCredentials.InitialPassword) { ActivationCode = activation }, default)).Value;
         Assert.NotNull(session);
         Assert.True(session.Profile.MustChangePassword);
         Assert.True(session.Profile.NeedsAuthenticator);
         Assert.Null(session.Profile.OrganizationId);
         target.TemporaryPasswordExpiresUtc = DateTime.UtcNow.AddMinutes(-1);
         await db.SaveChangesAsync();
-        Assert.Null(await login.Handle(new LoginCommand(target.Username, AccountCredentials.InitialPassword), default));
+        Assert.Null((await login.Handle(new LoginCommand(target.Username, AccountCredentials.InitialPassword) { ActivationCode = activation }, default)).Value);
         Assert.Equal(legacyHash, legacy.PasswordHash);
         Assert.False(legacy.MustChangePassword);
         Assert.Null(legacy.TemporaryPasswordExpiresUtc);
@@ -167,15 +175,14 @@ public sealed class AccountLifecycleTests
 
     private static QLCDDbContext Database() => new(new DbContextOptionsBuilder<QLCDDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     private static TaiKhoan Admin() => new() { Username = "qlcd_admin", HoTen = "Fixture admin", VaiTro = "ADMIN", PasswordHash = PasswordHasher.Hash("AdminPassword1!"), ProtectedMfaSecret = "fixture" };
-    private static AccountCommands Commands(QLCDDbContext db, TaiKhoan actor) => new(db, new FixtureUser(actor.Id), TimeProvider.System, new FixtureMfa(), new CredentialResetPermission(actor.Id));
+    private static AccountCommands Commands(QLCDDbContext db, TaiKhoan actor) => new(db, new FixtureUser(actor.Id, actor.Username), TimeProvider.System, new FixtureMfa(), new CredentialResetPermission(actor.Id));
     private sealed class FixtureMfa : IMfaVerifier
     {
         public bool TryVerify(TaiKhoan account, string? code, out long? step) { step = 42; return code == "123456"; }
     }
-    private sealed record FixtureUser(Guid Id) : ICurrentUserService
+    private sealed record FixtureUser(Guid Id, string Username) : ICurrentUserService
     {
         public Guid? UserId => Id;
-        public string Username => "qlcd_admin";
         public string Role => "ADMIN";
         public Guid? OrganizationId => null;
         public bool IsAdmin => true;

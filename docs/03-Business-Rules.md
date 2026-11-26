@@ -28,10 +28,12 @@ Tài liệu này tổng hợp toàn bộ các quy tắc ràng buộc logic nghi�
 
 ## 4. Xác thực tài khoản
 
-- Tài khoản mới dùng mật khẩu khởi tạo `123456aA@` đã băm và mã kích hoạt riêng. Người dùng liên kết Authenticator, lưu mã khôi phục và đổi mật khẩu trước khi vào nghiệp vụ.
+- Tài khoản mới dùng mật khẩu khởi tạo `123456aA@` đã băm và mã kích hoạt riêng. Chọn **Thiết lập Authenticator bằng mã kích hoạt** để nhập tên đăng nhập, mật khẩu và mã kích hoạt trên cùng màn hình. Sau khi quét QR và xác nhận OTP, hệ thống tự chuyển vào phần mềm, hiển thị một lần bộ mã khôi phục và khuyến nghị đổi mật khẩu mặc định. Những lần sau dùng form mặc định với tên đăng nhập và mật khẩu, rồi xác thực OTP. Sau Reset 2FA, dùng lại bước thiết lập với mã kích hoạt mới.
+- Sai 5 lần liên tiếp trong luồng đăng nhập khóa đăng nhập 10 phút cho mọi tài khoản. Backend tính mật khẩu, mã kích hoạt và OTP cùng một bộ đếm SQL theo UTC. Đúng mật khẩu chưa xóa bộ đếm. Khóa tạm giữ nguyên cờ hoạt động và trạng thái lưu trữ. Hết hạn hoặc hoàn tất đăng nhập thì bắt đầu lại bộ đếm.
 - Mọi tài khoản dùng mật khẩu và OTP để đăng nhập. Tài khoản cũ chưa có Authenticator giữ mật khẩu hiện tại và dùng mã thiết lập do người được cấp quyền bàn giao.
 - Đổi mật khẩu cần mật khẩu hiện tại, xác nhận mật khẩu mới và OTP mới. Mật khẩu mới có 8–128 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt, đồng thời khác mật khẩu hiện tại và mật khẩu khởi tạo. Khôi phục bằng mã yêu cầu liên kết thiết bị mới rồi đăng nhập lại.
-- Chỉ `qlcd_admin` có ID đã cấu hình được đặt lại mật khẩu hoặc 2FA cho tài khoản khác. Hai thao tác độc lập, yêu cầu xác nhận và OTP mới, thu hồi phiên đích và được ghi audit. Cấp mã kích hoạt sau khi xác minh danh tính qua kênh tin cậy. [Luồng xác thực](AUTHENTICATION.md) · [Quy trình khôi phục](ACCOUNT_RECOVERY.md)
+- Duy trì Reset mật khẩu và Reset 2FA như hai thao tác quản trị độc lập. Backend chỉ cấp quyền cho ID đã xác minh của `qlcd_admin` có vai trò ADMIN, kể cả sau khi đổi tên đăng nhập. Cả hai thao tác chỉ áp dụng cho tài khoản khác, yêu cầu xác nhận, mật khẩu và OTP mới của người thực hiện, thu hồi phiên đích và ghi audit. Trước khi cấp mã kích hoạt phải xác minh danh tính qua kênh tin cậy. [Luồng xác thực](AUTHENTICATION.md) · [Quy trình khôi phục](ACCOUNT_RECOVERY.md)
+- Trước khi sửa, xác định phạm vi và các chức năng liên quan. Bảo toàn API, service, component, quyền và thao tác đang dùng, chỉ loại bỏ khi có yêu cầu rõ ràng. Kiểm thử chức năng mới và hồi quy các luồng cũ bị ảnh hưởng. Giữ nguyên các kiểm soát an toàn thông tin khi sửa lỗi.
 
 ## 5. Khối quản lý
 

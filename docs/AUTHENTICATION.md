@@ -6,10 +6,12 @@ Backend xác minh mật khẩu bằng PBKDF2-SHA256. Trình duyệt giữ cookie
 
 ```mermaid
 flowchart TD
-    A[Nhập tên đăng nhập và mật khẩu] --> B{Thông tin hợp lệ và tài khoản hoạt động?}
+    A[Nhập tên đăng nhập, mật khẩu và mã kích hoạt nếu được cấp] --> B{Thông tin hợp lệ và tài khoản hoạt động?}
     B -- Không --> C[Thông báo đăng nhập thất bại]
     B -- Có --> D{Đã liên kết Authenticator?}
-    D -- Chưa --> E[Phiên giới hạn và màn hình kích hoạt]
+    D -- Chưa --> E[Phiên giới hạn hiển thị QR và xác nhận OTP]
+    E --> K[Tiêu thụ mã kích hoạt và cấp phiên mới]
+    K --> H
     D -- Rồi --> F[Thử thách xác thực có hạn 3 phút]
     F --> G[Xác minh OTP và tiêu thụ bước thời gian]
     G --> H{Cần đổi mật khẩu?}
@@ -17,7 +19,9 @@ flowchart TD
     H -- Không --> J[Phiên nghiệp vụ có hạn 30 phút]
 ```
 
-Phiên giới hạn có hạn tối đa 10 phút và có thể kết thúc sớm hơn theo hạn mật khẩu tạm. Khi người dùng rời luồng, lần đăng nhập tiếp theo đọc lại trạng thái đã lưu từ SQL. Khóa QR tạo dở có thể tạo lại bằng mã kích hoạt còn hiệu lực. Một phiên chưa hoàn tất sẽ bị từ chối khi gọi trực tiếp API nghiệp vụ.
+Form mặc định chỉ gửi tên đăng nhập và mật khẩu. Tài khoản đã liên kết Authenticator chuyển sang bước nhập OTP. Khi chọn **Thiết lập Authenticator bằng mã kích hoạt**, form gửi thêm `activationCode` qua `POST /api/v1/auth/login`. Phiên giới hạn tối đa 10 phút, có thể kết thúc sớm theo hạn mật khẩu tạm hoặc mã kích hoạt. `/auth/authenticator/setup` dùng phiên đã xác minh để lấy cùng QR khi tải lại. Khóa thiết lập dở được mã hóa trong phiên. Backend tiêu thụ mã kích hoạt và bước OTP, cấp cookie và phiên mới trong cùng thao tác xác nhận. Giao diện chuyển thẳng vào phần mềm, hiển thị một lần bộ mã khôi phục và nhắc đổi mật khẩu mặc định. Nếu quản trị viên đã đặt lại mật khẩu trước bước thiết lập 2FA, bước đổi mật khẩu tạm vẫn bắt buộc. Phiên trước OTP bị chặn khỏi API nghiệp vụ.
+
+Mật khẩu sai, mã kích hoạt sai và OTP sai trong luồng đăng nhập cùng tăng bộ đếm SQL. Sai lần thứ 5 nhận HTTP 429 với `Retry-After` và thời gian còn lại, khóa 10 phút tính theo UTC. Các yêu cầu trong thời gian khóa giữ nguyên mốc hết hạn. Xác thực OTP thành công hoặc hết hạn khóa đặt lại bộ đếm. Tên chưa tồn tại cũng có phản hồi tương đương. Giới hạn IP bổ sung độc lập với khóa theo tài khoản.
 
 ## Đổi mật khẩu
 
@@ -30,7 +34,7 @@ flowchart LR
     E --> F[Đăng nhập lại bằng mật khẩu mới và OTP]
 ```
 
-Mật khẩu mới có 8–128 ký tự, gồm ít nhất một chữ hoa, một chữ thường, một chữ số và một ký tự dấu câu hoặc ký hiệu. Khoảng trắng không đáp ứng điều kiện ký tự đặc biệt. Người dùng phải đổi mật khẩu khởi tạo `123456aA@` trước khi vào nghiệp vụ. Mật khẩu mới phải khác mật khẩu khởi tạo và mật khẩu hiện tại. Đổi mật khẩu giữ khóa Authenticator và bộ mã khôi phục hiện tại. [Thiết lập Authenticator](TWO_FACTOR_AUTHENTICATION.md) · [Kiểm thử](TESTING.md)
+Mật khẩu mới có 8–128 ký tự, gồm ít nhất một chữ hoa, một chữ thường, một chữ số và một ký tự dấu câu hoặc ký hiệu. Khoảng trắng không đáp ứng điều kiện ký tự đặc biệt. Mật khẩu mới phải khác mật khẩu khởi tạo `123456aA@` và mật khẩu hiện tại. Đổi mật khẩu giữ khóa Authenticator và bộ mã khôi phục hiện tại. Sau Reset mật khẩu quản trị, việc đổi mật khẩu tạm trước khi vào nghiệp vụ vẫn bắt buộc. [Thiết lập Authenticator](TWO_FACTOR_AUTHENTICATION.md) · [Kiểm thử](TESTING.md)
 
 ## Mật khẩu khởi tạo và các luồng quản trị
 
@@ -38,14 +42,15 @@ Nguồn chuẩn của mật khẩu khởi tạo là `QLCD.Shared/Security/Passwo
 
 | Luồng | Mật khẩu sau thao tác | Trạng thái và yêu cầu tiếp theo |
 | --- | --- | --- |
-| Tạo đơn vị, tự sinh tài khoản CDCS/CDBP/TOCD | `123456aA@` | Khóa, `MustChangePassword=true`, chưa bắt đầu hạn mật khẩu tạm. Admin xác minh danh tính và cấp mã để mở tài khoản mới và bắt đầu hạn 24 giờ. |
+| Tạo đơn vị, tự sinh tài khoản CDCS/CDBP/TOCD | `123456aA@` | Khóa đến khi admin xác minh danh tính và cấp mã. Đăng nhập và hoàn tất 2FA trong 24 giờ để vào phần mềm. Hệ thống nhắc đổi mật khẩu mặc định. |
 | Cấp mã kích hoạt cho tài khoản cũ chưa có MFA | Giữ nguyên | Không reset mật khẩu. Mã kích hoạt có hạn 24 giờ; không tự mở khóa tài khoản cũ. |
 | Reset mật khẩu qua `/accounts/{id}/reset-password` | `123456aA@` cho mọi vai trò đích được hỗ trợ, kể cả ADMIN khác | Có hạn 24 giờ, bắt buộc đổi, thu hồi phiên qua SecurityVersion. Giữ Authenticator, mã khôi phục và trạng thái khóa. |
 | Reset 2FA qua `/accounts/{id}/reset-2fa` | Giữ nguyên | Thay mã kích hoạt, xóa MFA/mã khôi phục cũ, thu hồi phiên; giữ cờ và hạn đổi mật khẩu cũng như trạng thái khóa. |
-| CLI `--bootstrap-admin` / khôi phục khẩn cấp `--provision-account` | `123456aA@` | Mở tài khoản, yêu cầu đổi mật khẩu trong 24 giờ và đăng ký lại MFA bằng mã riêng. Provision chỉ dành cho quản trị viên chỉ định. |
+| CLI `--bootstrap-admin` | `123456aA@` | Khởi tạo quản trị viên với mã kích hoạt riêng. Hoàn tất 2FA trong 24 giờ rồi vào phần mềm và nhận nhắc đổi mật khẩu. |
+| CLI khôi phục khẩn cấp `--provision-account` | `123456aA@` | Quản trị viên được chỉ định đăng ký lại MFA và phải đổi mật khẩu tạm trong 24 giờ. |
 | CLI `--issue-mfa-enrollment` / khôi phục bằng mã cá nhân | Giữ nguyên | Chỉ thay hoặc thiết lập MFA theo quy trình; không reset mật khẩu. |
 
-Không có form tạo tài khoản độc lập trong giao diện hiện tại: tài khoản quản lý được tạo cùng đơn vị; quản trị viên đầu tiên được bootstrap bằng CLI. Chỉ `qlcd_admin` khớp ID cấu hình được reset tài khoản khác, không được tự reset qua API quản trị. Backend vẫn chặn nghiệp vụ ở phiên giới hạn và từ chối mật khẩu khởi tạo khi chọn mật khẩu mới. `GET /api/v1/accounts` trả thêm `credentialPolicy` để giao diện quản trị hiển thị đúng mật khẩu khởi tạo và thời hạn từ backend; không trả mật khẩu hay hash riêng của từng tài khoản.
+Không có form tạo tài khoản độc lập trong giao diện hiện tại: tài khoản quản lý được tạo cùng đơn vị; quản trị viên đầu tiên được bootstrap bằng CLI. Backend cho phép reset tài khoản khác khi ID trùng ID đã cấu hình cho `qlcd_admin` và vai trò hiện tại là ADMIN. Tên đăng nhập có thể thay đổi. Backend chặn tự reset qua API quản trị, chặn nghiệp vụ ở phiên giới hạn và từ chối mật khẩu khởi tạo khi chọn mật khẩu mới. `GET /api/v1/accounts` trả `canResetCredentials` từ cùng chính sách với API reset và `credentialPolicy` để hiển thị mật khẩu khởi tạo cùng thời hạn, không trả mật khẩu hay hash riêng của từng tài khoản.
 
 ## Trạng thái tổ chức và khóa tài khoản
 
@@ -55,9 +60,9 @@ Ngừng đơn vị không xóa hoặc khóa cờ riêng của tài khoản: UI h
 
 Ngừng đơn vị thu hồi phiên của mọi tài khoản gắn trực tiếp. Khôi phục còn thu hồi phiên thuộc nhánh con tối đa ba cấp để xử lý dữ liệu cũ có cha ngừng nhưng con vẫn hoạt động. Chỉ SecurityVersion thay đổi; cờ khóa, MFA và trạng thái con không đổi. Phiên cũ không sống lại khi khôi phục. Với tài khoản soft-delete cũ, quản trị viên phải mở khóa/khôi phục riêng (không áp dụng tự phục hồi ADMIN qua toggle). Các bản ghi thực sự đã bị hard-delete ở môi trường ngoài repo không thể tái tạo bằng luồng này.
 
-## Mở khóa kèm khôi phục đơn vị theo yêu cầu mới
+## Mở khóa kèm khôi phục đơn vị
 
-Quy tắc mới thay cho luồng toggle mở khóa không đổi cây: POST /accounts/{id}/unlock chỉ nhận phiên ADMIN đầy đủ, xác nhận rõ, mật khẩu admin và OTP mới; kiểm tra lại vai trò/trạng thái/proof phiên tại DB, không cho tự mở hoặc mở ADMIN. Khác với reset thông tin xác thực, thao tác này dành cho các ADMIN hợp lệ, không đòi quyền CredentialResetPermission; các API reset vẫn giữ hạn chế qlcd_admin.
+`POST /api/v1/accounts/{id}/unlock` yêu cầu phiên ADMIN đầy đủ, xác nhận, mật khẩu của quản trị viên và OTP mới. Backend kiểm tra lại vai trò, trạng thái và thông tin xác thực tại SQL. Chỉ áp dụng với tài khoản đích khác và có vai trò ngoài ADMIN. Thao tác mở khóa dành cho ADMIN hợp lệ. Hai thao tác reset tiếp tục yêu cầu `CredentialResetPermission` theo ID đã cấu hình của `qlcd_admin`.
 
 Trong transaction Serializable: kiểm chứng actor, xác định đúng OrganizationId, khôi phục chính đơn vị nếu ngừng/IsDeleted (cha phải hoạt động), mở tài khoản đã chọn, clear tombstone cũ của tài khoản và thu hồi phiên/audit AUTH_ACCOUNT_UNLOCK cùng ORG_RESTORE khi có. OrganizationLifecycle tham gia transaction đang có, không commit riêng; lỗi cuối phải rollback cả phần restore đã save, trạng thái tài khoản, bước OTP và audit. Các tài khoản khác không được đổi cờ khóa/MFA/password; các phiên liên quan không được hồi sinh. Khối chỉ phân loại và không cản khôi phục khi liên kết khối cũ đã ngừng dùng.
 

@@ -162,3 +162,56 @@ Ngày rà soát 25/11/2026. Đường cơ sở là working tree có sẵn đợt
 - Không thay schema/EF model, không thêm migration, không sửa trạng thái dữ liệu triển khai. OrganizationLifecycle tham gia transaction ngoài khi được gọi từ mở khóa. Tài liệu nghiệp vụ, xác thực, khôi phục và hướng dẫn dự án đã cập nhật theo yêu cầu mới.
 - Kiểm chứng: backend build 0 warning/error; xUnit mặc định 83 qua, 2 bỏ qua. Chạy riêng AuthenticatedUnlockTests trên SQL Server Docker: 10/10 qua, gồm lỗi SaveChanges sau khôi phục phải rollback toàn bộ đơn vị/tài khoản/OTP/audit; mỗi test dùng database QLCD_Test_Unlock_GUID riêng. Ca rollback đã qua SQL riêng; kiểm thử concurrency chuyển đoàn viên cũ vẫn chưa chạy do fixture khác chưa cấu hình.
 - Frontend lint max-warnings 0, production build và typecheck qua; HTTP security smoke qua. Browser: 29 nhóm luồng, 98 ảnh trên 7 độ rộng, 0 tràn ngang, 0 lỗi trình duyệt/API ngoài dự kiến, axe trên 14 trang. Bao gồm X hủy mở khóa không ghi, xác thực thành công đưa cùng ID đơn vị lại cây và luồng khôi phục riêng. Chưa stress-test tải đồng thời hoặc nghiệm thu production.
+
+### Kiểm chứng lại trên Windows
+
+- Commit `173a47e` đã có luồng mở khóa có xác thực và tên đăng nhập viết tắt. `dotnet build backend/QLCD.sln -c Release` qua với 0 cảnh báo và 0 lỗi. `dotnet test backend/QLCD.sln -c Release --no-build` qua 83 ca, bỏ qua 2 ca cần SQL. Chạy lại với `--filter FullyQualifiedName~AuthenticatedUnlockTests` và `QLCD_TEST_UNLOCK_SQL_CONNECTION` trỏ tới SQL Express cục bộ qua shared memory, qua 10/10 ca gồm rollback. Các database `QLCD_Test_Unlock_*` đã được dọn.
+- `node tools/test-security-smoke.mjs` qua với InMemory. `npm run lint -- --max-warnings 0`, `npm run build`, `npm run typecheck` và `npm run test:browser` đều qua. Chrome kiểm tra 29 nhóm luồng với 98 ảnh, 0 tràn ngang và 0 lỗi trình duyệt/API ngoài dự kiến. Browser xác nhận đơn vị trở lại cây với cùng ID sau mở khóa và tài khoản mới dùng `tcd_`, `cdbp_`, `cdcs_`. Các lượt chạy dùng dữ liệu tổng hợp.
+
+### Sao lưu và nâng cấp QLCD_Local trên SQL Express
+
+- Chạy `tools/test-sql.ps1` trên schema trống và dữ liệu cũ tổng hợp trước khi nâng cấp. Sáu kiểm thử SQL qua và lần chạy lặp giữ dữ liệu fixture.
+- Sau khi người dùng xác nhận, chạy `BACKUP DATABASE` với `COPY_ONLY, CHECKSUM` trên `QLCD_Local` tại `SQLEXPRESS`. SQL Server đọc được bản sao trong thư mục Backup mặc định và `RESTORE VERIFYONLY WITH CHECKSUM` xác nhận hợp lệ. Nếu cần phục hồi, dùng bản sao trước migration để phục hồi vào database cô lập và đối soát trước khi chuyển kết nối.
+- Dùng `dotnet bin/Release/net10.0/QLCD.Api.dll --migrate` với kết nối migration cục bộ. Áp dụng `20261126050655_ManagementBlockDetails` sau `SeparateActivationExpiry`. SQL xác nhận hai cột mới và giá trị mặc định của các khối hiện có. Số bản ghi tài khoản, đơn vị và khối khớp trước và sau. Lệnh báo hai cảnh báo model EF về quan hệ `AuthSession` và kiểu decimal `DiemSo`.
+- Khởi động API local với kết nối `QLCD_Local` và bootstrap tắt. Xác nhận có phiên SQL của API trên database đích, `/health/ready` trả `Healthy` và `/login` trả HTTP 200. Việc xác thực tài khoản thực được thực hiện bởi người dùng trên trang đăng nhập.
+
+## Khôi phục nút Reset mật khẩu và Reset 2FA
+
+- Git xác nhận hai route, handler và dialog vẫn còn. `GET /api/v1/accounts` trả `canResetCredentials=false` khi backend local thiếu `Security:CredentialResetAccountId`. Cấu hình cũ cũng kiểm tra cứng `Username` và sẽ mất quyền khi đổi tên. Đã thống nhất chính sách API, handler và CLI khôi phục theo ID quản trị đã xác minh và vai trò ADMIN. ID trống vẫn từ chối và ghi cảnh báo khởi động. Giữ hợp đồng API v1 và hai dialog hiện có.
+- Đối chiếu đúng một `qlcd_admin` đang hoạt động trong `QLCD_Local` qua truy vấn chỉ đọc. Lưu ID vào `backend/QLCD.Api/appsettings.Local.json` được Git bỏ qua. Khởi động lại API và xác nhận SQL runtime kết nối `QLCD_Local`, readiness `Healthy`, trang đăng nhập HTTP 200. Các reset kiểm thử chỉ chạy trên fixture tổng hợp.
+- `dotnet build backend/QLCD.sln --no-restore` qua với 0 cảnh báo và 0 lỗi. `dotnet test backend/QLCD.sln --no-build --no-restore` qua 83 ca, bỏ qua 2 ca cần SQL. Chạy riêng `AuthenticatedUnlockTests` trên SQL Express qua 10/10 ca. `node tools/test-security-smoke.mjs` qua cả InMemory và `--sql-local`. Fixture SQL xác nhận ID đã đổi tên được phép, ADMIN khác mang tên `qlcd_admin` bị chặn, OTP sai hoặc dùng lại bị từ chối, giữ đúng mật khẩu/2FA, thu hồi phiên đích và ghi đúng hai audit. Database fixture đã được dọn.
+- Frontend lint, typecheck và production build đều qua. `npm run test:browser` qua 31 nhóm luồng trên Chrome, gồm ẩn hai nút khi thiếu quyền, hộp thoại, xác thực và hoàn tất cả hai reset, cấp mã kích hoạt, khóa và mở khóa kèm khôi phục đơn vị. 98 ảnh, 0 tràn ngang và 0 lỗi trình duyệt/API ngoài dự kiến.
+
+## Tạo lại QLCD_Local trên SQL Server Express
+
+- Theo yêu cầu khởi tạo lại, xác nhận `QLCD_Local` không tồn tại trên `SQLEXPRESS` rồi chạy `--migrate`, `--initialize-data` và `--bootstrap-admin` lần lượt. SQL xác nhận đủ 6 migration, 93 mục danh mục, 4 khối quản lý, 1 tài khoản `qlcd_admin` theo ID đã cấu hình và 0 đơn vị. Tài khoản mới yêu cầu mã kích hoạt Authenticator và đổi mật khẩu.
+- Lưu cấu hình SQL Windows Authentication và tắt bootstrap lúc khởi động trong `backend/QLCD.Api/appsettings.Local.json` được Git bỏ qua. Mã dùng một lần được lưu riêng ngoài repo. API readiness `Healthy`, trang đăng nhập và CSRF qua frontend đều trả HTTP 200. Cơ sở dữ liệu được tạo mới theo yêu cầu khởi tạo từ đầu.
+
+## Đăng nhập lần đầu và khóa đăng nhập tạm thời
+
+- Luồng cũ xác minh mật khẩu hai lần trong thiết lập Authenticator, sau đó ép đổi mật khẩu và đăng nhập lại. Các hạn mức theo tiến trình tách riêng mật khẩu và OTP. Luồng mới nhận mã kích hoạt ở API đăng nhập, dùng phiên giới hạn để tiếp tục cùng QR, tiêu thụ mã ở bước xác nhận OTP và cấp phiên mới. Xác nhận xong tự mở tổng quan và hiển thị mã khôi phục một lần. Mật khẩu mặc định được nhắc đổi sau khi kích hoạt. Reset mật khẩu của admin vẫn yêu cầu đổi trước khi vào nghiệp vụ. Reset 2FA độc lập và giữ mật khẩu.
+- Migration `20261126085830_LoginLockoutAndEnrollment` thêm trạng thái phiên, cờ nhắc đổi mật khẩu và bộ đếm SQL. Khóa đăng nhập đúng 10 phút sau 5 lỗi liên tiếp theo UTC. Kiểm tra đúng mật khẩu chưa xóa bộ đếm. SQL tuần tự hóa các lần xác thực đồng thời theo tài khoản. Xác thực thành công hoặc hết khóa đặt lại bộ đếm. Trạng thái hoạt động, xóa và phiên nghiệp vụ đã cấp giữ nguyên. Audit ghi lần sai và lần khóa, dùng giới hạn IP bổ sung.
+- Build backend Debug và Release qua. Release build dùng thư mục kết quả riêng vì API local đang giữ DLL bản cũ. xUnit qua 87 ca, bỏ qua 2 ca SQL trong lượt mặc định. Chạy riêng `LoginLockoutTests` với `QLCD_TEST_LOGIN_SQL_CONNECTION` qua 4/4 trên SQL Express. Kiểm tra HTTP riêng xác nhận `Retry-After`, cùng thời hạn khóa sau khi khởi động lại API và dùng client mới.
+- `dotnet ef migrations has-pending-model-changes` xác nhận model khớp. `tools/test-sql.ps1` qua 6 ca trên schema trống và dữ liệu cũ tổng hợp, gồm chạy lại migration. Chỉ áp migration trong database thử. `QLCD_Local` vẫn ở schema trước.
+- `node tools/test-security-smoke.mjs` qua với InMemory và `--sql-local`. Kiểm tra OTP, đổi mật khẩu, reset hai luồng độc lập, thu hồi phiên, khôi phục Authenticator và quản trị tài khoản. Chạy riêng `AuthenticatedUnlockTests` trên SQL Express qua 10/10 ca.
+- Frontend lint, typecheck và production build qua. Browser smoke cuối qua 32 nhóm luồng, gồm tự chuyển vào tổng quan sau OTP, tiếp tục cùng QR sau tải lại, và vẫn yêu cầu đổi mật khẩu sau Reset mật khẩu quản trị. 98 ảnh trên 7 độ rộng, 0 tràn ngang, 0 lỗi JavaScript/API ngoài dự kiến và 0 vi phạm axe trên 14 trang.
+
+## Kiểm duyệt an toàn thông tin ngày 26/11/2026
+
+- Rà soát mã, role/scope, phân loại dữ liệu, tệp, cấu hình, lịch sử Git, dependency và CI theo working tree. Ghi nhận 0 Critical, 2 High, 5 Medium, 2 Low. Một High đã sửa bằng concurrency token, một High còn mở để xác minh thu hồi credential SQL trong lịch sử. Ghi audit cho đăng nhập hoàn tất, đọc hồ sơ và tải minh chứng hợp lệ.
+- Debug/Release, frontend lint/build/typecheck, 87 xUnit mặc định, 14 ca khóa/mở riêng trên SQL Express và 32 nhóm luồng Chrome qua. HTTP smoke qua trên InMemory và SQL riêng. SQL rehearsal qua 7 ca, schema trống/cũ, chạy lặp, backup checksum, restore riêng và DBCC CHECKDB. Quét SAST và SCA không báo phát hiện trong phạm vi luật/nguồn đã dùng. Secret scan hiện hành 0 khớp, lịch sử 14 khớp đã che giá trị.
+- Cập nhật gate CI, AGENTS.md và bốn kỹ năng. Hai migration chờ áp lên QLCD_Local theo phê duyệt. Nghiệm thu ingress, quyền SQL, bảo vệ audit, storage/key ring, retention và thu hồi credential tại môi trường đích còn mở. [Báo cáo kiểm duyệt](security-audit/SECURITY_AUDIT.md)
+
+## Đồng bộ tài liệu và kỹ năng ngày 26/11/2026
+
+- Đồng bộ AGENTS, Markdown nghiệp vụ, hợp đồng API, hướng dẫn SQL/bảo mật và mẫu prompt theo mã hiện hành. Ghi điều kiện hiển thị hai nút reset, vòng đời đơn vị và mốc migration. Gắn nhãn các bản thiết kế và báo cáo lịch sử để dẫn về tài liệu hiện hành.
+- Cập nhật kỹ năng rà soát dự án, frontend, SQL, kiểm thử và rà soát bảo mật. Kiểm tra metadata 8 kỹ năng liên quan, liên kết Markdown bổ sung và `git diff --check`.
+- Backend build trên thư mục kết quả riêng qua với 0 cảnh báo và 0 lỗi. xUnit mặc định qua 87 ca, bỏ qua 3 ca cần SQL. Các lượt chạy SQL Express riêng qua 14/14 ca khóa/mở khóa và 2/2 ca ghi đồng thời, bao gồm cả 3 ca trên. Frontend lint, production build và typecheck qua.
+- `node tools/test-security-smoke.mjs` qua cả InMemory và `--sql-local` với dữ liệu tổng hợp. [Lệnh kiểm thử và fixture](TESTING.md)
+- Truy vấn chỉ đọc xác nhận `QLCD_Local` ở mốc 6 (`20261126050655_ManagementBlockDetails`). Hai migration mới đã chạy trên cơ sở dữ liệu tổng hợp riêng. Việc áp migration lên `QLCD_Local` vẫn chờ phê duyệt. [Hướng dẫn nâng schema](SECURITY.md)
+
+## Tách bước nhập mã kích hoạt khỏi đăng nhập thông thường ngày 26/11/2026
+
+- Trang đăng nhập từng hiển thị ô mã kích hoạt ở bước mật khẩu cho mọi tài khoản. API đã trả thử thách OTP cho tài khoản có Authenticator. Form mặc định hiện chỉ gửi tên đăng nhập và mật khẩu. Người dùng mở bước **Thiết lập Authenticator bằng mã kích hoạt** lần đầu hoặc sau Reset 2FA; đóng bước này xóa mã đang nhập. [Hướng dẫn xác thực](TWO_FACTOR_AUTHENTICATION.md)
+- Backend build và 87 ca xUnit qua, 3 ca SQL được bỏ qua trong lượt mặc định. HTTP smoke InMemory, frontend lint, typecheck, production build và browser smoke qua. Playwright kiểm tra dữ liệu request, mở/hủy bước mã kích hoạt, QR lần đầu và OTP khi đăng nhập lại. Báo cáo có 98 ảnh, 0 tràn ngang, 0 lỗi trình duyệt và 0 lỗi API ngoài dự kiến.
+- Dùng Chrome kiểm trực tiếp trang `/login` trên port 3000 và đường chuyển tiếp CSRF tới API local. Truy vấn chỉ đọc `QLCD_Local` xác nhận `qlcd_admin` đã liên kết Authenticator. Kiểm thử thông tin xác thực dùng tài khoản tổng hợp riêng.

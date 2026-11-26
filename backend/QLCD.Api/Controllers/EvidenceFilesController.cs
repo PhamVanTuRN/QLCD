@@ -89,13 +89,28 @@ public sealed class EvidenceFilesController(
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
     {
         var file = await database.EvidenceFiles.AsNoTracking().SingleOrDefaultAsync(value => value.Id == id, cancellationToken);
-        if (file is null || !await links.CanAccessAsync(file, cancellationToken))
+        if (file is null || user.UserId is not Guid actor || !await links.CanAccessAsync(file, cancellationToken))
             return NotFound();
 
         try
         {
             var stream = await storage.OpenAsync(file, cancellationToken);
-            return stream is null ? NotFound() : File(stream, "application/octet-stream", file.OriginalFileName);
+            if (stream is null) return NotFound();
+            try
+            {
+                database.AuditLogs.Add(new AuditLog
+                {
+                    EntityName = nameof(EvidenceFile), RecordId = file.Id, Action = "EVIDENCE_DOWNLOAD",
+                    UserId = actor.ToString(), CorrelationId = HttpContext.TraceIdentifier
+                });
+                await database.SaveChangesAsync(cancellationToken);
+                return File(stream, "application/octet-stream", file.OriginalFileName);
+            }
+            catch
+            {
+                await stream.DisposeAsync();
+                throw;
+            }
         }
         catch (InvalidEvidenceException)
         {

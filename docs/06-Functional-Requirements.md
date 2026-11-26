@@ -1,5 +1,7 @@
 # 06. FUNCTIONAL REQUIREMENTS - YÊU CẦU CHỨC NĂNG CHI TIẾT
 
+> Danh sách yêu cầu thiết kế. Đối chiếu chức năng đã triển khai và yêu cầu mới theo [tổng quan](PROJECT_OVERVIEW.md), [quy tắc nghiệp vụ](03-Business-Rules.md) và [tiến độ](TASK_TRACKER.md).
+
 Tài liệu này xác định các yêu cầu chức năng (FR) chi tiết cho các phân hệ nghiệp vụ hoàn chỉnh của hệ thống QLCD BV108.
 
 ## 1. Phân hệ Quản lý Hoạt động Công đoàn (FR-ACT)

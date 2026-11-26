@@ -107,11 +107,11 @@ public sealed class AccountCommands(IQLCDDbContext database, ICurrentUserService
 
     private async Task<TaiKhoan> LoadForReset(Guid id, string password, string code, Guid sessionVersion, CancellationToken cancellationToken)
     {
-        if (user.UserId == id || !permission.Allows(user.UserId, user.Username, user.Role))
+        if (user.UserId == id || !permission.Allows(user.UserId, user.Role))
             throw new UnauthorizedAccessException("Account reset permission is required for another account.");
 
         var actor = await database.TaiKhoans.SingleOrDefaultAsync(row => row.Id == user.UserId, cancellationToken);
-        if (actor is null || !permission.Allows(actor.Id, actor.Username, actor.VaiTro)
+        if (actor is null || !permission.Allows(actor.Id, actor.VaiTro)
             || !LoginCommandHandler.IsUsable(actor) || actor.MustChangePassword
             || LoginCommandHandler.SessionVersion(actor) != sessionVersion
             || !PasswordHasher.Verify(password, actor.PasswordHash) || !mfa.TryVerify(actor, code, out var used))

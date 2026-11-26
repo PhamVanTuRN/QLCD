@@ -1,8 +1,12 @@
 # Báo cáo kiểm toán bảo mật QLCD
 
-Báo cáo bên dưới ghi nhận trạng thái tại thời điểm audit. Mã và số dòng đã thay đổi trong đợt khắc phục. [Tình trạng khắc phục và hướng dẫn triển khai](08-remediation-status.md)
+Đợt kiểm duyệt ngày 26/11/2026 dùng working tree hiện tại và đối chiếu lại các thay đổi xác thực. [Báo cáo kiểm duyệt hiện hành](SECURITY_AUDIT.md) · [Bảo vệ dữ liệu](DATA_PROTECTION.md) · [Ứng phó sự cố](INCIDENT_RESPONSE.md)
 
-Đợt cải tiến ngày 25/11/2026 xác minh lại migration hardening trên SQL Server Express, phạm vi các báo cáo và luồng trình duyệt. [Báo cáo tổng kết hiện hành](../FINAL_REPORT.md)
+## Đường cơ sở lịch sử
+
+Các phát hiện bên dưới mô tả snapshot trước hardening. Mã và số dòng đã thay đổi trong các đợt khắc phục. [Tình trạng khắc phục và hướng dẫn triển khai](08-remediation-status.md)
+
+Đợt cải tiến ngày 25/11/2026 xác minh lại migration hardening trên SQL Server Express, phạm vi các báo cáo và luồng trình duyệt. [Báo cáo nghiệm thu theo mốc](../FINAL_REPORT.md)
 
 **Đánh giá tĩnh ngày 23/11/2026** · Nhánh `main`, commit nền `b9e38b2` và thay đổi đã có trong working tree lúc rà soát.
 

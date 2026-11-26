@@ -25,6 +25,7 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
     public DbSet<DanhMucDungChung> DanhMucDungChungs { get; set; } = null!;
     public DbSet<TaiKhoan> TaiKhoans { get; set; } = null!;
     public DbSet<AuthSession> AuthSessions { get; set; } = null!;
+    public DbSet<LoginAttempt> LoginAttempts { get; set; } = null!;
     public DbSet<HoatDongCongDoan> HoatDongCongDoans { get; set; } = null!;
     public DbSet<TaiChinhCongDoan> TaiChinhCongDoans { get; set; } = null!;
     public DbSet<PhucLoiDoanVien> PhucLoiDoanViens { get; set; } = null!;
@@ -150,6 +151,13 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<LoginAttempt>(entity =>
+        {
+            entity.HasKey(attempt => attempt.Key);
+            entity.Property(attempt => attempt.Key).HasMaxLength(66).IsUnicode(false);
+            entity.HasIndex(attempt => attempt.LastFailureUtc);
+        });
+
         modelBuilder.Entity<AuthSession>(entity =>
         {
             entity.Property(e => e.TokenHash).HasMaxLength(64).IsUnicode(false).IsRequired();
@@ -162,6 +170,7 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
         // 9. Cấu hình thực thể HoatDongCongDoan
         modelBuilder.Entity<HoatDongCongDoan>(entity =>
         {
+            entity.Property(e => e.DonViId).IsConcurrencyToken();
             entity.Property(e => e.TenHoatDong).HasMaxLength(250).IsRequired();
             entity.Property(e => e.MoTa).HasMaxLength(1000);
             entity.Property(e => e.LoaiHoatDong).HasMaxLength(50).IsRequired();
@@ -180,6 +189,8 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
         // 10. Cấu hình thực thể TaiChinhCongDoan
         modelBuilder.Entity<TaiChinhCongDoan>(entity =>
         {
+            entity.Property(e => e.DonViId).IsConcurrencyToken();
+            entity.Property(e => e.LoaiGiaoDich).IsConcurrencyToken();
             entity.Property(e => e.LoaiGiaoDich).HasMaxLength(50).IsRequired();
             entity.Property(e => e.SoTien).HasPrecision(18, 2);
             entity.Property(e => e.NguoiGiaoDich).HasMaxLength(100).IsRequired();
@@ -200,6 +211,8 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
         // 11. Cấu hình thực thể PhucLoiDoanVien
         modelBuilder.Entity<PhucLoiDoanVien>(entity =>
         {
+            entity.Property(e => e.DonViId).IsConcurrencyToken();
+            entity.Property(e => e.TrangThai).IsConcurrencyToken();
             entity.Property(e => e.LoaiPhucLoi).HasMaxLength(50).IsRequired();
             entity.Property(e => e.KinhPhiHoTro).HasPrecision(18, 2);
             entity.Property(e => e.LyDo).HasMaxLength(500).IsRequired();
@@ -219,6 +232,9 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
         // 12. Cấu hình thực thể SangKien
         modelBuilder.Entity<SangKien>(entity =>
         {
+            entity.Property(e => e.DonViId).IsConcurrencyToken();
+            entity.Property(e => e.TrangThai).IsConcurrencyToken();
+            entity.Property(e => e.KetQuaNghiemThu).IsConcurrencyToken();
             entity.Property(e => e.TenDeTai).HasMaxLength(250).IsRequired();
             entity.Property(e => e.LinhVuc).HasMaxLength(100).IsRequired();
             entity.Property(e => e.CapDeTai).HasMaxLength(50).IsRequired();
@@ -239,6 +255,12 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
         // 13. Cấu hình thực thể ThiDuaCongDoan
         modelBuilder.Entity<ThiDuaCongDoan>(entity =>
         {
+            entity.Property(e => e.DonViId).IsConcurrencyToken();
+            entity.Property(e => e.DoanVienId).IsConcurrencyToken();
+            entity.Property(e => e.TrangThai).IsConcurrencyToken();
+            entity.Property(e => e.DiemBchDuyet).IsConcurrencyToken();
+            entity.Property(e => e.XepLoai).IsConcurrencyToken();
+            entity.Property(e => e.KhenThuong).IsConcurrencyToken();
             entity.Property(e => e.TenPhongTrao).HasMaxLength(250).IsRequired();
             entity.Property(e => e.DiemTuDanhGia).HasPrecision(18, 2);
             entity.Property(e => e.DiemBchDuyet).HasPrecision(18, 2);
@@ -283,6 +305,7 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
                 var lambda = Expression.Lambda(compare, parameter);
 
                 modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
+                modelBuilder.Entity(entityType.ClrType).Property(nameof(BaseEntity.IsDeleted)).IsConcurrencyToken();
             }
         }
     }

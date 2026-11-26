@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { isAxiosError } from "axios";
-import { apiMessage, changePasswordApi, getSessionApi, loginApi, logoutApi, sessionExpiredEvent, verifyLoginAuthenticator, type SessionProfile } from "./api";
+import { apiMessage, changePasswordApi, getSessionApi, loginApi, loginErrorMessage, logoutApi, sessionExpiredEvent, verifyLoginAuthenticator, type SessionProfile } from "./api";
 
 export interface UserProfile {
   id: string;
@@ -14,15 +14,19 @@ export interface UserProfile {
   donViTen?: string;
   mustChangePassword: boolean;
   needsAuthenticator: boolean;
+  recommendPasswordChange: boolean;
 }
 
 type LoginResponse = { success: true; challenge?: string } | { success: false; error: string; expired?: boolean };
 
 interface AuthContextType {
   user: UserProfile | null;
-  login: (username: string, password: string) => Promise<LoginResponse>;
+  login: (username: string, password: string, activationCode?: string) => Promise<LoginResponse>;
   verifyAuthenticator: (challenge: string, code: string) => Promise<LoginResponse>;
-  refreshSession: () => Promise<void>;
+  enrollmentCodes: string[] | null;
+  completeEnrollment: (codes: string[]) => Promise<boolean>;
+  dismissEnrollmentCodes: () => void;
+  refreshSession: () => Promise<UserProfile | null>;
   logout: () => Promise<boolean>;
   changePassword: (currentPassword: string, newPassword: string, confirmPassword: string, code: string) => Promise<{ success: boolean; error?: string }>;
   isAuthenticated: boolean;
@@ -37,6 +41,7 @@ function profile(data: SessionProfile): UserProfile {
     donViId: data.organizationId ?? undefined, donViTen: data.donViTen ?? undefined,
     mustChangePassword: data.mustChangePassword,
     needsAuthenticator: data.needsAuthenticator,
+    recommendPasswordChange: data.recommendPasswordChange,
   };
 }
 
@@ -45,13 +50,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [enrollmentCodes, setEnrollmentCodes] = useState<string[] | null>(null);
 
   useEffect(() => {
     let active = true;
     // Remove data written by the retired browser-token implementation.
     localStorage.removeItem("qlcd_user");
     localStorage.removeItem("qlcd_token");
-    const onExpired = () => setUser(null);
+    const onExpired = () => { setUser(null); setEnrollmentCodes(null); };
     window.addEventListener(sessionExpiredEvent, onExpired);
     getSessionApi().then(data => { if (active) setUser(profile(data)); })
       .catch(() => { if (active) setUser(null); })
@@ -62,20 +68,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function login(username: string, password: string): Promise<LoginResponse> {
+  async function login(username: string, password: string, activationCode?: string): Promise<LoginResponse> {
     try {
-      const result = await loginApi(username, password);
+      const result = await loginApi(username, password, activationCode);
       if ("challenge" in result) return { success: true, challenge: result.challenge };
       setUser(profile(result));
       return { success: true };
     } catch (error) {
-      return { success: false, error: apiMessage(error, "Đăng nhập thất bại.") };
+      return { success: false, error: loginErrorMessage(error, "Đăng nhập thất bại.") };
     }
   }
 
   async function refreshSession() {
-    try { setUser(profile(await getSessionApi())); }
-    catch { setUser(null); }
+    try {
+      const current = profile(await getSessionApi());
+      setUser(current);
+      return current;
+    } catch {
+      setUser(null);
+      setEnrollmentCodes(null);
+      return null;
+    }
+  }
+
+  async function completeEnrollment(codes: string[]) {
+    try {
+      const current = profile(await getSessionApi());
+      if (current.mustChangePassword || current.needsAuthenticator) return false;
+      setEnrollmentCodes(codes);
+      setUser(current);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async function verifyAuthenticator(challenge: string, code: string): Promise<LoginResponse> {
@@ -83,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(profile(await verifyLoginAuthenticator(challenge, code)));
       return { success: true };
     } catch (error) {
-      return { success: false, error: apiMessage(error, "Không thể xác thực mã."),
+      return { success: false, error: loginErrorMessage(error, "Không thể xác thực mã."),
         expired: isAxiosError<{ code?: string }>(error) && error.response?.data.code === "mfa_challenge_expired" };
     }
   }
@@ -96,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
     }
     setUser(null);
+    setEnrollmentCodes(null);
     return true;
   }
 
@@ -103,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await changePasswordApi(currentPassword, newPassword, confirmPassword, code);
       setUser(null);
+      setEnrollmentCodes(null);
       return { success: true };
     } catch (error) {
       return { success: false, error: apiMessage(error, "Không thể đổi mật khẩu.") };
@@ -112,7 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   if (!isLoaded) return <main role="status" className="grid min-h-dvh place-items-center">Đang kiểm tra phiên làm việc…</main>;
 
   return <AuthContext.Provider value={{
-    user, login, verifyAuthenticator, refreshSession, logout, changePassword,
+    user, login, verifyAuthenticator, refreshSession, logout, changePassword, enrollmentCodes, completeEnrollment,
+    dismissEnrollmentCodes: () => setEnrollmentCodes(null),
     isAuthenticated: user !== null,
   }}>
     {children}

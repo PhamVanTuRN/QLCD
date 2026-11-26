@@ -11,7 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 Đọc AGENTS.md và các tài liệu liên quan trước khi sửa.
 
-Chỉ tìm kiếm và đọc các file trực tiếp liên quan đến Authentication, Authorization, Password, MFA và Account Management.
+Chỉ đọc các tệp trực tiếp liên quan đến yêu cầu đang thực hiện.
 
 Không phân tích lại toàn bộ codebase nếu không cần thiết.
 
@@ -39,8 +39,12 @@ Dùng `FormDialog` và `DialogCloseButton` cho nút X; không dùng `window.conf
 
 Phân biệt cờ khóa tài khoản và trạng thái đơn vị: hiển thị riêng organizationActive/accountArchived/canSignIn; mở khóa yêu cầu dialog mật khẩu/OTP của admin và chủ động khôi phục chính đơn vị ngừng/ẩn; khóa thường không đổi đơn vị. Cây chính chỉ có đơn vị hoạt động. Ngừng/khôi phục dùng thao tác riêng có xác nhận và khu vực ngừng hoạt động có phân trang; không có lựa chọn đổi trạng thái trong form sửa thông tin. Không dùng từ Xóa cho thao tác ngừng đơn vị.
 
-Khối quản lý dùng management-blocks tại Danh mục gốc; không gọi API danh mục chung để ghi loại KhoiChuyenMon. Khi tạo đơn vị, yêu cầu chọn rõ khối đang dùng; không tự chọn khối cha/khối đầu tiên. Cây chỉ thêm group header/nhãn, giữ node ID, MaParent và quyền hiện hành. Form sửa cho giữ MaKhoi null cũ hoặc khối ngừng hiện có, không âm thầm xóa/thay liên kết. Số đơn vị liên kết chỉ hiển thị khi API trả cho ADMIN.
-
-Khối quản lý trong /catalogs dùng ManagementBlocksPanel và endpoint management-blocks, không dùng API danh mục generic cho khối. Form tạo đơn vị phải để placeholder trống và yêu cầu chọn khối đang dùng; form sửa giữ liên kết khối ngừng hiện có và giá trị null cũ, không tự chọn thay thế khi lookup lỗi. Group header khối chỉ phân nhóm các node cùng cha, không mang ID tổ chức/tài khoản và không thay scope. Label của select phải liên kết rõ bằng htmlFor/id.
+Khối quản lý trong `/catalogs` dùng `ManagementBlocksPanel` và `management-blocks`. API danh mục chung loại `KhoiChuyenMon` chỉ đọc. Form tạo để lựa chọn ban đầu trống và yêu cầu chọn khối đang dùng. Form sửa giữ `MaKhoi` null cũ hoặc khối ngừng hiện có, kể cả khi lookup lỗi. Group header chỉ phân nhóm các node cùng cha, giữ ID, `MaParent` và scope. Liên kết label với select bằng `htmlFor`/`id`. Chỉ hiển thị số đơn vị liên kết khi API trả cho ADMIN.
 
 Tài khoản mới dùng username tcd_/cdbp_/cdcs_ theo loại tổ chức; UI hiển thị vai trò TCĐ/CĐBP/CĐCS nhưng giữ mã quyền TOCD/CDBP/CDCS trong API. Không đổi tên đăng nhập hoặc ghép các tài khoản hiện có. Mở khóa có X/Hủy không gửi ghi; mở khóa kèm khôi phục phải giải thích ảnh hưởng trước khi xác nhận, lỗi hiển thị trong dialog, khóa X khi đang gửi.
+
+## Xác thực và bảo mật tài khoản
+
+- Form đăng nhập mặc định chỉ có tên đăng nhập và mật khẩu. Ô mã kích hoạt chỉ xuất hiện trong bước thiết lập Authenticator do người dùng chọn. Khi quay lại đăng nhập thông thường, xóa mã đang nhập và bỏ trường này khỏi request. Sau khi liên kết, API yêu cầu OTP.
+- Dùng trạng thái phiên từ API để tiếp tục QR khi `activationVerified`, áp guard khi `needsAuthenticator` hoặc `mustChangePassword` và hiển thị gợi ý khi `recommendPasswordChange`. Mã khôi phục chỉ giữ trong bộ nhớ để hiển thị một lần. Lỗi `429` với `login_locked` dùng thời gian chờ do server trả. [Luồng xác thực](../../docs/AUTHENTICATION.md)
+- Hai thao tác reset dựa trên `canResetCredentials` từ backend và áp dụng cho tài khoản đích đủ điều kiện. Cả hai dùng hộp thoại xác nhận, mật khẩu và OTP mới của quản trị viên. Quyền thực hiện do backend quyết định. [Quy trình quản trị](../../docs/ACCOUNT_RECOVERY.md)

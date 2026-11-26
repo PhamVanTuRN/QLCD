@@ -51,7 +51,7 @@ public class UnionMembersController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var result = await _mediator.Send(new GetUnionMemberDetailQuery(id), HttpContext.RequestAborted);
+        var result = await _mediator.Send(new GetUnionMemberDetailQuery(id, HttpContext.TraceIdentifier), HttpContext.RequestAborted);
         if (result == null)
         {
             return NotFound(new { success = false, message = "Không tìm thấy đoàn viên." });

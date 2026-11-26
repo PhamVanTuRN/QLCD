@@ -12,23 +12,28 @@ using System.Text.Json.Serialization;
 
 namespace QLCD.Application.Features.Auth.Commands.Login;
 
-public record LoginCommand(string Username, string Password, string? MfaCode = null) : IRequest<LoginResult?>
+public record LoginCommand(string Username, string Password, string? MfaCode = null) : IRequest<LoginAttemptResult<LoginResult>>
 {
     public bool BeginAuthenticator { get; init; }
+    public string? ActivationCode { get; init; }
     [JsonIgnore]
     public MfaLoginProof? VerifiedPassword { get; init; }
+    [JsonIgnore]
+    public string? Trace { get; init; }
 }
 
 public sealed record SessionProfile(Guid Id, string Username, string HoTen, string VaiTro,
-    Guid? OrganizationId, string? DonViTen, bool MustChangePassword, bool NeedsAuthenticator, bool RequiresActivation, bool HasRecoveryCodes)
+    Guid? OrganizationId, string? DonViTen, bool MustChangePassword, bool NeedsAuthenticator, bool RequiresActivation, bool HasRecoveryCodes,
+    bool RecommendPasswordChange = false, bool ActivationVerified = false)
 {
-    public static SessionProfile From(TaiKhoan account)
+    public static SessionProfile From(TaiKhoan account, bool activationVerified = false)
     {
         var needsAuthenticator = account.ProtectedMfaSecret is null;
         var restricted = account.MustChangePassword || needsAuthenticator;
         return new SessionProfile(account.Id, account.Username, restricted ? account.Username : account.HoTen, account.VaiTro,
             restricted ? null : account.OrganizationId, restricted ? null : account.Organization?.TenDonVi,
-            account.MustChangePassword, needsAuthenticator, account.ActivationCodeHash is not null, account.RecoveryCodeHashes is not null);
+            account.MustChangePassword, needsAuthenticator, account.ActivationCodeHash is not null, account.RecoveryCodeHashes is not null,
+            !restricted && account.RecommendPasswordChange, needsAuthenticator && activationVerified);
     }
 }
 
@@ -48,59 +53,80 @@ public sealed class LoginCommandValidator : AbstractValidator<LoginCommand>
         RuleFor(command => command.Username).NotEmpty().MaximumLength(50);
         RuleFor(command => command.Password).NotEmpty().MaximumLength(128).When(command => command.VerifiedPassword is null);
         RuleFor(command => command.MfaCode).Matches("^[0-9]{6}$").When(command => command.MfaCode is not null);
+        RuleFor(command => command.ActivationCode).MaximumLength(32);
     }
 }
 
 public sealed class LoginCommandHandler(IQLCDDbContext context, IMfaVerifier mfa, TimeProvider clock)
-    : IRequestHandler<LoginCommand, LoginResult?>
+    : IRequestHandler<LoginCommand, LoginAttemptResult<LoginResult>>
 {
-    public async Task<LoginResult?> Handle(LoginCommand request, CancellationToken cancellationToken)
+    public async Task<LoginAttemptResult<LoginResult>> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         var username = request.Username.Trim().ToLowerInvariant();
-        var now = clock.GetUtcNow().UtcDateTime;
-        var operational = context.DonViCongDoans.OperationalUnits();
-        var account = await context.TaiKhoans.Include(user => user.Organization)
-            .Where(user => user.OrganizationId == null || operational.Any(u => u.Id == user.OrganizationId))
-            .SingleOrDefaultAsync(user => user.Username == username && user.TrangThai, cancellationToken);
-        var passwordMatches = request.VerifiedPassword is { } proof
-            ? account is not null && proof.AccountId == account.Id && proof.SecurityVersion == SessionVersion(account)
-                && account.ProtectedMfaSecret is not null
-            : PasswordHasher.Verify(request.Password, account?.PasswordHash);
-        if (account is null || !passwordMatches || !IsUsable(account)
-            || (account.MustChangePassword && !(account.TemporaryPasswordExpiresUtc > now)))
-            return null;
-
-        if (request.VerifiedPassword is null && account.ProtectedMfaSecret is not null)
-            return new LoginResult(null, default, SessionProfile.From(account), new MfaLoginProof(account.Id, SessionVersion(account)));
-
-        if (account.ProtectedMfaSecret is not null)
+        var accountId = request.VerifiedPassword?.AccountId ?? await context.TaiKhoans.IgnoreQueryFilters()
+            .Where(user => user.Username == username).Select(user => (Guid?)user.Id).SingleOrDefaultAsync(cancellationToken);
+        var key = accountId is Guid id ? LoginAttemptGuard.AccountKey(id) : LoginAttemptGuard.UnknownKey(username);
+        return await new LoginAttemptGuard(context, clock).RunAsync<LoginResult>(key, async attempt =>
         {
-            if (!mfa.TryVerify(account, request.MfaCode, out var step))
-                return null;
-            account.LastMfaStep = step;
-        }
+            var now = clock.GetUtcNow().UtcDateTime;
+            var operational = context.DonViCongDoans.OperationalUnits();
+            var account = await context.TaiKhoans.Include(user => user.Organization)
+                .Where(user => user.OrganizationId == null || operational.Any(u => u.Id == user.OrganizationId))
+                .SingleOrDefaultAsync(user => user.Id == accountId && user.TrangThai, cancellationToken);
+            if (request.VerifiedPassword is { } proof)
+            {
+                if (account is null || !IsUsable(account) || proof.SecurityVersion != SessionVersion(account)
+                    || account.ProtectedMfaSecret is null || (account.MustChangePassword && !(account.TemporaryPasswordExpiresUtc > now)))
+                    return null;
+                if (!mfa.TryVerify(account, request.MfaCode, out var step))
+                {
+                    attempt.Fail(account.Id, request.Trace);
+                    return null;
+                }
+                account.LastMfaStep = step;
+                attempt.CompleteSignIn();
+                context.AuditLogs.Add(AccountCredentials.Event(account.Id, account.Id, "AUTH_LOGIN_SUCCESS", request.Trace));
+                return CreateSession(context, account, now);
+            }
 
+            if (!PasswordHasher.Verify(request.Password, account?.PasswordHash) || account is null || !IsUsable(account)
+                || !string.Equals(account.Username, username, StringComparison.OrdinalIgnoreCase)
+                || (account.MustChangePassword && !(account.TemporaryPasswordExpiresUtc > now)))
+            {
+                attempt.Fail(accountId, request.Trace);
+                return null;
+            }
+
+            if (account.ProtectedMfaSecret is not null)
+                return new LoginResult(null, default, SessionProfile.From(account), new MfaLoginProof(account.Id, SessionVersion(account)));
+
+            if (!(account.ActivationCodeExpiresUtc > now) || !AccountCredentials.MatchesHash(request.ActivationCode, account.ActivationCodeHash))
+            {
+                attempt.Fail(account.Id, request.Trace);
+                return null;
+            }
+            return CreateSession(context, account, now, activationVerified: true);
+        }, cancellationToken);
+    }
+
+    public static LoginResult CreateSession(IQLCDDbContext context, TaiKhoan account, DateTime now, bool activationVerified = false)
+    {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var expires = now.AddMinutes(account.MustChangePassword || account.ProtectedMfaSecret is null ? 10 : 30);
         if (account.MustChangePassword && account.TemporaryPasswordExpiresUtc is DateTime deadline && deadline < expires)
             expires = deadline;
+        if (activationVerified && account.ActivationCodeExpiresUtc is DateTime activationExpiry && activationExpiry < expires)
+            expires = activationExpiry;
         var session = new AuthSession
         {
             AccountId = account.Id,
             SecurityVersion = SessionVersion(account),
             TokenHash = HashToken(token),
-            ExpiresAtUtc = expires
+            ExpiresAtUtc = expires,
+            ActivationVerified = activationVerified
         };
         context.AuthSessions.Add(session);
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return null;
-        }
-        return new LoginResult(token, session.ExpiresAtUtc, SessionProfile.From(account));
+        return new LoginResult(token, session.ExpiresAtUtc, SessionProfile.From(account, activationVerified));
     }
 
     public static string HashToken(string token) =>

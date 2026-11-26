@@ -1,5 +1,7 @@
 # 09. DATABASE DESIGN - THIẾT KẾ CƠ SỞ DỮ LIỆU HOÀN CHỈNH
 
+> Thiết kế dữ liệu ban đầu. Kiểm tra schema thực tế trong [EF migrations](../backend/QLCD.Infrastructure/Migrations) và trạng thái triển khai trong [hướng dẫn nâng schema](SECURITY.md).
+
 Tài liệu này trình bày thiết kế chi tiết cơ sở dữ liệu hệ thống QLCD đảm bảo đầy đủ các mối quan hệ thực thể, ràng buộc kiểm tra và hỗ trợ cơ chế Soft Delete, Audit Log.
 
 ## 1. Sơ đồ Quan hệ Thực thể (Physical ERD Diagram)

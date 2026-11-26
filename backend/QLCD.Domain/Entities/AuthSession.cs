@@ -8,4 +8,6 @@ public sealed class AuthSession
     public Guid SecurityVersion { get; set; }
     public required string TokenHash { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
+    public bool ActivationVerified { get; set; }
+    public string? ProtectedEnrollmentKey { get; set; }
 }

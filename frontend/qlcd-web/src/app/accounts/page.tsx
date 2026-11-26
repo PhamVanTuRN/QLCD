@@ -56,6 +56,8 @@ export default function AccountsPage() {
   const policy = list?.credentialPolicy;
   const accounts = list?.data ?? [];
   const hasMore = list?.hasMore ?? false;
+  const onlyOwnAccount = !loading && !search.trim() && page === 1 && !hasMore
+    && accounts.length === 1 && accounts[0].id === user?.id;
 
   const handleToggleStatus = async (id: string) => {
     try {
@@ -154,7 +156,10 @@ export default function AccountsPage() {
 
       {policy && <section aria-label="Mật khẩu khởi tạo" className="rounded-xl border border-brand-line bg-brand-soft p-4 text-sm text-copy">
         <p>Mật khẩu khởi tạo dùng chung cho tài khoản mới và reset mật khẩu: <code className="font-bold text-ink">{policy.initialPassword}</code>.</p>
-        <p>Khóa tài khoản không ngừng đơn vị. Mở khóa có xác thực admin sẽ khôi phục chính đơn vị liên kết đang ngừng/ẩn; tài khoản khác giữ cờ khóa riêng. Tài khoản mới được tạo ở trạng thái khóa. Sau khi xác minh danh tính và cấp mã kích hoạt, tài khoản được mở để thiết lập Authenticator và đổi mật khẩu trong {policy.temporaryPasswordLifetimeHours} giờ. Reset mật khẩu không mở khóa tài khoản và không thay Authenticator.</p>
+        <p>Khóa tài khoản không ngừng đơn vị. Mở khóa có xác thực admin sẽ khôi phục chính đơn vị liên kết đang ngừng/ẩn; tài khoản khác giữ cờ khóa riêng. Tài khoản mới được tạo ở trạng thái khóa. Sau khi xác minh danh tính và cấp mã kích hoạt, tài khoản được mở để thiết lập Authenticator trong {policy.activationCodeLifetimeHours} giờ. Reset mật khẩu không mở khóa tài khoản và không thay Authenticator.</p>
+        {list?.canResetCredentials && onlyOwnAccount && <p className="mt-2 font-medium text-ink">
+          Hiện danh sách chỉ có tài khoản của bạn. Reset mật khẩu và Reset 2FA xuất hiện ở cột Thao tác của tài khoản khác.
+        </p>}
       </section>}
 
       {/* Main card */}

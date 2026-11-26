@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "qlcd-sql-connection-password"
+description = "Password in an ASP.NET SQL connection configuration"
+path = '''(?i)(?:^|[\\/])appsettings(?:\.[^\\/]+)?\.json$'''
+regex = '''(?i)\b(?:password|pwd)\s*=\s*([^;"\s]+)'''
+secretGroup = 1

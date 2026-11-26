@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using QLCD.Api.Security;
+using QLCD.Application.Common;
 using QLCD.Application.Common.Interfaces;
 using QLCD.Application.Features.Auth;
 using QLCD.Application.Features.Auth.Commands.Login;
@@ -20,7 +21,7 @@ namespace QLCD.Api.Controllers;
 [RequestSizeLimit(4096)]
 public sealed class AuthenticatorController(
     IQLCDDbContext database, TotpVerifier totp, IDataProtectionProvider protection,
-    LoginThrottle throttle, TimeProvider clock) : ControllerBase
+    LoginThrottle throttle, TimeProvider clock, IWebHostEnvironment environment) : ControllerBase
 {
     private const string SetupPurpose = "QLCD.AuthenticatorSetup.v2";
     private const string RecoveryPurpose = "QLCD.AuthenticatorRecovery.v1";
@@ -31,35 +32,70 @@ public sealed class AuthenticatorController(
     public async Task<IActionResult> Status(CancellationToken cancellationToken)
     {
         var account = await LoadCurrent(cancellationToken);
-        return account is null ? Unauthorized() : Ok(new { success = true, data = SessionProfile.From(account) });
+        return account is null ? Unauthorized() : Ok(new { success = true, data = SessionProfile.From(account, Session.Profile.ActivationVerified) });
     }
 
     [HttpPost("setup")]
+    [EnableRateLimiting(LoginThrottle.FactorPolicy)]
     public async Task<IActionResult> Setup(AuthenticatorSetupRequest request, CancellationToken cancellationToken)
     {
-        if (!throttle.TryAcquireAuthenticatorChange(Session.Profile.Id)) return RateLimited();
-        var account = await LoadCurrent(cancellationToken);
-        if (account is null) return Unauthorized();
-        if (account.ProtectedMfaSecret is not null) return Conflict();
-        if (!PasswordHasher.Verify(request.CurrentPassword, account.PasswordHash)
-            || !(account.ActivationCodeExpiresUtc > clock.GetUtcNow().UtcDateTime)
-            || !AccountCredentials.MatchesHash(request.ActivationCode, account.ActivationCodeHash))
-            return BadRequest(new { success = false, message = "Mật khẩu hoặc mã kích hoạt không hợp lệ." });
+        return await GuardLogin(Session.Profile.Id, async attempt =>
+        {
+            var account = await LoadCurrent(cancellationToken);
+            var session = await database.AuthSessions.FindAsync([Session.Id], cancellationToken);
+            if (account is null || session is null || session.ExpiresAtUtc <= clock.GetUtcNow().UtcDateTime) return Unauthorized();
+            if (account.ProtectedMfaSecret is not null) return Conflict();
+            if (!(account.ActivationCodeExpiresUtc > clock.GetUtcNow().UtcDateTime)) return ExpiredSetup();
+            if (!session.ActivationVerified && (!PasswordHasher.Verify(request.CurrentPassword ?? "", account.PasswordHash)
+                || !AccountCredentials.MatchesHash(request.ActivationCode, account.ActivationCodeHash)))
+            {
+                attempt.Fail(account.Id, HttpContext.TraceIdentifier);
+                return InvalidLoginFactor();
+            }
 
-        return CreateSetup(account, SetupPurpose, Session.Id);
+            session.ActivationVerified = true;
+            session.ProtectedEnrollmentKey ??= totp.Protect(account.Id, TotpVerifier.GenerateKey());
+            return CreateSetup(account, SetupPurpose, session.Id, session.ProtectedEnrollmentKey);
+        }, cancellationToken);
     }
 
     [HttpPost("confirm")]
+    [EnableRateLimiting(LoginThrottle.FactorPolicy)]
     public async Task<IActionResult> Confirm(AuthenticatorConfirmRequest request, CancellationToken cancellationToken)
     {
-        if (!throttle.TryAcquireAuthenticatorChange(Session.Profile.Id)) return RateLimited();
         var pending = protection.Read<PendingAuthenticator>(SetupPurpose, request.Setup);
-        var account = await LoadCurrent(cancellationToken);
-        if (account is null) return Unauthorized();
-        if (account.ProtectedMfaSecret is not null || pending?.SessionId != Session.Id
-            || account.ActivationCodeHash is null || !(account.ActivationCodeExpiresUtc > clock.GetUtcNow().UtcDateTime))
-            return ExpiredSetup();
-        return await ConfirmSetup(account, pending!, request.Code, Session.Id, cancellationToken);
+        if (pending?.SessionId != Session.Id) return ExpiredSetup();
+        LoginResult? login = null;
+        var result = await GuardLogin(Session.Profile.Id, async attempt =>
+        {
+            var account = await LoadCurrent(cancellationToken);
+            var session = await database.AuthSessions.FindAsync([Session.Id], cancellationToken);
+            var now = clock.GetUtcNow().UtcDateTime;
+            if (account is null || session is null || session.ExpiresAtUtc <= now) return Unauthorized();
+            if (account.ProtectedMfaSecret is not null || account.ActivationCodeHash is null || !(account.ActivationCodeExpiresUtc > now)
+                || (session.ProtectedEnrollmentKey is not null && pending!.ProtectedSecret != session.ProtectedEnrollmentKey))
+                return ExpiredSetup();
+            if (!VerifySetup(account, pending!, request.Code, attempt, out var step)) return InvalidLoginFactor();
+
+            // A password reset can precede enrollment; only the initial password policy can be deferred.
+            if (account.MustChangePassword && !await database.AuditLogs.AnyAsync(row => row.RecordId == account.Id
+                && row.EntityName == nameof(TaiKhoan) && (row.Action == "AUTH_PASSWORD_RESET" || row.Action == "AUTH_OPERATOR_RESET"), cancellationToken))
+            {
+                account.MustChangePassword = false;
+                account.RecommendPasswordChange = true;
+                account.TemporaryPasswordExpiresUtc = null;
+            }
+            var codes = ApplySetup(account, pending!, step, "MFA_ENROLL");
+            database.AuthSessions.Remove(session);
+            login = LoginCommandHandler.CreateSession(database, account, now);
+            attempt.CompleteSignIn();
+            database.AuditLogs.Add(AccountCredentials.Event(account.Id, account.Id, "AUTH_LOGIN_SUCCESS", HttpContext.TraceIdentifier));
+            return Ok(new { success = true, data = new { codes } });
+        }, cancellationToken);
+        if (login is not null)
+            Response.Cookies.Append(SessionAuthenticationHandler.CookieName(environment), login.SessionToken!,
+                SessionAuthenticationHandler.CookieOptions(environment, login.ExpiresAtUtc));
+        return result;
     }
 
     [AllowAnonymous]
@@ -69,11 +105,17 @@ public sealed class AuthenticatorController(
     {
         var challenge = protection.Read<AuthenticatorLoginChallenge>(AuthenticatorTickets.LoginPurpose, request.Challenge);
         if (challenge is null) return ExpiredSetup();
-        if (!throttle.TryAcquireSecondFactor(challenge.Proof.AccountId)) return RateLimited();
-        var account = await FindUsable(challenge.Proof.AccountId, challenge.Proof.SecurityVersion, cancellationToken);
-        if (account?.ProtectedMfaSecret is null || !AccountCredentials.MatchesRecoveryCode(account, request.RecoveryCode))
-            return BadRequest(new { success = false, message = "Mã khôi phục không hợp lệ hoặc đã được sử dụng." });
-        return CreateSetup(account, RecoveryPurpose, null);
+        return await GuardLogin(challenge.Proof.AccountId, async attempt =>
+        {
+            var account = await FindUsable(challenge.Proof.AccountId, challenge.Proof.SecurityVersion, cancellationToken);
+            if (account?.ProtectedMfaSecret is null) return ExpiredSetup();
+            if (!AccountCredentials.MatchesRecoveryCode(account, request.RecoveryCode))
+            {
+                attempt.Fail(account.Id, HttpContext.TraceIdentifier);
+                return InvalidLoginFactor();
+            }
+            return CreateSetup(account, RecoveryPurpose, null, totp.Protect(account.Id, TotpVerifier.GenerateKey()));
+        }, cancellationToken);
     }
 
     [AllowAnonymous]
@@ -83,10 +125,14 @@ public sealed class AuthenticatorController(
     {
         var pending = protection.Read<PendingAuthenticator>(RecoveryPurpose, request.Setup);
         if (pending is null) return ExpiredSetup();
-        if (!throttle.TryAcquireAuthenticatorChange(pending.AccountId)) return RateLimited();
-        var account = await FindUsable(pending.AccountId, pending.SecurityVersion, cancellationToken);
-        if (account?.ProtectedMfaSecret is null) return ExpiredSetup();
-        return await ConfirmSetup(account, pending, request.Code, null, cancellationToken);
+        return await GuardLogin(pending.AccountId, async attempt =>
+        {
+            var account = await FindUsable(pending.AccountId, pending.SecurityVersion, cancellationToken);
+            if (account?.ProtectedMfaSecret is null) return ExpiredSetup();
+            if (!VerifySetup(account, pending, request.Code, attempt, out var step)) return InvalidLoginFactor();
+            var codes = ApplySetup(account, pending, step, "MFA_RECOVERY");
+            return Ok(new { success = true, data = new { codes } });
+        }, cancellationToken);
     }
 
     [Authorize(Roles = QLCD.Domain.Security.SecurityRoles.Staff)]
@@ -107,11 +153,11 @@ public sealed class AuthenticatorController(
         return Ok(new { success = true, data = new { codes } });
     }
 
-    private IActionResult CreateSetup(TaiKhoan account, string purpose, Guid? sessionId)
+    private IActionResult CreateSetup(TaiKhoan account, string purpose, Guid? sessionId, string protectedSecret)
     {
-        var key = TotpVerifier.GenerateKey();
+        var key = totp.ReadSetupKey(account.Id, protectedSecret);
         var setup = protection.Protect(purpose,
-            new PendingAuthenticator(account.Id, sessionId, LoginCommandHandler.SessionVersion(account), totp.Protect(account.Id, key)), TimeSpan.FromMinutes(10));
+            new PendingAuthenticator(account.Id, sessionId, LoginCommandHandler.SessionVersion(account), protectedSecret), TimeSpan.FromMinutes(10));
         var issuer = Uri.EscapeDataString(Issuer);
         var label = Uri.EscapeDataString(account.Username);
         var uri = $"otpauth://totp/{issuer}:{label}?secret={key}&issuer={issuer}&algorithm=SHA1&digits=6&period=30";
@@ -119,24 +165,25 @@ public sealed class AuthenticatorController(
         return Ok(new { success = true, data = new { setup, key, qrImage = $"data:image/png;base64,{Convert.ToBase64String(png)}" } });
     }
 
-    private async Task<IActionResult> ConfirmSetup(TaiKhoan account, PendingAuthenticator pending, string code, Guid? sessionId, CancellationToken cancellationToken)
+    private bool VerifySetup(TaiKhoan account, PendingAuthenticator pending, string code, LoginAttemptGuard.Attempt attempt, out long? step)
     {
+        step = null;
         if (pending.AccountId != account.Id || pending.SecurityVersion != LoginCommandHandler.SessionVersion(account))
-            return ExpiredSetup();
-        if (!totp.TryVerifySecret(account.Id, pending.ProtectedSecret, code, null, out var step))
-            return BadRequest(new { success = false, message = "Mã Authenticator không đúng hoặc đã hết hạn." });
+            return false;
+        if (totp.TryVerifySecret(account.Id, pending.ProtectedSecret, code, null, out step)) return true;
+        attempt.Fail(account.Id, HttpContext.TraceIdentifier);
+        return false;
+    }
 
+    private string[] ApplySetup(TaiKhoan account, PendingAuthenticator pending, long? step, string action)
+    {
         account.ProtectedMfaSecret = pending.ProtectedSecret;
         account.ActivationCodeHash = null;
         account.ActivationCodeExpiresUtc = null;
         account.LastMfaStep = step;
-        var codes = AccountCredentials.RotateRecoveryCodes(account);
-        // An onboarding session remains limited to password change. Every other case requires a new sign-in.
-        await RotateStamp(account, account.MustChangePassword ? sessionId : null, cancellationToken);
-        database.AuditLogs.Add(AccountCredentials.Event(account.Id, account.Id,
-            sessionId.HasValue ? "MFA_ENROLL" : "MFA_RECOVERY", HttpContext.TraceIdentifier));
-        await database.SaveChangesAsync(cancellationToken);
-        return Ok(new { success = true, data = new { codes } });
+        account.SecurityVersion = Guid.NewGuid();
+        database.AuditLogs.Add(AccountCredentials.Event(account.Id, account.Id, action, HttpContext.TraceIdentifier));
+        return AccountCredentials.RotateRecoveryCodes(account);
     }
 
     private async Task RotateStamp(TaiKhoan account, Guid? keepSession, CancellationToken cancellationToken)
@@ -152,19 +199,29 @@ public sealed class AuthenticatorController(
 
     private async Task<TaiKhoan?> FindUsable(Guid accountId, Guid version, CancellationToken cancellationToken)
     {
+        var operational = database.DonViCongDoans.OperationalUnits();
         var account = await database.TaiKhoans.Include(row => row.Organization)
+            .Where(row => row.OrganizationId == null || operational.Any(unit => unit.Id == row.OrganizationId))
             .SingleOrDefaultAsync(row => row.Id == accountId, cancellationToken);
         return account is not null && LoginCommandHandler.IsUsable(account) && LoginCommandHandler.SessionVersion(account) == version
             && (!account.MustChangePassword || account.TemporaryPasswordExpiresUtc > clock.GetUtcNow().UtcDateTime) ? account : null;
     }
 
+    private async Task<IActionResult> GuardLogin(Guid accountId, Func<LoginAttemptGuard.Attempt, Task<IActionResult?>> operation, CancellationToken ct)
+    {
+        var result = await new LoginAttemptGuard(database, clock).RunAsync(LoginAttemptGuard.AccountKey(accountId), operation, ct);
+        return result.RetryAfterSeconds(clock.GetUtcNow().UtcDateTime) is int seconds
+            ? AuthLoginResponse.Locked(this, seconds) : result.Value!;
+    }
+
     private ObjectResult RateLimited() => StatusCode(429, new { success = false, message = "Bạn đã thử nhiều lần. Vui lòng thử lại sau." });
+    private BadRequestObjectResult InvalidLoginFactor() => BadRequest(new { success = false, message = AuthLoginResponse.InvalidCredentials });
     private BadRequestObjectResult ExpiredSetup() => BadRequest(new { success = false, code = "mfa_setup_expired", message = "Yêu cầu thiết lập đã hết hiệu lực. Hãy bắt đầu lại." });
 
     private sealed record PendingAuthenticator(Guid AccountId, Guid? SessionId, Guid SecurityVersion, string ProtectedSecret);
 }
 
-public sealed record AuthenticatorSetupRequest([Required, StringLength(128)] string CurrentPassword, [StringLength(32)] string? ActivationCode);
+public sealed record AuthenticatorSetupRequest([StringLength(128)] string? CurrentPassword, [StringLength(32)] string? ActivationCode);
 public sealed record AuthenticatorConfirmRequest([Required, StringLength(2048)] string Setup, [Required, RegularExpression(@"\A[0-9]{6}\z")] string Code);
 public sealed record AuthenticatorReauthenticateRequest([Required, StringLength(128)] string CurrentPassword, [Required, RegularExpression(@"\A[0-9]{6}\z")] string Code);
 public sealed record AuthenticatorRecoveryRequest([Required, StringLength(2048)] string Challenge, [Required, StringLength(32)] string RecoveryCode);

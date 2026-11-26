@@ -1,5 +1,7 @@
 # Báo cáo hoàn thiện xác thực hai bước
 
+> Báo cáo của luồng 2FA trước khi cập nhật đăng nhập lần đầu và khóa tạm thời. Xem [luồng hiện hành](AUTHENTICATION.md) và [hướng dẫn khôi phục](ACCOUNT_RECOVERY.md).
+
 ## Hiện trạng và xử lý
 
 | Hiện trạng đã rà soát | Thay đổi đã triển khai |

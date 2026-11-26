@@ -94,10 +94,18 @@ try {
     await signIn(adminUsername, adminPassword);
   } else {
     adminFactor = await enroll(adminUsername, adminActivation, adminPassword);
-    report.flows.push("Administrator completes mandatory activation, QR enrollment and OTP-gated password change");
+    report.flows.push("Administrator enrolls at first sign-in without re-entering credentials, enters the app after OTP, and later changes password with OTP");
   }
   await page.waitForURL(origin + "/");
   if (!baseline) {
+    await open("/accounts");
+    const table = page.getByRole("region", { name: "Bảng tài khoản" });
+    await table.getByText(adminUsername, { exact: true }).waitFor();
+    await page.getByText("Hiện danh sách chỉ có tài khoản của bạn.", { exact: false }).waitFor();
+    assert.equal(await table.getByRole("row").count(), 2);
+    assert.equal(await table.getByRole("button", { name: /^Reset/ }).count(), 0);
+    report.flows.push("Designated administrator sees why reset actions are unavailable when their own account is the only row");
+
     await open("/catalogs");
     await page.getByRole("button", { name: "Thêm khối quản lý", exact: true }).click();
     const blockDialog = page.getByRole("dialog", { name: "Thêm khối quản lý", exact: true });
@@ -205,10 +213,20 @@ try {
     await capture(route);
   }
   if (!baseline) {
+    await page.route(url => url.pathname === "/api/v1/accounts", async route => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...await response.json(), canResetCredentials: false } });
+    }, { times: 1 });
+    await open("/accounts");
+    const accountsTable = page.getByRole("region", { name: "Bảng tài khoản" });
+    const departmentRow = accountsTable.getByRole("row").filter({ hasText: departmentAccount.username });
+    await departmentRow.getByRole("button", { name: "Cấp mã kích hoạt", exact: true }).waitFor();
+    assert.equal(await accountsTable.getByRole("button", { name: /^Reset/ }).count(), 0);
+    report.flows.push("Account management keeps activation visible when the API denies credential reset permission");
+
     await open("/accounts");
     await page.getByRole("region", { name: "Mật khẩu khởi tạo", exact: true }).getByText(initialPassword, { exact: true }).waitFor();
     const accountSearch = page.getByRole("textbox", { name: "Tìm kiếm", exact: true });
-    const accountsTable = page.getByRole("region", { name: "Bảng tài khoản" });
     await accountsTable.getByText(departmentAccount.username, { exact: true }).waitFor();
     const searchRequest = page.waitForResponse(response => {
       const url = new URL(response.url());
@@ -222,9 +240,9 @@ try {
     await accountSearch.fill("");
     await accountsTable.getByText(adminUsername, { exact: true }).waitFor();
     report.flows.push("Account search uses organization matching on the API and clears to the full list");
-    const departmentRow = accountsTable.getByRole("row").filter({ hasText: departmentAccount.username });
     const ownRow = accountsTable.getByRole("row").filter({ hasText: adminUsername });
     assert.equal(await ownRow.getByRole("button", { name: /^Reset/ }).count(), 0);
+    assert.equal(await page.getByText("Hiện danh sách chỉ có tài khoản của bạn.", { exact: false }).count(), 0);
     for (const action of ["Reset mật khẩu", "Reset 2FA"]) {
       const trigger = departmentRow.getByRole("button", { name: action, exact: true });
       await trigger.click();
@@ -314,6 +332,20 @@ try {
     await page.getByRole("status").filter({ hasText: `Đã đặt lại mật khẩu của ${departmentAccount.username} thành ${initialPassword}` }).waitFor();
     report.flows.push("Password reset success states the exact initial password, 24-hour deadline, forced change and preserved MFA/lock");
 
+    await departmentRow.getByRole("button", { name: "Reset 2FA", exact: true }).click();
+    const authenticatorDialog = page.getByRole("dialog", { name: "Reset 2FA", exact: true });
+    await authenticatorDialog.getByRole("checkbox").check();
+    await authenticatorDialog.getByLabel("Mật khẩu quản trị viên").fill(adminPassword);
+    const authenticatorResetFactor = await nextFixtureTotp(adminFactor.key, resetFactor.step);
+    await authenticatorDialog.getByLabel("Mã Authenticator", { exact: true }).fill(authenticatorResetFactor.code);
+    await authenticatorDialog.getByRole("button", { name: "Xác nhận reset", exact: true }).click();
+    const newActivation = await authenticatorDialog.getByTestId("activation-code").textContent();
+    assert.match(newActivation, /^[A-F0-9]{32}$/);
+    assert.ok(newActivation !== departmentActivation, "2FA reset must issue a new activation code");
+    departmentActivation = newActivation;
+    await authenticatorDialog.getByRole("button", { name: "Đã lưu mã" }).click();
+    await authenticatorDialog.waitFor({ state: "hidden" });
+    report.flows.push("Administrator confirms identity and completes 2FA reset with a fresh OTP");
 
     await open("/catalogs");
     await page.getByRole("button", { name: "Chức vụ công đoàn", exact: true }).click();
@@ -371,7 +403,7 @@ try {
     assert.equal(await unlockDialog.getByLabel("Mật khẩu quản trị viên").inputValue(), "");
     await unlockDialog.getByRole("checkbox").check();
     await unlockDialog.getByLabel("Mật khẩu quản trị viên").fill(adminPassword);
-    const unlockFactor = await nextFixtureTotp(adminFactor.key, resetFactor.step);
+    const unlockFactor = await nextFixtureTotp(adminFactor.key, authenticatorResetFactor.step);
     await unlockDialog.getByLabel("Mã Authenticator", { exact: true }).fill(unlockFactor.code);
     await unlockDialog.getByRole("button", { name: "Xác nhận mở khóa", exact: true }).click();
     await unlockDialog.waitFor({ state: "hidden" });
@@ -685,7 +717,7 @@ try {
     // Chromium exercises all roles from one loopback IP. Keep the production API quota intact.
     const nextApiWindow = firstApiWindow + 62_000 - Date.now();
     if (nextApiWindow > 0) await delay(nextApiWindow);
-    const departmentFactor = await enroll(departmentAccount.username, departmentActivation, departmentPassword);
+    const departmentFactor = await enroll(departmentAccount.username, departmentActivation, departmentPassword, true);
     await page.waitForURL(origin + "/");
     await open("/members");
     const addMember = page.getByRole("button", { name: /Thêm Đoàn viên mới/ });
@@ -762,10 +794,29 @@ try {
   await rm(join(output, "failure.png"), { force: true });
   console.log(`${report.screens.length} screenshots, ${report.screens.filter(screen => screen.overflow > 1).length} overflowing screens, ${report.browserErrors.length} browser errors, ${report.apiFailures.length} unexpected API errors.`);
 
-  async function signIn(username, credential) {
+  async function signIn(username, credential, activation) {
+    const activationField = page.getByLabel("Mã kích hoạt", { exact: true });
+    assert.equal(await activationField.count(), 0, "The standard login form must not ask for an activation code");
     await page.getByLabel("Tên đăng nhập").fill(username);
     await page.getByLabel("Mật khẩu", { exact: true }).fill(credential);
-    await page.getByRole("button", { name: "Đăng nhập" }).click();
+    if (activation) {
+      const openEnrollment = page.getByRole("button", { name: "Thiết lập Authenticator bằng mã kích hoạt" });
+      await openEnrollment.click();
+      if (username === adminUsername) {
+        await activationField.fill("0123456789abcdef0123456789abcdef");
+        await page.getByRole("button", { name: "Quay lại đăng nhập thông thường" }).click();
+        assert.equal(await activationField.count(), 0);
+        await openEnrollment.click();
+        assert.equal(await activationField.inputValue(), "", "Returning to enrollment must not retain the entered code");
+      }
+      await activationField.fill(activation);
+    }
+    const [loginRequest] = await Promise.all([
+      page.waitForRequest(request => request.method() === "POST" && request.url().endsWith("/api/v1/auth/login")),
+      page.getByRole("button", { name: "Đăng nhập", exact: true }).click(),
+    ]);
+    const body = loginRequest.postDataJSON();
+    assert.ok(body.activationCode === activation, "Only the enrollment form may send an activation code");
   }
 
   async function changePassword(current, next, otp) {
@@ -804,22 +855,34 @@ try {
     return factor.step;
   }
 
-  async function enroll(username, activation, credential) {
-    await signIn(username, initialPassword);
-    await page.getByLabel("Mật khẩu hiện tại").fill(initialPassword);
-    await page.getByLabel("Mã kích hoạt", { exact: true }).fill(activation);
-    await page.getByRole("button", { name: "Tạo mã QR" }).click();
+  async function enroll(username, activation, credential, passwordReset = false) {
+    await signIn(username, initialPassword, activation);
     const key = await readSetupKey();
+    assert.equal(await page.getByLabel("Mật khẩu hiện tại", { exact: true }).count(), 0);
+    if (username === adminUsername) {
+      await page.reload();
+      assert.ok(await readSetupKey() === key, "Enrollment must resume with the same key after reload");
+    }
     const factor = await nextFixtureTotp(key, -1);
     await page.getByLabel("Mã Authenticator", { exact: true }).fill(factor.code);
     await page.getByRole("button", { name: "Xác nhận và bật" }).click();
+    if (!passwordReset) await page.waitForURL(origin + "/");
     await page.getByRole("heading", { name: "Lưu mã khôi phục" }).waitFor();
     const codes = await page.getByRole("region", { name: "Mã khôi phục" }).locator("code").allTextContents();
     assert.equal(codes.length, 10);
     await page.getByRole("button", { name: "Tôi đã lưu mã" }).click();
+    if (passwordReset) {
+      await page.getByRole("status").filter({ hasText: "Bạn đang dùng mật khẩu tạm sau khi được đặt lại." }).waitFor();
+    } else {
+      await page.waitForURL(origin + "/");
+      const advisory = page.getByRole("status").filter({ hasText: "Bạn đang dùng mật khẩu mặc định." });
+      await advisory.getByRole("link", { name: "đổi mật khẩu" }).click();
+    }
     const rotation = await nextFixtureTotp(key, factor.step);
     await changePassword(initialPassword, credential, rotation.code);
     await signIn(username, credential);
+    await page.getByRole("heading", { name: "Xác thực hai bước" }).waitFor();
+    assert.equal(await page.getByLabel("Mã kích hoạt", { exact: true }).count(), 0, "A linked account must proceed to OTP without asking for activation");
     const step = await verifyFactor(key, rotation.step);
     await page.waitForURL(origin + "/");
     return { codes, key, step };

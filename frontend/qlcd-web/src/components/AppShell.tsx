@@ -5,10 +5,11 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { Building2, Menu, ShieldAlert, X } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { RecoveryCodes } from "@/components/AuthenticatorFields";
 import Sidebar, { canOpenPage } from "@/components/Sidebar";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, enrollmentCodes, dismissEnrollmentCodes } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const menu = useRef<HTMLDialogElement>(null);
@@ -57,6 +58,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           <span className="hidden shrink-0 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-strong sm:block">{user?.vaiTro}</span>
         </header>
         <main id="main-content" tabIndex={-1} className="mx-auto min-w-0 max-w-[100rem] p-4 sm:p-6 lg:p-8">
+          {user?.recommendPasswordChange && <div role="status" className="mb-4 rounded-xl bg-gold-soft p-3 text-sm text-gold-ink">
+            Bạn đang dùng mật khẩu mặc định. Hãy <Link href="/login?change=1" className="font-semibold underline">đổi mật khẩu</Link> khi có thể.
+          </div>}
+          {enrollmentCodes && <div className="panel mb-4 p-4">
+            <RecoveryCodes codes={enrollmentCodes} onContinue={dismissEnrollmentCodes} />
+          </div>}
           {canOpenPage(pathname, user?.role) ? children :
             <section className="panel space-y-3 p-6">
               <ShieldAlert size={24} className="text-gold-ink" aria-hidden="true" />

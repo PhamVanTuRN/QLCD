@@ -59,11 +59,12 @@ public sealed class SecurityTests
     {
         var id = Guid.NewGuid();
         var permission = new CredentialResetPermission(id);
-        Assert.True(permission.Allows(id, "qlcd_admin", "ADMIN"));
-        Assert.False(permission.Allows(Guid.NewGuid(), "qlcd_admin", "ADMIN"));
-        Assert.False(permission.Allows(id, "another_admin", "ADMIN"));
-        Assert.False(permission.Allows(id, "qlcd_admin", "CDCS"));
-        Assert.False(new CredentialResetPermission(null).Allows(id, "qlcd_admin", "ADMIN"));
+        Assert.True(permission.Allows(id, "ADMIN"));
+        Assert.False(permission.Allows(Guid.NewGuid(), "ADMIN"));
+        Assert.False(permission.Allows(null, "ADMIN"));
+        Assert.False(permission.Allows(id, "CDCS"));
+        Assert.False(new CredentialResetPermission(null).Allows(id, "ADMIN"));
+        Assert.False(new CredentialResetPermission(Guid.Empty).Allows(Guid.Empty, "ADMIN"));
     }
 
     [Fact]

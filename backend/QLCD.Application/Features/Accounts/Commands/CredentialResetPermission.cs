@@ -7,6 +7,6 @@ public sealed record CredentialResetPermission(Guid? AccountId)
     public const string Policy = "ResetAccountCredentials";
     public const string AdminUsername = "qlcd_admin";
 
-    public bool Allows(Guid? id, string? username, string? role) =>
-        AccountId.HasValue && id == AccountId && username == AdminUsername && role == SecurityRoles.Admin;
+    public bool Allows(Guid? id, string? role) =>
+        AccountId is Guid configuredId && configuredId != Guid.Empty && id == configuredId && role == SecurityRoles.Admin;
 }

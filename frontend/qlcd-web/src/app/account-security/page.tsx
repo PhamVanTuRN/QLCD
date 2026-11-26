@@ -2,19 +2,25 @@
 
 import DialogCloseButton from "@/components/DialogCloseButton";
 import { ShieldCheck } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import LoadState from "@/components/LoadState";
 import { AuthenticatorQr, OtpField, RecoveryCodes, securityInput } from "@/components/AuthenticatorFields";
 import {
-  apiMessage, beginAuthenticatorSetup, confirmAuthenticatorSetup, rotateRecoveryCodes,
+  beginAuthenticatorSetup, confirmAuthenticatorSetup, loginErrorMessage, rotateRecoveryCodes,
   getAuthenticatorStatus, type AuthenticatorSetup,
 } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
 import { useAuth } from "@/lib/auth-context";
 
 export default function AccountSecurity() {
-  const { refreshSession, logout } = useAuth();
+  const { refreshSession, logout, completeEnrollment } = useAuth();
+  const router = useRouter();
   const { data, loading, error: loadError, reload } = useResource(getAuthenticatorStatus);
+  const verified = data?.needsAuthenticator === true && data.activationVerified;
+  const readVerifiedSetup = useCallback((signal: AbortSignal) => verified
+    ? beginAuthenticatorSetup(undefined, undefined, signal) : Promise.resolve(null), [verified]);
+  const verifiedSetup = useResource(readVerifiedSetup);
   const [pending, setPending] = useState<AuthenticatorSetup | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [rotating, setRotating] = useState(false);
@@ -23,6 +29,7 @@ export default function AccountSecurity() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const setup = pending ?? verifiedSetup.data;
 
   function clearForm() {
     setPending(null);
@@ -38,19 +45,21 @@ export default function AccountSecurity() {
     setError("");
     setBusy(true);
     try {
-      if (!pending && data.needsAuthenticator) {
+      if (!setup && data.needsAuthenticator) {
+        if (verified) return;
         setPending(await beginAuthenticatorSetup(password, activation.trim()));
         setPassword("");
         setActivation("");
         return;
       }
-      const codes = pending
-        ? (await confirmAuthenticatorSetup(pending.setup, code)).codes
+      const codes = setup
+        ? (await confirmAuthenticatorSetup(setup.setup, code)).codes
         : await rotateRecoveryCodes(password, code);
       clearForm();
-      setRecoveryCodes(codes);
+      if (setup && await completeEnrollment(codes)) router.replace("/");
+      else setRecoveryCodes(codes);
     } catch (failure) {
-      setError(apiMessage(failure, "Không thể cập nhật thiết lập Authenticator."));
+      setError(loginErrorMessage(failure, "Không thể cập nhật thiết lập Authenticator."));
       setCode("");
     } finally {
       setBusy(false);
@@ -71,14 +80,20 @@ export default function AccountSecurity() {
             onClose={() => { clearForm(); setRotating(false); }} />}
         </div>
         {recoveryCodes ? <RecoveryCodes codes={recoveryCodes} onContinue={async () => {
-          await refreshSession();
+          const profile = await refreshSession();
           setRecoveryCodes(null);
           setRotating(false);
-          if (!data.needsAuthenticator) reload();
+          if (data.needsAuthenticator) router.replace(profile && !profile.mustChangePassword ? "/" : "/login");
+          else reload();
         }} /> : (data.needsAuthenticator || rotating) ?
           <form className="space-y-4 border-t border-line pt-5 text-sm" onSubmit={submit}>
             <fieldset disabled={busy} className="min-w-0 space-y-4">
-              {pending ? <AuthenticatorQr setup={pending} /> : <>
+              {setup ? <AuthenticatorQr setup={setup} /> : verified ? <>
+                {verifiedSetup.loading ? <p role="status">Đang tải mã QR…</p> : <>
+                  <p role="alert" className="text-danger-strong">{loginErrorMessage(verifiedSetup.error, "Không thể tải mã QR.")}</p>
+                  <button type="button" onClick={verifiedSetup.reload} className="font-semibold text-brand">Thử lại</button>
+                </>}
+              </> : <>
                 {data.needsAuthenticator && <p className="text-copy">Nhập mật khẩu và mã kích hoạt do quản trị viên cung cấp qua kênh riêng.</p>}
                 {data.needsAuthenticator && !data.requiresActivation &&
                   <p className="rounded-lg bg-gold-soft p-3 text-gold-ink">Tài khoản đang chờ cấp mã. Liên hệ quản trị viên để xác minh danh tính và nhận mã.</p>}
@@ -94,12 +109,12 @@ export default function AccountSecurity() {
                     value={activation} onChange={event => setActivation(event.target.value)} pattern="[A-Fa-f0-9]{32}" />
                 </label>}
               </>}
-              {(pending || rotating) && <div className="max-w-sm"><OtpField value={code} onChange={setCode} autoFocus={!!pending} /></div>}
+              {(setup || rotating) && <div className="max-w-sm"><OtpField value={code} onChange={setCode} autoFocus={!!setup} /></div>}
               {error && <p role="alert" className="rounded-lg bg-danger-soft p-3 text-danger-strong">{error}</p>}
               <div className="flex flex-wrap gap-2">
-                <button type="submit" disabled={data.needsAuthenticator && !data.requiresActivation}
+                <button type="submit" disabled={data.needsAuthenticator && (!data.requiresActivation || (verified && !setup))}
                   className="rounded-lg bg-brand px-4 py-2.5 font-semibold text-white hover:bg-brand-hover disabled:opacity-50">
-                  {busy ? "Đang xử lý…" : pending ? "Xác nhận và bật" : rotating ? "Xác nhận tạo mã" : "Tạo mã QR"}
+                  {busy ? "Đang xử lý…" : setup ? "Xác nhận và bật" : rotating ? "Xác nhận tạo mã" : "Tạo mã QR"}
                 </button>
                 {(pending || rotating) && <button type="button" onClick={() => { clearForm(); setRotating(false); }}
                   className="rounded-lg border border-line px-4 py-2.5 font-semibold text-copy hover:bg-soft">Hủy</button>}

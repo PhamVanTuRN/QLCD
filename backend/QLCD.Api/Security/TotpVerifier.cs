@@ -70,6 +70,13 @@ public sealed class TotpVerifier(IDataProtectionProvider protection, TimeProvide
         }
     }
 
+    public string ReadSetupKey(Guid accountId, string protectedSecret)
+    {
+        var key = Convert.FromBase64String(ForUser(accountId).Unprotect(protectedSecret));
+        try { return Base32Encoding.ToString(key); }
+        finally { CryptographicOperations.ZeroMemory(key); }
+    }
+
     private IDataProtector ForUser(Guid accountId) =>
         protection.CreateProtector("QLCD.Totp.v1", accountId.ToString());
 }

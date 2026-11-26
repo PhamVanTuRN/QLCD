@@ -43,6 +43,7 @@ public static class AccountCredentials
     {
         account.PasswordHash = PasswordHasher.Hash(InitialPassword);
         account.MustChangePassword = true;
+        account.RecommendPasswordChange = false;
         account.TemporaryPasswordExpiresUtc = now.AddHours(TemporaryPasswordLifetimeHours);
         account.SecurityVersion = Guid.NewGuid();
     }

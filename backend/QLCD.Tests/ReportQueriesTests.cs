@@ -231,6 +231,42 @@ public sealed class ReportQueriesTests
         return new QLCDDbContext(options.UseSqlServer(builder.ConnectionString).Options);
     }
 
+    [SqlServerFact]
+    public async Task ConcurrentScopeApprovalAndArchiveChangesRejectStaleWrites()
+    {
+        await using var first = CreateDatabase();
+        await using var second = CreateDatabase();
+        var source = Unit();
+        var destination = Unit();
+        var member = new DoanVien { HoTen = "Scoped write fixture", SoCCCD = "000000000828", MaNhanVien = "REPORT828", MaToCongDoan = source.Id };
+        var welfare = new PhucLoiDoanVien { DonViId = source.Id, DoanVienId = member.Id, LoaiPhucLoi = "FIXTURE", LyDo = "Original" };
+        first.DonViCongDoans.AddRange(source, destination);
+        first.DoanViens.Add(member);
+        first.PhucLoiDoanViens.Add(welfare);
+        await first.SaveChangesAsync();
+
+        var stale = await second.PhucLoiDoanViens.SingleAsync(row => row.Id == welfare.Id);
+        welfare.TrangThai = 2;
+        await first.SaveChangesAsync();
+        stale.LyDo = "Stale after approval";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
+
+        await second.Entry(stale).ReloadAsync();
+        welfare.DonViId = destination.Id;
+        await first.SaveChangesAsync();
+        stale.LyDo = "Stale after transfer";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
+
+        await second.Entry(stale).ReloadAsync();
+        welfare.IsDeleted = true;
+        await first.SaveChangesAsync();
+        stale.LyDo = "Stale after archive";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
+        first.ChangeTracker.Clear();
+        var saved = await first.PhucLoiDoanViens.IgnoreQueryFilters().SingleAsync(row => row.Id == welfare.Id);
+        Assert.Equal((destination.Id, 2, true, "Original"), (saved.DonViId, saved.TrangThai, saved.IsDeleted, saved.LyDo));
+    }
+
     private static DonViCongDoan Unit() =>
         new() { TenDonVi = "Report fixture", LoaiToChuc = LoaiToChuc.TO_CD_TRUC_THUOC_CDCS, Level = 2 };
 

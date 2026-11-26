@@ -23,6 +23,16 @@ public sealed class SessionAuthenticationHandler(
     public static string CookieName(IWebHostEnvironment environment) =>
         environment.IsDevelopment() || environment.IsEnvironment("Testing") ? "QLCD-Session" : "__Host-QLCD-Session";
 
+    public static CookieOptions CookieOptions(IWebHostEnvironment environment, DateTime? expiration = null) => new()
+    {
+        Secure = !environment.IsDevelopment() && !environment.IsEnvironment("Testing"),
+        HttpOnly = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+        IsEssential = true,
+        Expires = expiration
+    };
+
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Cookies.TryGetValue(CookieName(environment), out var token))
@@ -59,7 +69,7 @@ public sealed class SessionAuthenticationHandler(
                     claims.Add(new Claim("OrganizationId", organization.ToString()));
             }
 
-            Context.Features.Set(new AuthenticatedSession(session.Id, session.SecurityVersion, SessionProfile.From(account)));
+            Context.Features.Set(new AuthenticatedSession(session.Id, session.SecurityVersion, SessionProfile.From(account, session.ActivationVerified)));
             var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName));
             return AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName));
         }

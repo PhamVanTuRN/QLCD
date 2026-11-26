@@ -1,5 +1,7 @@
 # Rà soát ứng dụng và ưu tiên
 
+> Kiểm kê ngày 25/11/2026. Các thay đổi và kết quả xác minh sau mốc này được ghi trong [TASK_TRACKER](TASK_TRACKER.md) và [báo cáo bảo mật hiện hành](security-audit/SECURITY_AUDIT.md).
+
 Ngày 25/11/2026. Đường cơ sở là working tree đầu phiên, sau đợt hardening có sẵn. Đối chiếu tài liệu nghiệp vụ với route, handler và schema. Thử trên ASP.NET Core Testing, SQL Server Express cô lập và Chromium headless. [Đợt hardening trước](security-audit/08-remediation-status.md)
 
 | Ưu tiên | Phát hiện | Xử lý |

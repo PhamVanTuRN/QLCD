@@ -1,5 +1,7 @@
 # 05. FUNCTIONAL REQUIREMENTS - YÊU CẦU CHỨC NĂNG
 
+> Danh sách yêu cầu thiết kế. Phạm vi đã triển khai và các yêu cầu cập nhật được theo dõi trong [tổng quan](PROJECT_OVERVIEW.md) và [quy tắc nghiệp vụ](03-Business-Rules.md).
+
 Tài liệu này liệt kê các yêu cầu chức năng (FR) chi tiết cho Hệ thống Quản lý Công đoàn BV108.
 
 ## 1. Phân hệ Quản lý Tổ chức & Danh mục (FR-ORG)

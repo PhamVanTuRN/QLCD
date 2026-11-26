@@ -12,6 +12,14 @@ export function apiMessage(error: unknown, fallback: string): string {
   return error.response?.data?.message || fallback;
 }
 
+export function loginErrorMessage(error: unknown, fallback: string): string {
+  const message = apiMessage(error, fallback);
+  if (!axios.isAxiosError<{ code?: string; retryAfterSeconds?: number }>(error)) return message;
+  const details = error.response?.data;
+  return details?.code === "login_locked" && typeof details.retryAfterSeconds === "number"
+    ? `${message} Còn khoảng ${Math.ceil(details.retryAfterSeconds / 60)} phút.` : message;
+}
+
 api.interceptors.request.use(async config => {
   if (["post", "put", "patch", "delete"].includes(config.method?.toLowerCase() ?? "")) {
     const response = await csrfClient.get<{ token: string }>("/auth/csrf");
@@ -41,6 +49,8 @@ export interface SessionProfile {
   needsAuthenticator: boolean;
   requiresActivation: boolean;
   hasRecoveryCodes: boolean;
+  activationVerified: boolean;
+  recommendPasswordChange: boolean;
 }
 
 export async function getSessionApi(): Promise<SessionProfile> {
@@ -48,9 +58,9 @@ export async function getSessionApi(): Promise<SessionProfile> {
   return response.data.data;
 }
 
-export async function loginApi(username: string, password: string) {
+export async function loginApi(username: string, password: string, activationCode?: string) {
   const { data: { data } } = await api.post<{ data: SessionProfile | { challenge: string } }>("/auth/login", {
-    username, password, beginAuthenticator: true,
+    username, password, activationCode, beginAuthenticator: true,
   });
   return data;
 }
@@ -67,8 +77,8 @@ export async function getAuthenticatorStatus(signal: AbortSignal) {
   return data.data;
 }
 
-export async function beginAuthenticatorSetup(currentPassword: string, activationCode: string) {
-  const { data } = await api.post<{ data: AuthenticatorSetup }>("/auth/authenticator/setup", { currentPassword, activationCode });
+export async function beginAuthenticatorSetup(currentPassword?: string, activationCode?: string, signal?: AbortSignal) {
+  const { data } = await api.post<{ data: AuthenticatorSetup }>("/auth/authenticator/setup", { currentPassword, activationCode }, { signal });
   return data.data;
 }
 

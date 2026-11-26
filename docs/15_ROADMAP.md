@@ -1,5 +1,7 @@
 # 15. ROADMAP - LỘ TRÌNH PHÁT TRIỂN KHUYẾN NGHỊ
 
+> Lộ trình đề xuất ban đầu. Tiến độ triển khai và các việc còn mở được theo dõi trong [TASK_TRACKER](TASK_TRACKER.md).
+
 Lộ trình phát triển và hoàn thiện Hệ thống QLCD Bệnh viện TWQĐ 108 được chia làm 4 giai đoạn (Phases) kế thừa chặt chẽ để đảm bảo không phá vỡ cấu trúc và dữ liệu.
 
 ```

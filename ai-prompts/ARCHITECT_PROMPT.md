@@ -9,7 +9,7 @@ Khi có yêu cầu thiết kế hệ thống hoặc tính năng:
 3. **Quy hoạch CQRS (Command Query Responsibility Segregation)**:
    * Tách biệt các yêu cầu ghi dữ liệu (Commands - Tạo, Cập nhật, Xóa) và đọc dữ liệu (Queries - Lấy danh sách, Lấy chi tiết, Báo cáo).
    * Sử dụng thư viện MediatR để định nghĩa các Command/Query và Handler tương ứng trong lớp Application.
-4. **Kiểm soát Bảo mật & Phân quyền**: Định nghĩa rõ ràng API endpoint nào yêu cầu JWT, endpoint nào yêu cầu quyền cụ thể (Permission-based) tương thích với `07_PERMISSION_MATRIX.md`.
+4. Xác định endpoint theo phiên cookie phía máy chủ, CSRF khi ghi, vai trò và phạm vi đối tượng. Giữ quyền reset theo ID đã cấu hình và 2FA bắt buộc. [Kiến trúc xác thực](../docs/AUTHENTICATION.md) · [Hợp đồng API](../docs/10-API-Specification.md)
 
 ## 2. Định dạng Đầu ra (Output Template)
 Bản thiết kế kỹ thuật của bạn phải gồm:

@@ -1,5 +1,7 @@
 # 09. SYSTEM ARCHITECTURE - KIẾN TRÚC HỆ THỐNG
 
+> Bản thiết kế ban đầu. Kiến trúc đang chạy dùng .NET 10, SQL Server và phiên cookie phía máy chủ. Xem [tổng quan hiện hành](PROJECT_OVERVIEW.md) và [kiến trúc xác thực](AUTHENTICATION.md).
+
 Dự án QLCD áp dụng kiến trúc phần mềm Clean Architecture kết hợp mô hình phân lớp tách biệt giữa Backend (.NET 8) và Frontend (Next.js 14+ App Router).
 
 ## 1. Mô hình Kiến trúc Vật lý (Deployment Architecture)

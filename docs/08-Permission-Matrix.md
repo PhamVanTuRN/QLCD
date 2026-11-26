@@ -1,5 +1,7 @@
 # 08. PERMISSION MATRIX - MA TRẬN PHÂN QUYỀN HỆ THỐNG
 
+> Ma trận thiết kế ban đầu. Quyền tài khoản, phạm vi tổ chức và điều kiện reset hiện hành nằm trong [tổng quan](PROJECT_OVERVIEW.md), [quy tắc nghiệp vụ](03-Business-Rules.md) và [hướng dẫn khôi phục](ACCOUNT_RECOVERY.md).
+
 Tài liệu này xác định ma trận vai trò người dùng (RBAC) kết hợp với ràng buộc phạm vi dữ liệu (Scope) trên hệ thống QLCD.
 
 ## 1. Định nghĩa vai trò (Roles)

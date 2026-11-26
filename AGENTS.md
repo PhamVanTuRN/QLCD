@@ -4,18 +4,25 @@ QLCD là hệ thống quản lý công đoàn cho Bệnh viện Trung ương Qu�
 
 ## Thay đổi source code
 
+- Xác định phạm vi ảnh hưởng và các chức năng liên quan trước khi sửa. Bảo toàn API, service, component, quyền và thao tác nghiệp vụ đang dùng. Chỉ loại bỏ chức năng khi có yêu cầu rõ ràng.
 - Kiểm tra Git và giữ thay đổi đang có. Đọc hướng dẫn con của frontend, sau đó đối chiếu tài liệu Next.js trong dependency đã cài trước khi thay đổi router, layout hoặc proxy.
 - Đặt hợp đồng route ở controller, nghiệp vụ và kiểm quyền đối tượng ở handler, schema ở Infrastructure. Dùng DTO hiện có, truyền cancellation token và giữ tương thích API v1. Với thay đổi dữ liệu có nhiều bước, dùng cùng transaction và kiểm tra tính đúng đắn khi thất bại hoặc cập nhật đồng thời.
 - Dùng `src/lib/api.ts` cho đường API và CSRF. Truy vấn màn hình có thể dùng `useResource` để hủy request cũ. Giữ trạng thái tải, rỗng, lỗi, và lỗi quyền rõ ràng. Dùng native dialog cho biểu mẫu, label cho trường nhập và giữ focus hiển thị. [Thiết kế giao diện](docs/DESIGN_SYSTEM.md)
 - Phân biệt quyền theo chức năng với phạm vi tổ chức. Kiểm tra cả hai ở backend. Giữ tệp minh chứng và dữ liệu cá nhân trong môi trường được phép. Chỉ dùng tài khoản, PDF và hồ sơ tổng hợp khi kiểm thử local. [Kiểm soát bảo mật](docs/security-audit/08-remediation-status.md)
-- Khi thêm migration, chạy kiểm tra model và thử từ schema trống cùng schema có dữ liệu cũ tổng hợp. Nêu dữ liệu bị tác động và cách phục hồi. Yêu cầu xác nhận trước khi tác động môi trường triển khai hay dữ liệu thực.
+- Khi thay đổi EF model, kể cả concurrency token không sinh DDL, đối chiếu snapshot và chạy `has-pending-model-changes`. Khi thêm migration, thử từ schema trống và schema có dữ liệu cũ tổng hợp. Nêu dữ liệu bị tác động và cách phục hồi. Yêu cầu xác nhận trước khi tác động môi trường triển khai hay dữ liệu thực.
 
 ## Kiểm thử và hoàn thành
 
-- Xác thực hai bước bắt buộc cho mọi vai trò. Xác minh danh tính qua kênh tin cậy trước khi cấp mã kích hoạt Authenticator. Chặn API nghiệp vụ trong phiên giới hạn. Mật khẩu mới có 8–128 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt. Mật khẩu khởi tạo `123456aA@` phải đổi và bị từ chối khi chọn mật khẩu mới. Giữ bộ băm hiện hành.
-- Chỉ cấp quyền đặt lại thông tin xác thực cho ID cấu hình của `qlcd_admin` tại backend. Tách đặt lại mật khẩu và đặt lại 2FA, chặn tự đặt lại qua giao diện và API quản trị. Cả hai thao tác yêu cầu xác nhận, mật khẩu và OTP mới của người thực hiện, thu hồi phiên đích và ghi audit. Khôi phục bằng mã chỉ thay Authenticator và yêu cầu đăng nhập lại. [Kiến trúc xác thực](docs/AUTHENTICATION.md) · [Khôi phục tài khoản](docs/ACCOUNT_RECOVERY.md)
+- Thiết kế bảo mật từ đầu, mặc định từ chối và cấp quyền tối thiểu. Validate DTO tại backend. Lấy danh tính từ phiên đã xác thực và kiểm tra quyền chức năng, đối tượng và phạm vi trước khi đọc hoặc ghi. Giữ TLS, CSRF, 2FA, giới hạn tài nguyên và audit trong các bản sửa lỗi.
+- Không đưa bí mật hoặc dữ liệu cá nhân thực vào Git, log, prompt, AI agent hay dịch vụ quét. Dùng cấu hình theo môi trường, dữ liệu tổng hợp và che giá trị trong báo cáo. Chỉ thay đổi môi trường thật theo phạm vi đã được phê duyệt.
+- Với tác vụ bảo mật, dùng kỹ năng phù hợp trong danh mục bên dưới. Trước khi bàn giao hoặc phát hành, đối chiếu cổng kiểm tra bảo mật. Ghi lỗi kiểm tra và rủi ro còn mở. Phát hiện Critical hoặc High chưa khắc phục hoặc chưa có chấp nhận rủi ro được phê duyệt sẽ chặn phát hành. [Cổng kiểm tra](docs/security-audit/07-security-checklist.md)
 
-- Chạy test liên quan trong lúc sửa. Trước khi giao, chạy backend build và test, HTTP smoke, frontend lint và type check cùng production build. Chạy browser smoke nếu thao tác hoặc giao diện thay đổi.
+- Đăng nhập thông thường chỉ hiển thị tên đăng nhập và mật khẩu, sau đó yêu cầu OTP. Chỉ hiện và gửi mã kích hoạt khi người dùng chọn thiết lập Authenticator lần đầu hoặc sau Reset 2FA. Ở chế độ thiết lập, gửi tên đăng nhập, mật khẩu và mã kích hoạt cùng lúc, rồi quét QR và xác nhận OTP. Xác minh danh tính qua kênh tin cậy trước khi cấp mã. Khuyến nghị đổi mật khẩu mặc định sau khi hoàn tất lần đầu. Phiên trung gian có hạn và chặn API nghiệp vụ.
+- Xác thực sai 5 lần liên tiếp khóa đăng nhập 10 phút theo UTC cho mọi tài khoản, kể cả `qlcd_admin`. Đếm mật khẩu, mã kích hoạt và OTP cùng một bộ đếm SQL, xử lý đồng thời và chỉ xóa đếm sau OTP thành công hoặc khi hết khóa. Dùng thêm giới hạn theo IP và ghi audit sự kiện mà không ghi thông tin xác thực.
+- Đổi mật khẩu bắt buộc OTP mới. Mật khẩu mới có 8–128 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt, khác mật khẩu hiện tại và mật khẩu mặc định `123456aA@`. Giữ bộ băm hiện hành.
+- Duy trì hai thao tác quản trị bắt buộc Reset mật khẩu và Reset 2FA. Chỉ cấp quyền cho ID đã xác minh và cấu hình của `qlcd_admin` khi tài khoản vẫn có vai trò ADMIN. Quyền theo ID khi đổi tên đăng nhập. Chặn tự đặt lại qua giao diện và API quản trị. Cả hai yêu cầu xác nhận, mật khẩu và OTP mới của người thực hiện, thu hồi phiên đích và ghi audit. Khôi phục bằng mã chỉ thay Authenticator và yêu cầu đăng nhập lại. Giữ các kiểm soát an toàn thông tin khi sửa lỗi. [Kiến trúc xác thực](docs/AUTHENTICATION.md) · [Khôi phục tài khoản](docs/ACCOUNT_RECOVERY.md)
+
+- Kiểm thử chức năng mới và hồi quy các chức năng cũ bị ảnh hưởng. Trước khi giao, chạy backend build và test, HTTP smoke, frontend lint và type check cùng production build. Chạy browser smoke nếu thao tác hoặc giao diện thay đổi.
 - Đối chiếu hợp đồng UI → API → handler → SQL. Kiểm tra vai trò, biên dữ liệu, tải lỗi và phân trang khi chúng bị ảnh hưởng. Cập nhật [TASK_TRACKER](docs/TASK_TRACKER.md) bằng kết quả đã quan sát.
 - Ghi lệnh, kết quả, quyết định và giới hạn trong báo cáo. Các thay đổi migration, quyền và cấu hình cần cập nhật hướng dẫn vận hành liên quan.
 
@@ -26,6 +33,7 @@ QLCD là hệ thống quản lý công đoàn cho Bệnh viện Trung ương Qu�
 - Sửa nghiệp vụ và hợp đồng API với [qlcd-backend](.agents/skills/qlcd-backend/SKILL.md).
 - Cải thiện bố cục và khả năng truy cập với [qlcd-ui-ux](.agents/skills/qlcd-ui-ux/SKILL.md).
 - Kiểm tra quyền, phiên và minh chứng với [qlcd-security-review](.agents/skills/qlcd-security-review/SKILL.md).
+- Sửa luồng hoặc tích hợp có biên tin cậy với [secure-development](.agents/skills/secure-development/SKILL.md), xử lý dữ liệu cá nhân với [data-protection](.agents/skills/data-protection/SKILL.md), kiểm chứng bảo mật và chuẩn bị phát hành với [security-testing](.agents/skills/security-testing/SKILL.md).
 - Đổi truy vấn, index hoặc migration với [qlcd-sql](.agents/skills/qlcd-sql/SKILL.md).
 - Cập nhật hoặc chạy kiểm thử với [qlcd-testing](.agents/skills/qlcd-testing/SKILL.md).
 - Đánh giá diff và kiểm tra tương thích với [qlcd-code-review](.agents/skills/qlcd-code-review/SKILL.md).
@@ -38,14 +46,10 @@ Mật khẩu khởi tạo chuẩn là `PasswordHasher.InitialPassword` (`123456a
 
 Không xóa/soft-delete đơn vị và tài khoản khi gỡ khỏi cây. Dùng OrganizationLifecycle: TrangThai=0 cho đơn vị, cờ khóa tài khoản giữ riêng, truy cập hiệu lực bị chặn bởi đơn vị/tổ tiên ngừng. Từ chối CĐCS hoặc đơn vị có bất kỳ con nào kể cả con ngừng/soft-delete; không cascade trạng thái. Khôi phục đơn vị độc lập dùng endpoint riêng, giữ ID/FK, không mở khóa tài khoản; luồng mở khóa có xác thực admin bên dưới được phép phối hợp khôi phục cùng đơn vị. Không dùng Update metadata để thay trạng thái. Legacy IsDeleted chỉ đọc trong quản trị để khôi phục tường minh, không tự backfill dữ liệu. Thu hồi phiên bằng SecurityVersion trong cùng transaction; kiểm tra trạng thái tổ tiên ở login, session và scope.
 
-## Khối quản lý
-
-Dùng KhoiChuyenMons/MaKhoi làm nguồn duy nhất; không tạo lại khái niệm khối trong DanhMucDungChung. Khối chỉ phân nhóm, không tham gia quyền/scope. Chỉ ADMIN quản lý khối; số liên kết toàn hệ thống không trả cho vai trò khác. Tạo đơn vị phải chọn khối đang dùng, dữ liệu MaKhoi null cũ giữ nguyên đến khi phân loại tường minh. Không xóa khối/liên kết; ngừng có xác nhận chỉ chặn lựa chọn mới. Giữ khối khi gỡ/khôi phục đơn vị và không đổi trạng thái đơn vị/tài khoản khi sửa khối. Migration bổ sung metadata không được tự gán hoặc đối sánh theo tên.
-
 ## Khối quản lý của cây tổ chức
 
 Nguồn chuẩn là KhoiChuyenMons/MaKhoi hiện có; DanhMucDungChung loại KhoiChuyenMon cũ chỉ đọc, không tiếp tục tạo/seed nguồn trùng. Chỉ ADMIN quản lý khối; danh sách dùng chung cho lookup nhưng số đơn vị liên kết toàn hệ thống chỉ ADMIN được đọc. Đơn vị mới bắt buộc chọn khối đang dùng, không tự kế thừa hoặc gán theo tên. Đơn vị cũ null hiển thị Chưa phân khối và được bổ sung tường minh; giữ MaKhoi khi ngừng/khôi phục đơn vị. Ngừng khối cần xác nhận, không xóa FK hoặc thay đơn vị/tài khoản/quyền; không cung cấp DELETE khối. Thống kê và group header dùng phân loại của chính đơn vị, không dùng khối làm node hay phạm vi truy cập.
 
-## Mở khóa có xác thực admin (yêu cầu mới)
+## Mở khóa có xác thực admin
 
 POST accounts/{id}/unlock yêu cầu checkbox xác nhận, mật khẩu và OTP mới của ADMIN đã hoàn tất MFA; không tự mở ADMIN/self. Trong cùng transaction Serializable, khôi phục chính đơn vị ngừng/ẩn theo ID cũ và mở đúng tài khoản đã chọn, giữ dữ liệu/FK/MaKhoi/mật khẩu/MFA và cờ khóa tài khoản khác. Cha ngừng phải khôi phục riêng trước. Lỗi phải rollback cả đơn vị, tài khoản, OTP và audit. Toggle v1 chỉ cho khóa, không được dùng để mở; cấp mã kích hoạt không được vượt qua đơn vị đang ngừng/ẩn. Khôi phục đơn vị độc lập vẫn không tự mở tài khoản. Mở khóa không đặt lại mật khẩu hoặc gia hạn mã/mật khẩu tạm. Chính sách này thay thế quy tắc cũ “mở khóa không khôi phục đơn vị”; không nới quyền reset mật khẩu/2FA vốn chỉ dành qlcd_admin có ID cấu hình.

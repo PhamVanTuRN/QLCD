@@ -6,11 +6,12 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QLCD.Application.Common.Interfaces;
+using QLCD.Domain.Entities;
 using QLCD.Domain.Enums;
 
 namespace QLCD.Application.Features.UnionMembers.Queries.GetUnionMemberDetail;
 
-public record GetUnionMemberDetailQuery(Guid Id) : IRequest<UnionMemberDetailDto?>;
+public record GetUnionMemberDetailQuery(Guid Id, string? Trace = null) : IRequest<UnionMemberDetailDto?>;
 
 public class UnionMemberDetailDto
 {
@@ -69,12 +70,15 @@ public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDe
     private readonly IQLCDDbContext _context;
     private readonly IOrganizationScopeService _scopeService;
     private readonly ICertificateLinkPolicy _certificateLinks;
+    private readonly ICurrentUserService _user;
 
-    public GetUnionMemberDetailQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService, ICertificateLinkPolicy certificateLinks)
+    public GetUnionMemberDetailQueryHandler(IQLCDDbContext context, IOrganizationScopeService scopeService,
+        ICertificateLinkPolicy certificateLinks, ICurrentUserService user)
     {
         _context = context;
         _scopeService = scopeService;
         _certificateLinks = certificateLinks;
+        _user = user;
     }
 
     public async Task<UnionMemberDetailDto?> Handle(GetUnionMemberDetailQuery request, CancellationToken cancellationToken)
@@ -88,7 +92,7 @@ public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDe
         if (member == null) return null;
 
         // Scope validation
-        if (!await _scopeService.IsInScopeAsync(member.MaToCongDoan, cancellationToken))
+        if (_user.UserId is not Guid actor || !await _scopeService.IsInScopeAsync(member.MaToCongDoan, cancellationToken))
         {
             throw new UnauthorizedAccessException("Không có quyền xem chi tiết đoàn viên ngoài phạm vi quản lý.");
         }
@@ -105,6 +109,13 @@ public class GetUnionMemberDetailQueryHandler : IRequestHandler<GetUnionMemberDe
                 change.TuToCongDoan == null ? null : change.TuToCongDoan.TenDonVi,
                 change.DenToCongDoan == null ? null : change.DenToCongDoan.TenDonVi, change.LyDo))
             .ToListAsync(cancellationToken);
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            EntityName = nameof(DoanVien), RecordId = member.Id, Action = "MEMBER_DETAIL_READ",
+            UserId = actor.ToString(), CorrelationId = request.Trace
+        });
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new UnionMemberDetailDto
         {
