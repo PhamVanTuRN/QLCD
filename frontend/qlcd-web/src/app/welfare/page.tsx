@@ -1,5 +1,8 @@
 "use client";
 
+import TableText from "@/components/TableText";
+import DataTable from "@/components/DataTable";
+
 import FormDialog from "@/components/FormDialog";
 
 import { useResource } from "@/lib/use-resource";
@@ -168,7 +171,7 @@ export default function WelfarePage() {
       <Notice value={notice} dismiss={dismiss} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink tracking-tight">Quản lý Phúc lợi & Cứu trợ khó khăn</h1>
           <p className="text-xs text-muted mt-1">
@@ -217,7 +220,7 @@ export default function WelfarePage() {
 
       {/* Welfare table */}
       <div className="bg-surface border border-line rounded-2xl p-6">
-        <div className="overflow-x-auto" role="region" aria-label="Bảng hồ sơ phúc lợi" tabIndex={0}>
+        <DataTable label="Bảng hồ sơ phúc lợi" footer={<ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />}>
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-line text-muted font-semibold">
@@ -251,7 +254,7 @@ export default function WelfarePage() {
                   <tr key={item.id} className="hover:bg-soft text-copy">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-ink">{item.hoTenDoanVien || "Chưa có liên kết"}</div>
+                        <div className="font-semibold text-ink"><TableText text={item.hoTenDoanVien || "Chưa có liên kết"} /></div>
                         {item.evidenceFileId && (
                           <a
                             href={`/api/v1/evidence-files/download/${item.evidenceFileId}`}
@@ -274,7 +277,7 @@ export default function WelfarePage() {
                     <td className="py-3 px-4 font-mono">
                       {new Date(item.ngayHoTro).toLocaleDateString("vi-VN")}
                     </td>
-                    <td className="py-3 px-4 font-medium max-w-[200px] truncate">{item.lyDo}</td>
+                    <td className="py-3 px-4 font-medium max-w-[200px]" title={item.lyDo || undefined}><TableText text={item.lyDo} /></td>
                     <td className="py-3 px-4 text-right font-mono font-bold text-brand">
                       {(item.kinhPhiHoTro || 0).toLocaleString()} đ
                     </td>
@@ -316,8 +319,7 @@ export default function WelfarePage() {
               )}
             </tbody>
           </table>
-          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
-        </div>
+        </DataTable>
       </div>
 
       {Boolean(choicesError) && <LoadState message="Không thể tải lựa chọn cho biểu mẫu." retry={reloadChoices} />}

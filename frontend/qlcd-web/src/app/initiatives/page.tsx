@@ -1,5 +1,8 @@
 "use client";
 
+import TableText from "@/components/TableText";
+import DataTable from "@/components/DataTable";
+
 import useConfirmation from "@/components/useConfirmation";
 
 import FormDialog from "@/components/FormDialog";
@@ -101,7 +104,8 @@ export default function InitiativesPage() {
     try {
       await deleteInitiativeApi(id);
       showAlert("success", "Xóa sáng kiến thành công");
-      loadData();
+      if (initiatives.length === 1 && page > 1) setPage(page - 1);
+      else loadData();
     } catch (err) {
       showAlert("error", apiMessage(err, "Lỗi xóa sáng kiến"));
     }
@@ -168,7 +172,7 @@ export default function InitiativesPage() {
       <Notice value={notice} dismiss={dismiss} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink tracking-tight">Phong trào Sáng kiến & Đề tài Khoa học</h1>
           <p className="text-xs text-muted mt-1">
@@ -216,7 +220,7 @@ export default function InitiativesPage() {
 
       {/* Initiatives table */}
       <div className="bg-surface border border-line rounded-2xl p-6">
-        <div className="overflow-x-auto" role="region" aria-label="Bảng sáng kiến" tabIndex={0}>
+        <DataTable label="Bảng sáng kiến" footer={<ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />}>
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-line text-muted font-semibold">
@@ -250,8 +254,8 @@ export default function InitiativesPage() {
                 initiatives.map((item) => (
                   <tr key={item.id} className="hover:bg-soft text-copy">
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-ink">{item.tenDeTai}</div>
-                      {item.hieuQuaKinhTe && <div className="text-[10px] text-muted truncate max-w-[200px]">{item.hieuQuaKinhTe}</div>}
+                      <div className="font-semibold text-ink"><TableText text={item.tenDeTai} /></div>
+                      {item.hieuQuaKinhTe && <div className="text-[10px] text-muted max-w-[200px]" title={item.hieuQuaKinhTe || undefined}><TableText text={item.hieuQuaKinhTe} /></div>}
                     </td>
                     <td className="py-3 px-4">
                       <span className="px-2 py-0.5 rounded bg-soft text-copy border border-line text-[10px]">
@@ -260,7 +264,7 @@ export default function InitiativesPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-ink">{item.hoTenDoanVien || "—"}</div>
+                        <div className="font-semibold text-ink"><TableText text={item.hoTenDoanVien} /></div>
                         {item.evidenceFileId && (
                           <a
                             href={`/api/v1/evidence-files/download/${item.evidenceFileId}`}
@@ -311,8 +315,7 @@ export default function InitiativesPage() {
               )}
             </tbody>
           </table>
-          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
-        </div>
+        </DataTable>
       </div>
 
       {Boolean(choicesError) && <LoadState message="Không thể tải lựa chọn cho biểu mẫu." retry={reloadChoices} />}

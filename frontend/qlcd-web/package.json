@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs",
+    "test:ui": "node tests/ui-quality.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

@@ -1,5 +1,8 @@
 "use client";
 
+import TableText from "@/components/TableText";
+import DataTable from "@/components/DataTable";
+
 import useConfirmation from "@/components/useConfirmation";
 
 import FormDialog from "@/components/FormDialog";
@@ -94,7 +97,8 @@ export default function ActivitiesPage() {
     try {
       await deleteActivityApi(id);
       showAlert("success", "Xóa hoạt động thành công");
-      loadData();
+      if (activities.length === 1 && page > 1) setPage(page - 1);
+      else loadData();
     } catch (err) {
       showAlert("error", apiMessage(err, "Lỗi xóa hoạt động"));
     }
@@ -140,7 +144,7 @@ export default function ActivitiesPage() {
       <Notice value={notice} dismiss={dismiss} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink tracking-tight">Quản lý Hoạt động Công đoàn</h1>
           <p className="text-xs text-muted mt-1">
@@ -174,7 +178,7 @@ export default function ActivitiesPage() {
 
       {/* Table list */}
       <div className="bg-surface border border-line rounded-2xl p-6">
-        <div className="overflow-x-auto" role="region" aria-label="Bảng hoạt động" tabIndex={0}>
+        <DataTable label="Bảng hoạt động" footer={<ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />}>
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-line text-muted font-semibold">
@@ -208,7 +212,7 @@ export default function ActivitiesPage() {
                   <tr key={item.id} className="hover:bg-soft text-copy">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-ink">{item.tenHoatDong}</div>
+                        <div className="font-semibold text-ink"><TableText text={item.tenHoatDong} /></div>
                         {item.evidenceFileId && (
                           <a
                             href={`/api/v1/evidence-files/download/${item.evidenceFileId}`}
@@ -221,7 +225,7 @@ export default function ActivitiesPage() {
                           </a>
                         )}
                       </div>
-                      {item.moTa && <div className="text-[10px] text-muted truncate max-w-[200px]">{item.moTa}</div>}
+                      {item.moTa && <div className="text-[10px] text-muted max-w-[200px]" title={item.moTa || undefined}><TableText text={item.moTa} /></div>}
                     </td>
                     <td className="py-3 px-4">
                       <span className="px-2 py-0.5 rounded bg-soft text-copy border border-line text-[10px]">
@@ -231,11 +235,11 @@ export default function ActivitiesPage() {
                     <td className="py-3 px-4 font-mono">
                       {new Date(item.tuNgay).toLocaleDateString("vi-VN")} - {new Date(item.denNgay).toLocaleDateString("vi-VN")}
                     </td>
-                    <td className="py-3 px-4 font-medium">{item.diaDiem}</td>
+                    <td className="py-3 px-4 font-medium"><TableText text={item.diaDiem} /></td>
                     <td className="py-3 px-4 text-right font-mono font-bold text-brand">
                       {(item.kinhPhi || 0).toLocaleString()} đ
                     </td>
-                    <td className="py-3 px-4 text-muted">{item.tenDonVi || "—"}</td>
+                    <td className="py-3 px-4 text-muted"><TableText text={item.tenDonVi} /></td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {(user?.role !== "ADMIN") && (
@@ -261,8 +265,7 @@ export default function ActivitiesPage() {
               )}
             </tbody>
           </table>
-          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
-        </div>
+        </DataTable>
       </div>
 
       {Boolean(choicesError) && <LoadState message="Không thể tải lựa chọn cho biểu mẫu." retry={reloadChoices} />}

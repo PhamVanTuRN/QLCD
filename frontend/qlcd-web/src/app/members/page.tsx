@@ -1,5 +1,7 @@
 "use client";
 
+import DataTable from "@/components/DataTable";
+
 import useConfirmation from "@/components/useConfirmation";
 
 import FormDialog from "@/components/FormDialog";
@@ -44,6 +46,7 @@ export default function MembersList() {
   const { confirm, confirmationDialog } = useConfirmation();
   const { user } = useAuth();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
@@ -64,11 +67,11 @@ export default function MembersList() {
   const canTransfer = user?.role !== "TOCD";
   const canDelete = user?.role === "ADMIN" || user?.role === "CDCS";
   const readMembers = useCallback((signal: AbortSignal) => getMembers({
-    page, search: searchTerm.trim() || undefined,
+    page, pageSize, search: searchTerm.trim() || undefined,
     toCongDoanId: selectedGroup || undefined,
     vaiTro: selectedRole || undefined,
     trangThai: selectedStatus || undefined,
-  }, signal), [page, searchTerm, selectedGroup, selectedRole, selectedStatus]);
+  }, signal), [page, pageSize, searchTerm, selectedGroup, selectedRole, selectedStatus]);
   const { data: result, error: memberLoadError, loading, reload: loadMembers } = useResource(readMembers, searchTerm ? 200 : 0);
   const members = result?.items ?? [];
   const totalCount = result?.totalCount ?? 0;
@@ -112,7 +115,8 @@ export default function MembersList() {
     try {
       await deleteMemberApi(id);
       showAlert("success", "Đã xóa đoàn viên.");
-      await loadMembers();
+      if (members.length === 1 && page > 1) setPage(page - 1);
+      else loadMembers();
     } catch (err) {
       showAlert("error", apiMessage(err, "Lỗi khi xóa đoàn viên"));
     }
@@ -185,9 +189,16 @@ export default function MembersList() {
       <div className="panel overflow-hidden">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-4 py-3.5 sm:px-6">
           <h2 className="text-sm font-bold text-ink">Danh sách đoàn viên</h2>
+          <label className="ml-auto flex items-center gap-2 text-sm text-copy">
+            Số dòng / trang
+            <select aria-label="Số dòng mỗi trang" value={pageSize} className="min-h-11 rounded-lg border border-edge bg-surface px-2"
+              onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
+              {[10, 20, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
           <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-xs font-semibold text-brand-strong">{totalCount} hồ sơ</span>
         </div>
-        <div className="overflow-x-auto" role="region" aria-label="Bảng đoàn viên" tabIndex={0}>
+        <DataTable label="Bảng đoàn viên" footer={<ListPager totalCount={result?.totalCount} pageSize={result?.pageSize} page={page} hasMore={page * (result?.pageSize ?? 50) < totalCount} loading={loading} onChange={setPage} />}>
           <table className="w-full min-w-[55rem] border-collapse text-left text-sm">
             <thead className="bg-soft">
               <tr className="border-b border-line font-semibold text-copy">
@@ -268,8 +279,7 @@ export default function MembersList() {
               )}
             </tbody>
           </table>
-          <ListPager page={page} hasMore={page * (result?.pageSize ?? 50) < totalCount} loading={loading} onChange={setPage} />
-        </div>
+        </DataTable>
       </div>
 
       {Boolean(treeError) && <LoadState message="Không thể tải danh sách tổ công đoàn." retry={reloadTree} />}

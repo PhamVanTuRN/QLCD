@@ -54,7 +54,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             <Menu size={22} aria-hidden="true" />
           </button>
           <Building2 size={18} className="hidden shrink-0 text-brand lg:block" aria-hidden="true" />
-          <div className="min-w-0 grow truncate text-sm font-semibold text-ink">{user?.donViTen ?? "Công đoàn Bệnh viện TWQĐ 108"}</div>
+          <div title={user?.donViTen ?? "Công đoàn Bệnh viện TWQĐ 108"} className="min-w-0 grow truncate text-sm font-semibold text-ink">{user?.donViTen ?? "Công đoàn Bệnh viện TWQĐ 108"}</div>
           <span className="hidden shrink-0 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-strong sm:block">{user?.vaiTro}</span>
         </header>
         <main id="main-content" tabIndex={-1} className="mx-auto min-w-0 max-w-[100rem] p-4 sm:p-6 lg:p-8">

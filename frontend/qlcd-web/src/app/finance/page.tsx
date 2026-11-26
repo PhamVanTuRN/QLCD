@@ -1,5 +1,8 @@
 "use client";
 
+import TableText from "@/components/TableText";
+import DataTable from "@/components/DataTable";
+
 import useConfirmation from "@/components/useConfirmation";
 
 import FormDialog from "@/components/FormDialog";
@@ -96,7 +99,8 @@ export default function FinancePage() {
     try {
       await deleteFinanceApi(id);
       showAlert("success", "Xóa giao dịch thành công");
-      loadData();
+      if (transactions.length === 1 && page > 1) setPage(page - 1);
+      else loadData();
     } catch (err) {
       showAlert("error", apiMessage(err, "Lỗi xóa giao dịch"));
     }
@@ -155,7 +159,7 @@ export default function FinancePage() {
       <Notice value={notice} dismiss={dismiss} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink tracking-tight">Tài chính & Thu nộp Đoàn phí</h1>
           <p className="text-xs text-muted mt-1">
@@ -207,7 +211,7 @@ export default function FinancePage() {
 
       {/* Transaction table */}
       <div className="bg-surface border border-line rounded-2xl p-6">
-        <div className="overflow-x-auto" role="region" aria-label="Bảng giao dịch" tabIndex={0}>
+        <DataTable label="Bảng giao dịch" footer={<ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />}>
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-line text-muted font-semibold">
@@ -256,7 +260,7 @@ export default function FinancePage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-ink">{item.nguoiGiaoDich}</div>
+                        <div className="font-semibold text-ink"><TableText text={item.nguoiGiaoDich} /></div>
                         {item.evidenceFileId && (
                           <a
                             href={`/api/v1/evidence-files/download/${item.evidenceFileId}`}
@@ -279,8 +283,8 @@ export default function FinancePage() {
                     >
                       {isReceipt(item.loaiGiaoDich) ? "+" : "-"}{(item.soTien || 0).toLocaleString()} đ
                     </td>
-                    <td className="py-3 px-4 text-muted truncate max-w-[150px]">{item.ghiChu || "—"}</td>
-                    <td className="py-3 px-4 text-muted">{item.tenDonVi || "—"}</td>
+                    <td className="py-3 px-4 text-muted max-w-[150px]" title={item.ghiChu || undefined}><TableText text={item.ghiChu} /></td>
+                    <td className="py-3 px-4 text-muted"><TableText text={item.tenDonVi} /></td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -304,8 +308,7 @@ export default function FinancePage() {
               )}
             </tbody>
           </table>
-          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
-        </div>
+        </DataTable>
       </div>
 
       {Boolean(choicesError) && <LoadState message="Không thể tải lựa chọn cho biểu mẫu." retry={reloadChoices} />}

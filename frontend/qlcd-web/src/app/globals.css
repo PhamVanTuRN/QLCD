@@ -173,3 +173,73 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Shared data surfaces: one bounded table viewport, with pagination outside it. */
+:root {
+  --ui-control-height: 2.75rem;
+  --ui-table-height: 36rem;
+  --ui-table-width: 56rem;
+  --ui-layer-table-header: 1;
+}
+
+.data-table { min-width: 0; }
+.data-table-scroll {
+  max-height: clamp(14rem, calc(100dvh - 25rem), var(--ui-table-height));
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+  border-radius: 0.75rem;
+}
+.data-table-scroll table { min-width: var(--ui-table-width); font-size: 0.875rem; }
+.data-table-scroll th {
+  position: sticky;
+  top: 0;
+  z-index: var(--ui-layer-table-header);
+  background: var(--color-soft);
+  white-space: nowrap;
+}
+.data-table-scroll td {
+  min-width: 7rem;
+  max-width: 24rem;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.data-table-scroll td[colspan] { max-width: none; }
+.data-table-scroll td:last-child > .flex { flex-wrap: wrap; }
+.data-table-scroll button { min-height: 2rem; }
+.list-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--outline);
+  color: var(--color-copy);
+  font-size: 0.875rem;
+}
+.list-pager button { min-height: var(--ui-control-height); flex-shrink: 0; }
+.list-pager > span { font-variant-numeric: tabular-nums; }
+.form-dialog { overscroll-behavior: contain; scrollbar-gutter: stable; }
+.form-dialog input:not([type="checkbox"]):not([type="radio"]),
+.form-dialog select, .form-dialog textarea { min-width: 0; max-width: 100%; }
+.form-dialog input:not([type="checkbox"]):not([type="radio"]),
+.form-dialog select { min-height: var(--ui-control-height); }
+.form-dialog :is(h2, p, label) { overflow-wrap: anywhere; }
+
+/* Allow long text to shrink within the app's grid columns. */
+#main-content { overflow-wrap: anywhere; }
+#main-content .grid > *, .form-dialog .grid > * { min-width: 0; }
+@media (max-width: 639px) {
+  .list-pager > [role="status"] { flex-basis: 100%; }
+}
+
+.table-text { max-width: 24rem; }
+.table-text summary { cursor: pointer; overflow-wrap: anywhere; }
+.table-text-less, .table-text[open] .table-text-preview, .table-text[open] .table-text-more { display: none; }
+.table-text[open] .table-text-less { display: inline; }
+/* Keep amounts, dates and compact status labels intact while the table scrolls. */
+.data-table-scroll td.font-mono,
+.data-table-scroll td > span[class*="rounded"] { white-space: nowrap; }
+.table-text summary { list-style: none; }
+.table-text summary::-webkit-details-marker { display: none; }

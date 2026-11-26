@@ -1,5 +1,8 @@
 "use client";
 
+import TableText from "@/components/TableText";
+import DataTable from "@/components/DataTable";
+
 import useConfirmation from "@/components/useConfirmation";
 
 import ManagementBlocksPanel from "@/components/ManagementBlocksPanel";
@@ -96,7 +99,8 @@ export default function CatalogsPage() {
     try {
       await deleteCatalogApi(id);
       showAlert("success", "Xóa danh mục thành công");
-      loadCatalogs();
+      if (catalogs.length === 1 && page > 1) setPage(page - 1);
+      else loadCatalogs();
     } catch (err) {
       const msg = apiMessage(err, "Không thể xóa danh mục này do đang có liên kết dữ liệu.");
       showAlert("error", msg);
@@ -141,7 +145,7 @@ export default function CatalogsPage() {
       <Notice value={notice} dismiss={dismiss} />
 
       {/* Title */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink tracking-tight">Quản lý Danh mục Dùng chung</h1>
           <p className="text-xs text-muted mt-1">Cấu hình các danh mục và tùy chọn lựa chọn cho toàn hệ thống</p>
@@ -194,8 +198,8 @@ export default function CatalogsPage() {
             />
           </div>
 
-          <div className="overflow-x-auto" role="region" aria-label="Bảng danh mục" tabIndex={0}>
-            <table className="w-full text-left text-xs border-collapse">
+          <DataTable label="Bảng danh mục" footer={<ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />}>
+          <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-line text-muted font-semibold">
                   <th scope="col" className="py-3 px-4">Mã</th>
@@ -226,7 +230,7 @@ export default function CatalogsPage() {
                   catalogs.map((item) => (
                     <tr key={item.id} className="hover:bg-soft text-copy">
                       <td className="py-3 px-4 font-mono font-bold text-brand">{item.ma}</td>
-                      <td className="py-3 px-4 font-medium text-ink">{item.ten}</td>
+                      <td className="py-3 px-4 font-medium text-ink"><TableText text={item.ten} /></td>
                       <td className="py-3 px-4 text-center font-mono">{item.thuTu}</td>
                       <td className="py-3 px-4 text-center">
                         <span
@@ -265,8 +269,7 @@ export default function CatalogsPage() {
                 )}
               </tbody>
             </table>
-          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
-          </div>
+        </DataTable>
         </div>)}
       </div>
 

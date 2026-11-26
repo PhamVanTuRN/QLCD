@@ -1,5 +1,8 @@
 "use client";
 
+import TableText from "@/components/TableText";
+import DataTable from "@/components/DataTable";
+
 import FormDialog from "@/components/FormDialog";
 import { OtpField, securityInput } from "@/components/AuthenticatorFields";
 
@@ -164,7 +167,7 @@ export default function AccountsPage() {
 
       {/* Main card */}
       <div className="panel overflow-hidden">
-        <div className="overflow-x-auto" role="region" aria-label="Bảng tài khoản" tabIndex={0}>
+        <DataTable label="Bảng tài khoản" footer={<ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />}>
           <table className="w-full min-w-[52rem] border-collapse text-left text-sm">
             <thead className="bg-soft">
               <tr className="border-b border-line font-semibold text-copy">
@@ -197,7 +200,7 @@ export default function AccountsPage() {
                 accounts.map((item) => (
                   <tr key={item.id} className="hover:bg-soft text-copy">
                     <td className="py-3 px-4 font-mono font-bold text-ink">{item.username}</td>
-                    <td className="py-3 px-4 font-medium text-ink">{item.hoTen}</td>
+                    <td className="py-3 px-4 font-medium text-ink"><TableText text={item.hoTen} /></td>
                     <td className="py-3 px-4">
                       <span className={`inline-block rounded-full border px-2.5 py-1 text-xs font-semibold ${getRoleBadgeColor(item.vaiTro)}`}>
                         {roleNames[item.vaiTro] ?? item.vaiTro}
@@ -253,8 +256,7 @@ export default function AccountsPage() {
               )}
             </tbody>
           </table>
-          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
-        </div>
+        </DataTable>
       </div>
 
       {selectedAccount && (

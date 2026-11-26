@@ -22,3 +22,9 @@ Dùng dữ liệu tổng hợp, cơ sở dữ liệu riêng và storage thử tr
 - Trên SQL, thử khôi phục chính đơn vị liên kết khi mở khóa, lỗi giữa transaction và cha ngừng. Dùng hai context để xác nhận cập nhật cũ bị từ chối sau khi đơn vị, trạng thái duyệt hoặc xóa mềm thay đổi. Kiểm tra sự kiện đọc hồ sơ và tải minh chứng chỉ được ghi cho truy cập hợp lệ.
 
 QR trong kiểm thử trình duyệt dùng TOTP sinh từ khóa thử nghiệm. Nghiệm thu trên thiết bị thật gồm quét bằng Google Authenticator và Microsoft Authenticator, dán mã trên điện thoại, thay thiết bị và khôi phục với key ring của môi trường đích. [Bằng chứng đã chạy](TASK_TRACKER.md)
+
+## Cổng chất lượng giao diện
+
+`npm run test:ui` trong frontend chạy Next production trên port loopback ngẫu nhiên và Chromium với API mock chỉ trong Playwright. Không có endpoint seed trong ứng dụng, không kết nối hoặc ghi database. Fixture sinh từng trang cho tổng 0/1/7/20/50/100/500/1.000/10.000 bản ghi; chạy lại tự tạo fixture và đóng process/context sau cùng. Báo cáo và ảnh tổng hợp ở `artifacts/ui-quality/after`; xóa riêng thư mục này để dọn bằng chứng. `node tests/ui-quality.mjs --before` chỉ thu đường cơ sở trên bundle đã build, không dùng thay gate sau sửa.
+
+Bộ này đo giới hạn DOM, phân trang, hai trục cuộn, header sticky, pager ngoài vùng cuộn, overflow, các viewport desktop/mobile, reflow tương đương zoom, trạng thái lỗi/thử lại, dialog và axe. Mock chứng minh hiển thị và tham số request; `test:browser` tiếp tục chứng minh API thật/CSRF/OTP và nghiệp vụ trên InMemory cô lập. Chưa thay thế kiểm SQL, kiểm tải đồng thời, memory profiling hoặc zoom trình duyệt thật. Đặt `QLCD_CHROMIUM_PATH` khi cần Chrome đã cài. CI chạy cả hai bộ và giữ ảnh/báo cáo.

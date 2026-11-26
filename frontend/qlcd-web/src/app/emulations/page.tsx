@@ -1,5 +1,8 @@
 "use client";
 
+import TableText from "@/components/TableText";
+import DataTable from "@/components/DataTable";
+
 import useConfirmation from "@/components/useConfirmation";
 
 import FormDialog from "@/components/FormDialog";
@@ -101,7 +104,8 @@ export default function EmulationsPage() {
     try {
       await deleteEmulationApi(id);
       showAlert("success", "Xóa kết quả thi đua thành công");
-      loadData();
+      if (emulations.length === 1 && page > 1) setPage(page - 1);
+      else loadData();
     } catch (err) {
       showAlert("error", apiMessage(err, "Lỗi xóa thi đua"));
     }
@@ -170,7 +174,7 @@ export default function EmulationsPage() {
       <Notice value={notice} dismiss={dismiss} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink tracking-tight">Phong trào Thi đua & Đánh giá phân loại</h1>
           <p className="text-xs text-muted mt-1">
@@ -219,7 +223,7 @@ export default function EmulationsPage() {
 
       {/* Table list */}
       <div className="bg-surface border border-line rounded-2xl p-6">
-        <div className="overflow-x-auto" role="region" aria-label="Bảng hồ sơ thi đua" tabIndex={0}>
+        <DataTable label="Bảng hồ sơ thi đua" footer={<ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />}>
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-line text-muted font-semibold">
@@ -255,7 +259,7 @@ export default function EmulationsPage() {
                   <tr key={item.id} className="hover:bg-soft text-copy">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-ink">{item.tenPhongTrao}</span>
+                        <div className="font-semibold text-ink"><TableText text={item.tenPhongTrao} /></div>
                         {item.evidenceFileId && (
                           <a
                             href={`/api/v1/evidence-files/download/${item.evidenceFileId}`}
@@ -272,12 +276,12 @@ export default function EmulationsPage() {
                     <td className="py-3 px-4">
                       {item.hoTenDoanVien ? (
                         <div>
-                          <div className="font-semibold text-ink">{item.hoTenDoanVien}</div>
+                          <div className="font-semibold text-ink"><TableText text={item.hoTenDoanVien} /></div>
                           <div className="text-[10px] text-muted">Đoàn viên</div>
                         </div>
                       ) : item.tenDonVi ? (
                         <div>
-                          <div className="font-semibold text-brand">{item.tenDonVi}</div>
+                          <div className="font-semibold text-brand"><TableText text={item.tenDonVi} /></div>
                           <div className="text-[10px] text-muted">Tập thể</div>
                         </div>
                       ) : (
@@ -323,8 +327,7 @@ export default function EmulationsPage() {
               )}
             </tbody>
           </table>
-          <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
-        </div>
+        </DataTable>
       </div>
 
       {Boolean(choicesError) && <LoadState message="Không thể tải lựa chọn cho biểu mẫu." retry={reloadChoices} />}
