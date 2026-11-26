@@ -207,17 +207,17 @@ public class GetUnionStatsQueryHandler : IRequestHandler<GetUnionStatsQuery, Uni
         }
 
         // Khối chuyên môn (sử dụng KhoiChuyenMon hoặc Danhmuc)
-        var khoiList = await _context.KhoiChuyenMons.AsNoTracking().ToListAsync(cancellationToken);
+        var khoiList = await _context.KhoiChuyenMons.IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);
         foreach (var khoi in khoiList)
         {
             // Lấy các đơn vị thuộc khối
             var unitIdsInKhoi = allUnits.Where(u => u.MaKhoi == khoi.Id).Select(u => u.Id).ToHashSet();
-            var childToCdIds = allUnits.Where(u => u.MaParent.HasValue && unitIdsInKhoi.Contains(u.MaParent.Value)).Select(u => u.Id);
-            var combinedIds = unitIdsInKhoi.Concat(childToCdIds).ToHashSet();
-
-            var count = combinedIds.Sum(id => unitCounts.GetValueOrDefault(id));
+            var count = activeMembers.Count(d => unitIdsInKhoi.Contains(d.MaToCongDoan));
             listKhoi.Add(new CountPair { Name = khoi.TenKhoi, Count = count });
         }
+
+        var unclassifiedUnits = allUnits.Where(u => u.MaKhoi == null).Select(u => u.Id).ToHashSet();
+        listKhoi.Add(new CountPair { Name = "Chưa phân khối", Count = activeMembers.Count(m => unclassifiedUnits.Contains(m.MaToCongDoan)) });
 
         // Giới tính
         var maleCount = activeMembers.Count(m => m.GioiTinh == 1);

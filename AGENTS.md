@@ -37,3 +37,11 @@ Mật khẩu khởi tạo chuẩn là `PasswordHasher.InitialPassword` (`123456a
 ## Vòng đời đơn vị và tài khoản
 
 Không xóa/soft-delete đơn vị và tài khoản khi gỡ khỏi cây. Dùng OrganizationLifecycle: TrangThai=0 cho đơn vị, cờ khóa tài khoản giữ riêng, truy cập hiệu lực bị chặn bởi đơn vị/tổ tiên ngừng. Từ chối CĐCS hoặc đơn vị có bất kỳ con nào kể cả con ngừng/soft-delete; không cascade trạng thái. Khôi phục đơn vị dùng endpoint riêng, giữ ID/FK, không mở khóa tài khoản. Không dùng Update metadata để thay trạng thái. Legacy IsDeleted chỉ đọc trong quản trị để khôi phục tường minh, không tự backfill dữ liệu. Thu hồi phiên bằng SecurityVersion trong cùng transaction; kiểm tra trạng thái tổ tiên ở login, session và scope.
+
+## Khối quản lý
+
+Dùng KhoiChuyenMons/MaKhoi làm nguồn duy nhất; không tạo lại khái niệm khối trong DanhMucDungChung. Khối chỉ phân nhóm, không tham gia quyền/scope. Chỉ ADMIN quản lý khối; số liên kết toàn hệ thống không trả cho vai trò khác. Tạo đơn vị phải chọn khối đang dùng, dữ liệu MaKhoi null cũ giữ nguyên đến khi phân loại tường minh. Không xóa khối/liên kết; ngừng có xác nhận chỉ chặn lựa chọn mới. Giữ khối khi gỡ/khôi phục đơn vị và không đổi trạng thái đơn vị/tài khoản khi sửa khối. Migration bổ sung metadata không được tự gán hoặc đối sánh theo tên.
+
+## Khối quản lý của cây tổ chức
+
+Nguồn chuẩn là KhoiChuyenMons/MaKhoi hiện có; DanhMucDungChung loại KhoiChuyenMon cũ chỉ đọc, không tiếp tục tạo/seed nguồn trùng. Chỉ ADMIN quản lý khối; danh sách dùng chung cho lookup nhưng số đơn vị liên kết toàn hệ thống chỉ ADMIN được đọc. Đơn vị mới bắt buộc chọn khối đang dùng, không tự kế thừa hoặc gán theo tên. Đơn vị cũ null hiển thị Chưa phân khối và được bổ sung tường minh; giữ MaKhoi khi ngừng/khôi phục đơn vị. Ngừng khối cần xác nhận, không xóa FK hoặc thay đơn vị/tài khoản/quyền; không cung cấp DELETE khối. Thống kê và group header dùng phân loại của chính đơn vị, không dùng khối làm node hay phạm vi truy cập.

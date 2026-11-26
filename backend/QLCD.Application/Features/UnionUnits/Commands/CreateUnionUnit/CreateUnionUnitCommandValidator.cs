@@ -10,6 +10,8 @@ public class CreateUnionUnitCommandValidator : AbstractValidator<CreateUnionUnit
             .NotEmpty().WithMessage("Tên đơn vị không được để trống.")
             .MaximumLength(150).WithMessage("Tên đơn vị không được vượt quá 150 ký tự.");
 
+        RuleFor(v => v.MaKhoi).NotEmpty().WithMessage("Phải chọn Khối quản lý.");
+
         RuleFor(v => v.LoaiToChuc)
             .IsInEnum().WithMessage("Loại tổ chức không hợp lệ.");
     }

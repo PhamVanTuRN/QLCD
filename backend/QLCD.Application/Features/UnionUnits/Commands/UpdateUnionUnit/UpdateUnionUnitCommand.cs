@@ -1,4 +1,5 @@
 using QLCD.Application.Common;
+using QLCD.Application.Features.ManagementBlocks;
 using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
@@ -34,6 +35,8 @@ public class UpdateUnionUnitCommandHandler : IRequestHandler<UpdateUnionUnitComm
     public async Task<bool> Handle(UpdateUnionUnitCommand request, CancellationToken cancellationToken)
     {
         OrganizationLifecycle.RequireManager(_user);
+        await using var transaction = _context.Database.IsRelational()
+            ? await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken) : null;
         var unit = await _context.DonViCongDoans
             .FirstOrDefaultAsync(u => u.Id == request.Id, cancellationToken);
 
@@ -44,10 +47,12 @@ public class UpdateUnionUnitCommandHandler : IRequestHandler<UpdateUnionUnitComm
 
         if (request.TrangThai != unit.TrangThai)
             throw new OrganizationStateException("Dùng thao tác Ngừng hoạt động hoặc Khôi phục đơn vị riêng; sửa thông tin không đổi trạng thái.");
+        await ManagementBlockAssignment.ValidateAsync(_context, request.MaKhoi, unit.MaKhoi, false, cancellationToken);
         unit.TenDonVi = request.TenDonVi;
         unit.MaKhoi = request.MaKhoi;
 
         await _context.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return true;
     }
 }

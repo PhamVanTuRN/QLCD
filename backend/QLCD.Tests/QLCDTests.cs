@@ -131,9 +131,12 @@ public class QLCDTests
         var root = await context.DonViCongDoans.FirstAsync(u => u.LoaiToChuc == LoaiToChuc.CDCS);
         var handler = new CreateUnionUnitCommandHandler(context);
 
+        var block = new KhoiChuyenMon { TenKhoi = "Fixture block" };
+        context.KhoiChuyenMons.Add(block); await context.SaveChangesAsync();
         // 1. Tạo CĐBP dưới CĐCS thành công
         var cdbpId = await handler.Handle(new CreateUnionUnitCommand
         {
+            MaKhoi = block.Id,
             TenDonVi = "CĐBP Khối Nội 1",
             LoaiToChuc = LoaiToChuc.CDBP,
             MaParent = root.Id
@@ -142,6 +145,7 @@ public class QLCDTests
         // 2. Tạo tổ thuộc CĐBP thành công
         var tcdCdbpId = await handler.Handle(new CreateUnionUnitCommand
         {
+            MaKhoi = block.Id,
             TenDonVi = "Tổ Tiêu hóa",
             LoaiToChuc = LoaiToChuc.TO_CD_THUOC_CDBP,
             MaParent = cdbpId
@@ -150,6 +154,7 @@ public class QLCDTests
         // 3. Tạo tổ trực thuộc CĐCS thành công
         var tcdCdcsId = await handler.Handle(new CreateUnionUnitCommand
         {
+            MaKhoi = block.Id,
             TenDonVi = "Tổ trực thuộc CĐCS số 1",
             LoaiToChuc = LoaiToChuc.TO_CD_TRUC_THUOC_CDCS,
             MaParent = root.Id
@@ -157,6 +162,7 @@ public class QLCDTests
 
         var emptyDepartmentId = await handler.Handle(new CreateUnionUnitCommand
         {
+            MaKhoi = block.Id,
             TenDonVi = "CĐBP chưa có tổ",
             LoaiToChuc = LoaiToChuc.CDBP,
             MaParent = root.Id

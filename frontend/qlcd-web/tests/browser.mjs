@@ -28,6 +28,8 @@ const widths = [360, 390, 768, 1024, 1280, 1440, 1920];
 const report = { screens: [], accessibility: [], browserErrors: [], apiFailures: [], dashboard: [], flows: [] };
 let browser;
 let adminFactor;
+let testBlockId;
+let testBlockName = "Khối quản lý thử nghiệm";
 let ingress;
 const writes = [];
 let page;
@@ -95,6 +97,18 @@ try {
     report.flows.push("Administrator completes mandatory activation, QR enrollment and OTP-gated password change");
   }
   await page.waitForURL(origin + "/");
+  if (!baseline) {
+    await open("/catalogs");
+    await page.getByRole("button", { name: "Thêm khối quản lý", exact: true }).click();
+    const blockDialog = page.getByRole("dialog", { name: "Thêm khối quản lý", exact: true });
+    await blockDialog.getByLabel("Tên khối *", { exact: true }).fill(testBlockName);
+    await blockDialog.getByLabel("Thông tin / Ghi chú", { exact: true }).fill("Thông tin khối thử nghiệm");
+    await blockDialog.getByRole("button", { name: "Lưu khối", exact: true }).click();
+    await page.getByText(testBlockName, { exact: true }).waitFor();
+    report.flows.push("Administrator creates the canonical management block in root catalogs");
+  }
+  const blockPage = await (await context.request.get("/api/v1/management-blocks?activeOnly=true")).json();
+  testBlockId = (blockPage.data.find(b => b.tenKhoi === testBlockName) ?? blockPage.data[0]).id;
 
   if (!baseline) {
     await open("/members");
@@ -119,6 +133,8 @@ try {
       await page.getByRole("button", { name: button, exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Thêm đơn vị" });
       await dialog.getByLabel("Tên đơn vị *", { exact: true }).fill(name);
+      assert.equal(await dialog.getByRole("button", { name: "Xác nhận tạo", exact: true }).isDisabled(), true);
+      await dialog.getByLabel("Khối quản lý *", { exact: true }).selectOption(testBlockId);
       await dialog.getByRole("button", { name: "Xác nhận tạo" }).click();
       await page.getByRole("button", { name: name.trim(), exact: true }).waitFor();
     }
@@ -136,6 +152,8 @@ try {
     assert.equal(response.status(), 200);
     const tree = (await response.json()).data;
     assert.equal(tree.tenDonVi, `  ${centralName}  `, "Creation must preserve exactly the entered unit name");
+    assert.equal(tree.maKhoi, testBlockId); assert.equal(tree.tenKhoi, testBlockName);
+    await page.getByRole("group", { name: `Khối quản lý: ${testBlockName}`, exact: true }).first().waitFor();
     const directTeam = tree.children.find(unit => unit.tenDonVi === directTeamName);
     const department = tree.children.find(unit => unit.tenDonVi === departmentName);
     const emptyDepartment = tree.children.find(unit => unit.tenDonVi === emptyDepartmentName);
@@ -298,6 +316,7 @@ try {
 
 
     await open("/catalogs");
+    await page.getByRole("button", { name: "Chức vụ công đoàn", exact: true }).click();
     await page.getByRole("button", { name: /Thêm Danh mục/ }).click();
     const catalog = page.getByRole("dialog", { name: "Thông tin danh mục" });
     await cancelForm(catalog, page.getByRole("button", { name: /Thêm Danh mục/ }));
@@ -352,6 +371,55 @@ try {
     assert.equal(restoredAccount.organizationId, emptyDepartmentId);
     assert.equal(restoredAccount.trangThai, true);
     report.flows.push("Deactivate unit, retain and unlock account without restoring unit, then explicitly restore the same unit ID");
+    await open("/catalogs");
+    const blockRow = page.getByRole("region", { name: "Khối quản lý", exact: true }).getByRole("listitem").filter({ hasText: testBlockName });
+    await blockRow.getByRole("button", { name: "Sửa khối", exact: true }).click();
+    const blockEdit = page.getByRole("dialog", { name: "Sửa khối quản lý", exact: true });
+    testBlockName = "Khối Cơ quan thử nghiệm";
+    await blockEdit.getByLabel("Tên khối *", { exact: true }).fill(testBlockName);
+    await blockEdit.getByRole("button", { name: "Lưu khối", exact: true }).click();
+    const renamedBlock = page.getByRole("region", { name: "Khối quản lý", exact: true }).getByRole("listitem").filter({ hasText: testBlockName });
+    await renamedBlock.getByRole("button", { name: "Sửa khối", exact: true }).click();
+    await blockEdit.getByRole("checkbox", { name: "Đang sử dụng", exact: true }).uncheck();
+    const beforeCancelBlock = writes.length;
+    await blockEdit.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    assert.equal(writes.length, beforeCancelBlock);
+    await renamedBlock.getByRole("button", { name: "Sửa khối", exact: true }).click();
+    assert.equal(await blockEdit.getByRole("checkbox", { name: "Đang sử dụng", exact: true }).isChecked(), true);
+    await blockEdit.getByRole("checkbox", { name: "Đang sử dụng", exact: true }).uncheck();
+    await blockEdit.getByRole("checkbox", { name: /Tôi xác nhận ngừng sử dụng khối/ }).check();
+    await blockEdit.getByRole("button", { name: "Lưu khối", exact: true }).click();
+    await renamedBlock.getByText(/Ngừng sử dụng/).waitFor();
+    await open("/organizations");
+    await page.getByRole("group", { name: `Khối quản lý: ${testBlockName}`, exact: true }).first().waitFor();
+    const blockTree = (await (await context.request.get("/api/v1/union-units/tree")).json()).data;
+    assert.equal(blockTree.maKhoi, testBlockId); assert.equal(blockTree.tenKhoi, testBlockName);
+    assert.equal(blockTree.khoiDangSuDung, false);
+    await page.getByRole("button", { name: /Sửa Đơn vị/ }).click();
+    const unitEdit = page.getByRole("dialog", { name: "Sửa đơn vị", exact: true });
+    assert.equal(await unitEdit.getByLabel("Khối quản lý", { exact: true }).inputValue(), testBlockId);
+    await unitEdit.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    report.flows.push("Rename used block updates tree labels; cancelled stop does not write; confirmed stop retains organization/account links and classification");
+    const unknownWrites = writes.length;
+    const legacyTreePattern = "**/api/v1/union-units/tree";
+    await page.route(legacyTreePattern, async route => {
+      const response = await route.fetch();
+      const payload = await response.json();
+      payload.data.maKhoi = null; payload.data.tenKhoi = null; payload.data.khoiDangSuDung = false;
+      await route.fulfill({ response, json: payload });
+    });
+    await open("/organizations");
+    await page.getByText("Chưa phân khối", { exact: true }).first().waitFor();
+    await page.getByRole("button", { name: /Sửa Đơn vị/ }).click();
+    assert.equal(await unitEdit.getByLabel(/Khối quản lý/).inputValue(), "");
+    await unitEdit.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    assert.equal(writes.length, unknownWrites);
+    await page.unroute(legacyTreePattern);
+    const originalClassification = (await (await context.request.get("/api/v1/union-units/tree")).json()).data.maKhoi;
+    assert.equal(originalClassification, testBlockId);
+    report.flows.push("Unclassified legacy read fixture is labelled explicitly and closing its form never assigns or mutates a block");
+
+
 
     await page.getByRole("button", { name: emptyDepartmentName, exact: true }).waitFor();
     await open("/finance");
@@ -395,6 +463,7 @@ try {
     }
   }
   await open("/catalogs");
+  if (!baseline) assert.equal(await page.getByRole("button", { name: "Thêm khối quản lý", exact: true }).count(), 0);
 
   if (!baseline) {
     await page.setViewportSize({ width: 360, height: 960 });
@@ -463,6 +532,9 @@ try {
     await cancelDelete(page.getByRole("button", { name: /Xóa Hồ Sơ/ }));
     report.flows.push("Create, cancel/confirm transfer, view history, edit member; cancel deletion in list and detail");
 
+    // The expanded block/organization GUI fixture shares the production per-IP quota.
+    // Start the remaining business CRUD in a fresh window instead of relaxing limits.
+    await delay(61_000);
     await open("/activities");
     await page.getByRole("button", { name: /Thêm Hoạt động/ }).click();
     const activity = page.getByRole("dialog", { name: "Thông tin hoạt động" });
@@ -733,6 +805,7 @@ try {
   }
 
   async function post(path, data, expected = 200) {
+    if (path === "/union-units" && data && data.maKhoi === undefined) data = { ...data, maKhoi: testBlockId };
     const csrf = await context.request.get("/api/v1/auth/csrf");
     assert.equal(csrf.status(), 200);
     const response = await context.request.post("/api/v1" + path, {

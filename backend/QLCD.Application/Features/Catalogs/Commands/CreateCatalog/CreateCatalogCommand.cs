@@ -33,6 +33,7 @@ public class CreateCatalogCommandHandler : IRequestHandler<CreateCatalogCommand,
 
     public async Task<Guid> Handle(CreateCatalogCommand request, CancellationToken cancellationToken)
     {
+        if (request.Loai == "KhoiChuyenMon") throw new ArgumentException("Quản lý khối tại Khối quản lý, không tạo danh mục trùng lặp.");
         var normalizedMa = request.Ma.Trim().ToUpper();
         var exists = await _context.DanhMucDungChungs
             .AnyAsync(c => c.Loai == request.Loai && c.Ma == normalizedMa, cancellationToken);

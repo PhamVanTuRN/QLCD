@@ -99,6 +99,8 @@ public class DeleteCatalogCommandHandler : IRequestHandler<DeleteCatalogCommand,
         }
 
         // Soft delete danh mục
+        if (catalog.Loai == "KhoiChuyenMon") throw new ArgumentException("Danh mục khối cũ chỉ đọc; dùng Khối quản lý theo liên kết đơn vị.");
+
         catalog.IsDeleted = true;
         await _context.SaveChangesAsync(cancellationToken);
         return true;

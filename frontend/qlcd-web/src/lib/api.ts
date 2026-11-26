@@ -181,6 +181,28 @@ export async function deleteCatalogApi(id: string) {
   return res.data;
 }
 
+export interface ManagementBlockDto {
+  id: string; tenKhoi: string; ghiChu: string | null; trangThai: boolean; legacyDeleted: boolean; unitCount: number | null;
+}
+export async function getManagementBlocksPage(params: { page?: number; activeOnly?: boolean; search?: string }, signal?: AbortSignal) {
+  const { data } = await api.get<PageSlice<ManagementBlockDto>>("/management-blocks", { params, signal });
+  return data;
+}
+export async function getAllManagementBlocks(signal?: AbortSignal) {
+  const rows: ManagementBlockDto[] = [];
+  let page = 1;
+  while (true) {
+    const result = await getManagementBlocksPage({ page }, signal);
+    rows.push(...result.data);
+    if (!result.hasMore) return rows;
+    page++;
+  }
+}
+export async function saveManagementBlock(payload: { id?: string; tenKhoi: string; ghiChu: string | null; trangThai: boolean; confirmed: boolean }) {
+  if (payload.id) return api.put(`/management-blocks/${payload.id}`, payload);
+  return api.post("/management-blocks", payload);
+}
+
 // ==================== Union Units (Tổ chức) ====================
 export interface UnionUnitDto {
   id: string;
@@ -189,6 +211,8 @@ export interface UnionUnitDto {
   level: number;
   maParent: string | null;
   maKhoi: string | null;
+  tenKhoi?: string | null;
+  khoiDangSuDung?: boolean;
   soDoanVien: number;
   soDoanVienNam?: number;
   soDoanVienNu?: number;
@@ -209,7 +233,7 @@ export interface CreateUnionUnitPayload {
   tenDonVi: string;
   loaiToChuc: "CDCS" | "CDBP" | "TO_CD_TRUC_THUOC_CDCS" | "TO_CD_THUOC_CDBP";
   maParent?: string;
-  maKhoi?: string;
+  maKhoi: string;
 }
 
 export async function createUnionUnit(payload: CreateUnionUnitPayload) {

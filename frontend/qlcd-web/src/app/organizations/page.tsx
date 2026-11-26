@@ -5,7 +5,7 @@ import useConfirmation from "@/components/useConfirmation";
 import FormDialog from "@/components/FormDialog";
 
 import { useCallback, useState } from "react";
-import { apiMessage, getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, getInactiveUnits, restoreUnionUnit, UnionUnitDto } from "@/lib/api";
+import { apiMessage, getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, getInactiveUnits, restoreUnionUnit, getAllManagementBlocks, UnionUnitDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 import ListPager from "@/components/ListPager";
@@ -51,6 +51,8 @@ export default function OrganizationTree() {
     finally { setChangingUnit(false); }
   };
 
+  const { data: blocks, loading: blocksLoading, error: blocksError, reload: reloadBlocks } = useResource(getAllManagementBlocks);
+  const [addKhoi, setAddKhoi] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedNode = findUnit(tree, selectedId) ?? tree;
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
@@ -123,7 +125,7 @@ export default function OrganizationTree() {
   const isLeafNode = (type: string) => type === "TO_CD_THUOC_CDBP" || type === "TO_CD_TRUC_THUOC_CDCS";
 
   const handleAddChild = async () => {
-    if ((addType !== "CDCS" && !selectedNode) || !addName.trim()) return;
+    if ((addType !== "CDCS" && !selectedNode) || !addName.trim() || !addKhoi) return;
     setIsSubmitting(true);
     setAddError("");
 
@@ -137,6 +139,7 @@ export default function OrganizationTree() {
     try {
       await createUnionUnit({
         tenDonVi: addName,
+        maKhoi: addKhoi,
         loaiToChuc: loaiMap[addType],
         maParent: selectedNode?.id
       });
@@ -153,6 +156,7 @@ export default function OrganizationTree() {
 
   const openAddModal = (type: "CDCS" | "CDBP" | "TOCD_TRUC_THUOC" | "TOCD_CDBP") => {
     setAddType(type);
+    setAddKhoi("");
     setAddName("");
     setAddError("");
     setShowAddModal(true);
@@ -191,16 +195,43 @@ export default function OrganizationTree() {
               Lv.{node.level} • {loaiToChucMap[node.loaiToChuc] || node.loaiToChuc}
             </span>
             <span className="text-xs text-muted font-medium">({node.soDoanVien} ĐV)</span>
+            <span className="text-xs text-muted">{node.tenKhoi || "Chưa phân khối"}{node.maKhoi && !node.khoiDangSuDung ? " · Khối ngừng sử dụng" : ""}</span>
           </div>
         </div>
         {hasChildren && isExpanded && (
           <div className="space-y-1">
-            {node.children.map(child => renderNode(child))}
+            {renderGroups(node.children)}
           </div>
         )}
       </div>
     );
   };
+
+  function renderGroups(nodes: UnionUnitDto[]) {
+    const groups = new Map<string, UnionUnitDto[]>();
+    for (const node of nodes) {
+      const key = node.maKhoi ?? "unclassified";
+      groups.set(key, [...(groups.get(key) ?? []), node]);
+    }
+    return [...groups.entries()].map(([id, rows]) => <div key={id} className="space-y-1" role="group" aria-label={`Khối quản lý: ${rows[0].tenKhoi || "Chưa phân khối"}`}>
+      <p className="ml-4 break-words rounded-lg bg-soft px-3 py-2 text-xs font-semibold text-brand">{rows[0].tenKhoi || "Chưa phân khối"}{rows[0].maKhoi && !rows[0].khoiDangSuDung ? " (ngừng sử dụng)" : ""}</p>
+      {rows.map(node => renderNode(node))}
+    </div>);
+  }
+
+  function blockPicker(value: string, onChange: (value: string) => void, creating: boolean) {
+    const pickerId = creating ? "unit-create-block" : "unit-edit-block";
+    return <div className="space-y-2">
+      <label htmlFor={pickerId} className="block text-sm">Khối quản lý{creating ? " *" : ""}</label>
+        <select id={pickerId} value={value} onChange={e => onChange(e.target.value)} required={creating || !!selectedNode?.maKhoi} disabled={blocksLoading || !!blocksError}
+          className="min-h-11 w-full rounded-lg border border-edge px-3">
+          <option value="" disabled={!creating && !!selectedNode?.maKhoi}>{creating ? "Chọn Khối quản lý" : "Chưa phân khối (dữ liệu cũ)"}</option>
+          {blocks?.filter(b => (b.trangThai && !b.legacyDeleted) || (!creating && b.id === value)).map(b => <option key={b.id} value={b.id}>{b.tenKhoi}{!b.trangThai || b.legacyDeleted ? " (ngừng sử dụng, giữ liên kết cũ)" : ""}</option>)}
+        </select>
+      {blocksLoading || blocksError ? <LoadState loading={blocksLoading} retry={reloadBlocks} /> : !blocks?.some(b => b.trangThai && !b.legacyDeleted) && <p className="text-sm text-muted">Chưa có khối đang dùng. Admin cần bổ sung tại Danh mục gốc → Khối quản lý.</p>}
+      {!creating && !value && <p className="text-sm text-muted">Đơn vị cũ chưa được phân khối; không tự suy ra từ tên hoặc đơn vị cha. Có thể chọn khối phù hợp rồi lưu.</p>}
+    </div>;
+  }
 
   if (treeLoading) return <LoadState loading />;
   if (treeError) return <LoadState message="Không thể tải cây tổ chức." retry={loadTree} />;
@@ -212,7 +243,7 @@ export default function OrganizationTree() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Cây tổ chức công đoàn</h1>
-          <p className="mt-1 text-sm text-muted">CĐBP có thể có hoặc không có tổ. Tổ có thể trực thuộc CĐCS hoặc CĐBP.</p>
+          <p className="mt-1 text-sm text-muted">Khối chỉ phân nhóm trong từng cấp của cây, không thay quan hệ cha–con hoặc phạm vi truy cập. Chưa phân khối là dữ liệu cũ cần quản trị viên bổ sung.</p>
         </div>
       </div>
 
@@ -375,6 +406,7 @@ export default function OrganizationTree() {
                   {addType === "CDCS" ? "Công đoàn cơ sở" : addType === "CDBP" ? "Công đoàn Bộ phận (CĐBP)" : addType === "TOCD_TRUC_THUOC" ? "Tổ CĐ trực thuộc CĐCS" : "Tổ CĐ thuộc CĐBP"}
                 </div>
               </div>
+              {blockPicker(addKhoi, setAddKhoi, true)}
               <div>
                 <label htmlFor="organizations-field-1" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Tên đơn vị *</label>
                 <input id="organizations-field-1"
@@ -399,9 +431,9 @@ export default function OrganizationTree() {
               </button>
               <button
                 onClick={handleAddChild}
-                disabled={!addName.trim() || isSubmitting}
+                disabled={!addName.trim() || !addKhoi || blocksLoading || !!blocksError || isSubmitting}
                 className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
-                  addName.trim() && !isSubmitting
+                  addName.trim() && addKhoi && !blocksLoading && !blocksError && !isSubmitting
                     ? "bg-brand hover:bg-brand-hover text-white shadow-md shadow-brand-strong/20"
                     : "bg-soft text-muted cursor-not-allowed border border-line"
                 }`}
@@ -423,6 +455,7 @@ export default function OrganizationTree() {
             </div>
 
             <div className="space-y-4">
+              {blockPicker(editKhoi, setEditKhoi, false)}
               <div>
                 <label htmlFor="organizations-field-2" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Tên đơn vị *</label>
                 <input id="organizations-field-2"

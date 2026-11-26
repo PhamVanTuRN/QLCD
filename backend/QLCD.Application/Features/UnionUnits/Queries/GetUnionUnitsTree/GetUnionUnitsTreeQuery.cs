@@ -22,6 +22,8 @@ public class UnionUnitDto
     public int Level { get; set; }
     public Guid? MaParent { get; set; }
     public Guid? MaKhoi { get; set; }
+    public string? TenKhoi { get; set; }
+    public bool KhoiDangSuDung { get; set; }
     public int TrangThai { get; set; }
     public bool CoTheTiepNhanDoanVien { get; set; }
     public int SoDoanVien { get; set; }
@@ -81,6 +83,8 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
             Level = u.Level,
             MaParent = u.MaParent,
             MaKhoi = u.MaKhoi,
+            TenKhoi = _context.KhoiChuyenMons.IgnoreQueryFilters().Where(b => b.Id == u.MaKhoi).Select(b => b.TenKhoi).FirstOrDefault(),
+            KhoiDangSuDung = _context.KhoiChuyenMons.IgnoreQueryFilters().Any(b => b.Id == u.MaKhoi && b.TrangThai && !b.IsDeleted),
             TrangThai = u.TrangThai,
             CoTheTiepNhanDoanVien = eligibleUnits.Any(eligible => eligible.Id == u.Id)
         }).ToListAsync(cancellationToken);

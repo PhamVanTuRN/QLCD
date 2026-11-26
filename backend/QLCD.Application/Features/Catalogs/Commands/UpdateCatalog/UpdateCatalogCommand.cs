@@ -37,6 +37,8 @@ public class UpdateCatalogCommandHandler : IRequestHandler<UpdateCatalogCommand,
             throw new ArgumentException("Danh mục không tồn tại.");
         }
 
+        if (catalog.Loai == "KhoiChuyenMon") throw new ArgumentException("Danh mục khối cũ chỉ đọc; dùng Khối quản lý theo liên kết đơn vị.");
+
         catalog.Ten = request.Ten;
         catalog.ThuTu = request.ThuTu;
         catalog.TrangThai = request.TrangThai;

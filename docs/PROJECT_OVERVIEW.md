@@ -45,3 +45,11 @@ Quan hệ chính gồm đơn vị cha–con, đoàn viên–tổ, ngoại ngữ 
 Production cần cùng origin HTTPS, TLS SQL với xác thực chứng thư, ổ tệp riêng, ClamAV, key ring được bảo vệ, MFA và backup đồng bộ. Migration hardening yêu cầu diễn tập và kế hoạch cấp lại mật khẩu. Khi cutover gặp lỗi, giữ chế độ bảo trì, triển khai bản vá tiến hoặc phục hồi vào bản sao cô lập. [Runbook triển khai và rollback](security-audit/08-remediation-status.md)
 
 Xác minh quyền sử dụng MediatR 14.1.0 cho môi trường đích. Nếu tổ chức đã có khóa phù hợp, cung cấp `MediatR__LicenseKey` qua kho bí mật của backend. [Hướng dẫn cấu hình MediatR](https://github.com/LuckyPennySoftware/MediatR#setting-the-license-key)
+
+## Khối quản lý của đơn vị
+
+Nguồn chuẩn là KhoiChuyenMons, liên kết bởi DonViCongDoans.MaKhoi. Trang Danh mục gốc có nhóm Khối quản lý dùng API `/api/v1/management-blocks` (GET cho staff, POST/PUT chỉ ADMIN). Cây tổ chức giữ cấu trúc cha–con và hiển thị nhóm theo khối trong từng cấp; khối không tham gia OrganizationScopeService hoặc xác thực tài khoản. Dữ liệu chưa phân loại được hiển thị riêng, không tự gán. Các thao tác ngừng/khôi phục đơn vị giữ FK và độc lập với trạng thái sử dụng khối.
+
+## Khối quản lý
+
+Khối quản lý dùng KhoiChuyenMons (tên, ghi chú, trạng thái sử dụng) và liên kết nullable DonViCongDoans.MaKhoi có sẵn. Danh mục gốc quản lý qua /api/v1/management-blocks; chỉ ADMIN ghi, các vai trò nghiệp vụ đọc tên/trạng thái phục vụ lookup. Cây giữ nguyên phân cấp tổ chức và nhóm các đơn vị cùng cha theo khối; gán/đổi khối không tạo đơn vị, tài khoản hoặc quyền mới. Tên/trạng thái khối được lấy theo ID, kể cả nhãn ngừng dùng của liên kết cũ. MaKhoi bắt buộc cho tạo mới ở tầng API/handler nhưng không bị ép NOT NULL trong DB để giữ nguyên dữ liệu cũ chưa phân loại. Quản trị viên bổ sung thủ công trong Sửa đơn vị. Nguồn DanhMucDungChung loại KhoiChuyenMon cũ được giữ chỉ đọc, không tự ghép theo tên hoặc dùng để cấp FK mới.

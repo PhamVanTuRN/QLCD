@@ -30,3 +30,13 @@ Tài liệu này tổng hợp toàn bộ các quy tắc ràng buộc logic nghi�
 - Mọi tài khoản dùng mật khẩu và OTP để đăng nhập. Tài khoản cũ chưa có Authenticator giữ mật khẩu hiện tại và dùng mã thiết lập do người được cấp quyền bàn giao.
 - Đổi mật khẩu cần mật khẩu hiện tại, xác nhận mật khẩu mới và OTP mới. Mật khẩu mới có 8–128 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt, đồng thời khác mật khẩu hiện tại và mật khẩu khởi tạo. Khôi phục bằng mã yêu cầu liên kết thiết bị mới rồi đăng nhập lại.
 - Chỉ `qlcd_admin` có ID đã cấu hình được đặt lại mật khẩu hoặc 2FA cho tài khoản khác. Hai thao tác độc lập, yêu cầu xác nhận và OTP mới, thu hồi phiên đích và được ghi audit. Cấp mã kích hoạt sau khi xác minh danh tính qua kênh tin cậy. [Luồng xác thực](AUTHENTICATION.md) · [Quy trình khôi phục](ACCOUNT_RECOVERY.md)
+
+## 5. Khối quản lý
+
+- Dùng thực thể/bảng `KhoiChuyenMon` và FK `DonViCongDoan.MaKhoi` hiện có làm nguồn chuẩn, với nhãn giao diện **Khối quản lý**. Không tạo thêm đơn vị, tài khoản, cấp tổ chức hoặc phạm vi quyền theo khối.
+- ADMIN được tạo/sửa tên (1–100 ký tự, duy nhất), ghi chú (tối đa 500 ký tự) và trạng thái sử dụng. Các vai trò nghiệp vụ được đọc danh sách tên/trạng thái; số đơn vị liên kết toàn hệ thống chỉ trả cho ADMIN.
+- Không cung cấp xóa khối. Ngừng sử dụng cần xác nhận, giữ nguyên bản ghi và tất cả liên kết, kể cả đơn vị đã ngừng/lưu trữ cũ. Chỉ không cho chọn khối đó khi tạo hoặc đổi phân loại mới. Đơn vị đang liên kết được giữ nguyên khối khi sửa thông tin khác.
+- Mọi đơn vị mới, kể cả CĐCS, phải chọn khối đang dùng; không tự chọn khối đầu tiên hay suy ra từ tên/đơn vị cha. Đơn vị cũ chưa có MaKhoi giữ null và hiển thị **Chưa phân khối**. Có thể sửa thông tin cũ mà chưa phân loại; ADMIN/CDCS chọn khối phù hợp trong Sửa đơn vị để bổ sung sau kiểm tra. Sau khi đã phân loại, không được xóa liên kết về null qua form/API.
+- Cây phân nhóm các đơn vị cùng cha theo khối, kèm nhãn khối của mỗi đơn vị. Group header không phải node đơn vị, không thay MaParent/ID/quyền truy cập. Thống kê khối tính theo phân loại của chính đơn vị, không cộng lại theo khối của cha.
+- Ngừng/khôi phục đơn vị giữ nguyên MaKhoi; khóa/mở tài khoản không thay khối; sửa/ngừng khối không thay trạng thái đơn vị, tài khoản hay phiên/quyền của họ. Khối ngừng dùng không chặn nghiệp vụ của đơn vị đang hoạt động.
+- Các dòng DanhMucDungChung loại KhoiChuyenMon cũ được bảo toàn và chỉ đọc (GET catalogs legacy), không tự đối sánh/ghép ID theo tên. Không tạo/sửa/xóa thêm dòng khối qua API danh mục chung; dùng management-blocks. Không tiếp tục seed nguồn danh mục trùng này.

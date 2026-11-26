@@ -30,9 +30,10 @@ public sealed class AccountLifecycleTests
         var existing = new TaiKhoan { Username = "cdbp_existing", HoTen = "Existing", VaiTro = "CDBP", PasswordHash = "existing-hash" };
         db.TaiKhoans.Add(existing);
         await db.SaveChangesAsync();
+        var block = new KhoiChuyenMon { TenKhoi = "Fixture block" }; db.KhoiChuyenMons.Add(block); await db.SaveChangesAsync();
         const string entered = "  Khoa Nội - A  ";
         var id = await new CreateUnionUnitCommandHandler(db).Handle(new CreateUnionUnitCommand
-        { TenDonVi = entered, LoaiToChuc = type, MaParent = parent?.Id }, default);
+        { TenDonVi = entered, LoaiToChuc = type, MaParent = parent?.Id, MaKhoi = block.Id }, default);
         Assert.Equal(entered, (await db.DonViCongDoans.SingleAsync(u => u.Id == id)).TenDonVi);
         var account = await db.TaiKhoans.SingleAsync(a => a.OrganizationId == id);
         Assert.Equal("khoa_noi_a", account.Username);
@@ -55,13 +56,14 @@ public sealed class AccountLifecycleTests
         db.DonViCongDoans.Add(root);
         db.TaiKhoans.Add(new TaiKhoan { Username = "khoa_noi", HoTen = "Existing login", VaiTro = "ADMIN", PasswordHash = "unchanged" });
         await db.SaveChangesAsync();
+        var block = new KhoiChuyenMon { TenKhoi = "Fixture block" }; db.KhoiChuyenMons.Add(block); await db.SaveChangesAsync();
         var handler = new CreateUnionUnitCommandHandler(db);
         foreach (var (name, expected) in new[] {
             ("Khoa Nội", "khoa_noi_1"), ("Khoa Nội", "khoa_noi_2"),
             ("CDBP Khoa Nội", "cdbp_khoa_noi"), ("TCD Khoa Nhi", "tcd_khoa_nhi"),
             ("Công đoàn cơ sở Khoa Nội", "cong_doan_co_so_khoa_noi"), ("!!!", "don_vi") })
         {
-            var id = await handler.Handle(new CreateUnionUnitCommand { TenDonVi = name, LoaiToChuc = LoaiToChuc.CDBP, MaParent = root.Id }, default);
+            var id = await handler.Handle(new CreateUnionUnitCommand { TenDonVi = name, LoaiToChuc = LoaiToChuc.CDBP, MaParent = root.Id, MaKhoi = block.Id }, default);
             Assert.Equal(name, (await db.DonViCongDoans.SingleAsync(u => u.Id == id)).TenDonVi);
             Assert.Equal(expected, (await db.TaiKhoans.SingleAsync(a => a.OrganizationId == id)).Username);
         }

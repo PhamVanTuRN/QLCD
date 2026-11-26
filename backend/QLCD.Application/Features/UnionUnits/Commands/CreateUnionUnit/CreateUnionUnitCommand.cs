@@ -1,4 +1,5 @@
 using QLCD.Application.Common;
+using QLCD.Application.Features.ManagementBlocks;
 using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
@@ -93,6 +94,8 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
             }
             computedLevel = 1;
         }
+
+        await ManagementBlockAssignment.ValidateAsync(_context, request.MaKhoi, null, true, cancellationToken);
 
         var newUnit = new DonViCongDoan
         {

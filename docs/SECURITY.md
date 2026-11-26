@@ -17,3 +17,11 @@
 4. Phát hành frontend và API cùng phiên bản. Các client đang gọi `/api/v1/accounts/{id}/reset-authentication` cần chuyển sang `/reset-password` và `/reset-2fa` theo từng thao tác. Kiểm tra readiness, đăng nhập quản trị viên, cấp mã cho các tài khoản cũ cần thiết lập và thử các bước trên thiết bị thật. Cấp quyền runtime theo hướng dẫn vận hành.
 
 Ưu tiên bản vá tương thích tiến nếu phát hành gặp lỗi. Hạ migration xóa cả hai cột băm và làm mất mã đã phát hành. Phục hồi bản sao chỉ sau khi đã đối soát dữ liệu phát sinh và khóa Data Protection. [Runbook bảo mật](security-audit/08-remediation-status.md)
+
+## Nâng schema Khối quản lý
+
+Migration `20261126050655_ManagementBlockDetails` chỉ ADD `KhoiChuyenMons.GhiChu` nullable nvarchar(500) và `TrangThai` bit NOT NULL default 1. Không đổi ID, FK, tên hoặc trạng thái của đơn vị/tài khoản, không gán MaKhoi cho đơn vị cũ và không hợp nhất danh mục theo tên. FK MaKhoi vẫn nullable để giữ tương thích dữ liệu cũ; API bắt buộc chọn khi tạo mới. Chạy `--migrate` bằng connection Migration đã cấu hình trước khi phục vụ API mới, kiểm tra đúng database đích theo quy trình phê duyệt vận hành. Không chạy initialize/bootstrap để thay cho migration.
+
+Đã sinh SQL idempotent trong `artifacts/management-block-migration.sql` để kiểm tra. Downgrade của migration bỏ hai cột mới, vì vậy phải sao lưu/xuất thông tin khối mới trước khi cân nhắc; ưu tiên forward fix và phục hồi bản sao được phê duyệt thay vì tự rollback dữ liệu. `tools/test-sql.ps1` đã nâng mốc schema lên sáu migration; thử nghiệm native trên SQL Server Docker kiểm tra nâng schema cũ, dữ liệu có/không có MaKhoi và chạy migration lặp.
+
+Quản trị viên bổ sung phân loại cũ bằng Cây tổ chức → chọn đơn vị → Sửa đơn vị → Khối quản lý → chọn khối đang dùng và lưu. Đơn vị ngừng cần khôi phục riêng nếu muốn sửa từ cây chính. Không tạo lại đơn vị/tài khoản. Nếu danh mục khối tùy chỉnh trước đây chỉ nằm trong DanhMucDungChung, kiểm kê qua GET catalogs loại KhoiChuyenMon, đối chiếu thủ công với nguồn chuẩn rồi tạo khối cần thiết và chọn cho từng đơn vị; hệ thống không tự suy ra ánh xạ.

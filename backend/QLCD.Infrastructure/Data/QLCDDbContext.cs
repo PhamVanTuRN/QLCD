@@ -41,6 +41,8 @@ public class QLCDDbContext : DbContext, IQLCDDbContext
         {
             entity.HasIndex(e => e.TenKhoi).IsUnique();
             entity.Property(e => e.TenKhoi).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.GhiChu).HasMaxLength(500);
+            entity.Property(e => e.TrangThai).HasDefaultValue(true).IsConcurrencyToken();
         });
 
         // 2. Cấu hình thực thể DonViCongDoan

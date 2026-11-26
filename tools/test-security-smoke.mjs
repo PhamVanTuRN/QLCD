@@ -40,6 +40,7 @@ const authPath = "/api/v1/auth";
 const mfaPath = `${authPath}/authenticator`;
 const finishPath = `${authPath}/login/authenticator`;
 let child;
+let testBlockId;
 let logs = "";
 try {
   if (useSql) {
@@ -61,6 +62,16 @@ try {
   assert.equal((await publicClient.request("/api/v1/accounts")).status, 401);
   const adminFactor = await onboard(admin, adminUsername, adminActivation, adminPassword, true);
   assert.equal((await admin.request("/api/v1/finance")).status, 403);
+  const blockPage = await (await admin.request("/api/v1/management-blocks?activeOnly=true")).json();
+  testBlockId = blockPage.data[0].id;
+  assert.equal((await publicClient.request("/api/v1/management-blocks")).status, 401);
+  await admin.write("/api/v1/union-units", { tenDonVi: "Missing group", loaiToChuc: "CDCS", maKhoi: null }, 400);
+  const extraBlock = (await admin.json("/api/v1/management-blocks", { tenKhoi: "Khối phân nhóm HTTP", ghiChu: "Fixture", trangThai: true }, 200)).data;
+  await admin.write(`/api/v1/management-blocks/${extraBlock}`, undefined, 405, "DELETE");
+  await admin.write(`/api/v1/management-blocks/${extraBlock}`, { id: extraBlock, tenKhoi: "Khối phân nhóm HTTP", trangThai: false }, 409, "PUT");
+  await admin.write(`/api/v1/management-blocks/${extraBlock}`, { id: extraBlock, tenKhoi: "Khối phân nhóm HTTP đổi tên", trangThai: false, confirmed: true }, 200, "PUT");
+  await admin.write(`/api/v1/management-blocks/${extraBlock}`, { id: extraBlock, tenKhoi: "Khối phân nhóm HTTP đổi tên", trangThai: true }, 200, "PUT");
+
   const centralUnit = await admin.json("/api/v1/union-units", {
     tenDonVi: "Fixture central", loaiToChuc: "CDCS"
   }, 200);
@@ -100,6 +111,11 @@ try {
   const factors = new Map();
   const central = await provision("CDCS", centralPassword);
   const department = await provision("CDBP", departmentPassword);
+  await department.write("/api/v1/management-blocks", { tenKhoi: "Forbidden" }, 403);
+  await central.write(`/api/v1/management-blocks/${extraBlock}`, { id: extraBlock, tenKhoi: "Forbidden" }, 403, "PUT");
+  await central.write("/api/v1/union-units", { tenDonVi: "No block", loaiToChuc: "CDBP", maParent: centralUnit.data, maKhoi: null }, 400);
+  await central.write("/api/v1/union-units", { tenDonVi: "Invalid block", loaiToChuc: "CDBP", maParent: centralUnit.data, maKhoi: randomUUID() }, 409);
+
   const pdf = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n");
   const form = new FormData();
   form.append("file", new Blob([pdf], { type: "application/pdf" }), "fixture.pdf");
@@ -180,6 +196,8 @@ try {
   assert.equal((await admin.request("/api/v1/union-members?pageSize=201")).status, 400);
 
   assert.equal((await publicClient.request(mfaPath)).status, 401);
+  // Keep the longer block/lifecycle regression under the unchanged shared-IP quota.
+  await delay(61_000);
   const mfaUser = await provision("TOCD", teamPassword);
   const mfaAccount = allAccounts.data.find(row => row.vaiTro === "TOCD");
   const teamFactor = factors.get("TOCD");
@@ -428,6 +446,7 @@ function session(origin, initialCookies = []) {
     return response;
   };
   const write = async (path, data, expected, method = "POST") => {
+    if (path === "/api/v1/union-units" && data && data.maKhoi === undefined) data = { ...data, maKhoi: testBlockId };
     const csrf = await request("/api/v1/auth/csrf");
     assert.equal(csrf.status, 200);
     const headers = { "X-CSRF-Token": (await csrf.json()).token };

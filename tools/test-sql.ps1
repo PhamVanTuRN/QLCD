@@ -38,7 +38,7 @@ try {
     New-MigrationScript '20260621222853_AddEvidenceFiles' $previous
     New-MigrationScript 'HardenAuthenticationAndEvidence' $hardened
     New-MigrationScript 'RequireAuthenticatorActivation' $authenticator
-    New-MigrationScript 'SeparateActivationExpiry' $current
+    New-MigrationScript 'ManagementBlockDetails' $current
     foreach ($database in @($upgrade, $clean)) {
         Run-Sql 'master' @('-Q', "CREATE DATABASE [$database];")
         $created += $database
@@ -86,7 +86,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.TaiKhoans WHERE Username = N'fixture-existing-a
     Run-Sql $clean @('-i', $current)
     Run-Sql $clean @('-i', $current)
     Run-Sql $clean @('-Q', @'
-IF (SELECT COUNT(*) FROM dbo.__EFMigrationsHistory) <> 5
+IF (SELECT COUNT(*) FROM dbo.__EFMigrationsHistory) <> 6
     THROW 51000, 'Unexpected migrations in clean database', 1;
 '@)
     # The loopback fixture uses the developer instance's self-signed certificate.
@@ -125,7 +125,7 @@ EXEC sys.sp_executesql @restoreSql, N'@backup nvarchar(4000)', N'$escapedBackup'
 "@)
         Run-Sql $restore @('-Q', @'
 DBCC CHECKDB WITH NO_INFOMSGS;
-IF (SELECT COUNT(*) FROM dbo.__EFMigrationsHistory) <> 5
+IF (SELECT COUNT(*) FROM dbo.__EFMigrationsHistory) <> 6
     THROW 51000, 'Restored schema history is incomplete', 1;
 IF NOT EXISTS (SELECT 1 FROM dbo.DoanViens AS m INNER JOIN dbo.LichSuBienDongs AS h
     ON h.DoanVienId = m.Id AND h.DenToCongDoanId = m.MaToCongDoan WHERE m.MaNhanVien = N'REPORT826')

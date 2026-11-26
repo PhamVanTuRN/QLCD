@@ -31,11 +31,7 @@ public static class DbInitializer
         {
             var catalogs = new List<DanhMucDungChung>();
 
-            // Khối chuyên môn (đồng bộ danh mục)
-            catalogs.Add(new() { Loai = "KhoiChuyenMon", Ma = "KHOI_COQUAN", Ten = "Khối Cơ quan", ThuTu = 1 });
-            catalogs.Add(new() { Loai = "KhoiChuyenMon", Ma = "KHOI_NOI", Ten = "Khối Nội", ThuTu = 2 });
-            catalogs.Add(new() { Loai = "KhoiChuyenMon", Ma = "KHOI_NGOAI", Ten = "Khối Ngoại", ThuTu = 3 });
-            catalogs.Add(new() { Loai = "KhoiChuyenMon", Ma = "KHOI_CANLAMSANG", Ten = "Khối Cận lâm sàng", ThuTu = 4 });
+            // Khối quản lý uses KhoiChuyenMons only; retain existing generic legacy rows without merging.
 
             // Loại tổ chức công đoàn
             catalogs.Add(new() { Loai = "LoaiToChuc", Ma = "CDCS", Ten = "Công đoàn cơ sở", ThuTu = 1 });

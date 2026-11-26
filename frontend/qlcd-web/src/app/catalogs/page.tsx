@@ -2,6 +2,7 @@
 
 import useConfirmation from "@/components/useConfirmation";
 
+import ManagementBlocksPanel from "@/components/ManagementBlocksPanel";
 import FormDialog from "@/components/FormDialog";
 
 import { useResource } from "@/lib/use-resource";
@@ -14,7 +15,7 @@ import { apiMessage, getCatalogsPage, createCatalogApi, updateCatalogApi, delete
 import { useAuth } from "@/lib/auth-context";
 
 const CATALOG_TYPES = [
-  { value: "KhoiChuyenMon", label: "Khối chuyên môn" },
+  { value: "ManagementBlocks", label: "Khối quản lý" },
   { value: "LoaiToChuc", label: "Loại tổ chức công đoàn" },
   { value: "CapToChuc", label: "Cấp tổ chức" },
   { value: "NhiemKy", label: "Nhiệm kỳ" },
@@ -61,7 +62,7 @@ export default function CatalogsPage() {
     ghiChu: ""
   });
 
-  const readPage = useCallback((signal: AbortSignal) => getCatalogsPage({ loai: selectedType, search: search.trim() || undefined, page }, signal), [selectedType, search, page]);
+  const readPage = useCallback((signal: AbortSignal) => selectedType === "ManagementBlocks" ? Promise.resolve({ data: [], hasMore: false }) : getCatalogsPage({ loai: selectedType, search: search.trim() || undefined, page }, signal), [selectedType, search, page]);
   const { data: list, loading, error: listError, reload: loadCatalogs } = useResource(readPage, search ? 200 : 0);
   const catalogs = list?.data ?? [];
   const hasMore = list?.hasMore ?? false;
@@ -145,7 +146,7 @@ export default function CatalogsPage() {
           <h1 className="text-2xl font-bold text-ink tracking-tight">Quản lý Danh mục Dùng chung</h1>
           <p className="text-xs text-muted mt-1">Cấu hình các danh mục và tùy chọn lựa chọn cho toàn hệ thống</p>
         </div>
-        {canManage && (
+        {canManage && selectedType !== "ManagementBlocks" && (
         <button
           onClick={handleOpenCreate}
           className="bg-brand hover:bg-brand-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-brand-strong/30 transition-all flex items-center gap-2 active:scale-95"
@@ -177,6 +178,7 @@ export default function CatalogsPage() {
         </div>
 
         {/* Right table list */}
+        {selectedType === "ManagementBlocks" ? <ManagementBlocksPanel canManage={canManage} /> : (
         <div className="lg:col-span-3 bg-surface border border-line rounded-2xl p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h3 className="text-sm font-bold text-ink uppercase tracking-wider flex items-center gap-2">
@@ -265,7 +267,7 @@ export default function CatalogsPage() {
             </table>
           <ListPager page={page} hasMore={hasMore} loading={loading} onChange={setPage} />
           </div>
-        </div>
+        </div>)}
       </div>
 
       {/* Modal Dialog */}
