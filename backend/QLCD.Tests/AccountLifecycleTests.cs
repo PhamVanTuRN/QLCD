@@ -36,7 +36,7 @@ public sealed class AccountLifecycleTests
         { TenDonVi = entered, LoaiToChuc = type, MaParent = parent?.Id, MaKhoi = block.Id }, default);
         Assert.Equal(entered, (await db.DonViCongDoans.SingleAsync(u => u.Id == id)).TenDonVi);
         var account = await db.TaiKhoans.SingleAsync(a => a.OrganizationId == id);
-        Assert.Equal("khoa_noi_a", account.Username);
+        Assert.Equal((role == "TOCD" ? "tcd" : role.ToLowerInvariant()) + "_khoa_noi_a", account.Username);
         Assert.Equal(role, account.VaiTro);
         Assert.True(PasswordHasher.Verify(AccountCredentials.InitialPassword, account.PasswordHash));
         Assert.True(account.MustChangePassword);
@@ -49,19 +49,19 @@ public sealed class AccountLifecycleTests
     }
 
     [Fact]
-    public async Task GeneratedLoginsKeepEnteredWordsAndRemainUniqueWithoutTypePrefixes()
+    public async Task GeneratedLoginsUseAbbreviatedTypeOnceAndReserveExistingNames()
     {
         await using var db = Database();
         var root = new DonViCongDoan { TenDonVi = "Existing root", LoaiToChuc = LoaiToChuc.CDCS };
         db.DonViCongDoans.Add(root);
-        db.TaiKhoans.Add(new TaiKhoan { Username = "khoa_noi", HoTen = "Existing login", VaiTro = "ADMIN", PasswordHash = "unchanged" });
+        db.TaiKhoans.Add(new TaiKhoan { Username = "cdbp_khoa_noi", HoTen = "Existing login", VaiTro = "ADMIN", PasswordHash = "unchanged" });
         await db.SaveChangesAsync();
         var block = new KhoiChuyenMon { TenKhoi = "Fixture block" }; db.KhoiChuyenMons.Add(block); await db.SaveChangesAsync();
         var handler = new CreateUnionUnitCommandHandler(db);
         foreach (var (name, expected) in new[] {
-            ("Khoa Nội", "khoa_noi_1"), ("Khoa Nội", "khoa_noi_2"),
-            ("CDBP Khoa Nội", "cdbp_khoa_noi"), ("TCD Khoa Nhi", "tcd_khoa_nhi"),
-            ("Công đoàn cơ sở Khoa Nội", "cong_doan_co_so_khoa_noi"), ("!!!", "don_vi") })
+            ("Khoa Nội", "cdbp_khoa_noi_1"), ("Khoa Nội", "cdbp_khoa_noi_2"),
+            ("CDBP Khoa Nội", "cdbp_khoa_noi_3"), ("TCD Khoa Nhi", "cdbp_tcd_khoa_nhi"),
+            ("Công đoàn cơ sở Khoa Nội", "cdbp_cong_doan_co_so_khoa_noi"), ("!!!", "cdbp_don_vi") })
         {
             var id = await handler.Handle(new CreateUnionUnitCommand { TenDonVi = name, LoaiToChuc = LoaiToChuc.CDBP, MaParent = root.Id, MaKhoi = block.Id }, default);
             Assert.Equal(name, (await db.DonViCongDoans.SingleAsync(u => u.Id == id)).TenDonVi);
@@ -69,6 +69,25 @@ public sealed class AccountLifecycleTests
         }
         var hashes = await db.TaiKhoans.Where(a => a.OrganizationId != null).Select(a => a.PasswordHash).ToListAsync();
         Assert.Equal(hashes.Count, hashes.Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData(LoaiToChuc.TO_CD_TRUC_THUOC_CDCS, "Tổ Công đoàn Khoa Nhi", "tcd_khoa_nhi")]
+    [InlineData(LoaiToChuc.TO_CD_TRUC_THUOC_CDCS, "TCĐ Khoa Nhi", "tcd_khoa_nhi")]
+    [InlineData(LoaiToChuc.CDBP, "Công đoàn bộ phận Liên Cơ Quan", "cdbp_lien_co_quan")]
+    [InlineData(LoaiToChuc.CDCS, "Công đoàn cơ sở 108", "cdcs_108")]
+    public async Task LeadingTypeNamesAreAbbreviatedOnlyInNewUsernames(LoaiToChuc type, string name, string expected)
+    {
+        await using var db = Database();
+        var block = new KhoiChuyenMon { TenKhoi = "Fixture" }; db.KhoiChuyenMons.Add(block);
+        DonViCongDoan? parent = null;
+        if (type != LoaiToChuc.CDCS) { parent = new DonViCongDoan { TenDonVi = "Root", LoaiToChuc = LoaiToChuc.CDCS }; db.DonViCongDoans.Add(parent); }
+        var reserved = new TaiKhoan { Username = expected, HoTen = "Legacy account", VaiTro = "CDBP", PasswordHash = "preserved", IsDeleted = true };
+        db.TaiKhoans.Add(reserved); await db.SaveChangesAsync();
+        var id = await new CreateUnionUnitCommandHandler(db).Handle(new() { TenDonVi = name, LoaiToChuc = type, MaParent = parent?.Id, MaKhoi = block.Id }, default);
+        Assert.Equal(name, (await db.DonViCongDoans.SingleAsync(u => u.Id == id)).TenDonVi);
+        Assert.Equal(expected + "_1", (await db.TaiKhoans.SingleAsync(a => a.OrganizationId == id)).Username);
+        Assert.Equal(expected, reserved.Username); Assert.True(reserved.IsDeleted); Assert.Equal("preserved", reserved.PasswordHash);
     }
 
     [Theory]

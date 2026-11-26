@@ -325,11 +325,26 @@ try {
   assert.equal((await oldSession.request(memberPath)).status, 401);
   await session(origin).write(`${authPath}/login`, { username: lifecycleAccount.username, password: lifecyclePassword }, 401);
   await admin.write(`/api/v1/accounts/${lifecycleAccount.id}/toggle`, undefined, 200);
-  await admin.write(`/api/v1/accounts/${lifecycleAccount.id}/toggle`, undefined, 200);
+  await admin.write(`/api/v1/accounts/${lifecycleAccount.id}/toggle`, undefined, 409);
+  const unlockOtp = await nextFixtureTotp(adminFactor.key, nextAdminOtp.step);
+  const unlockBody = { confirmed: true, currentPassword: adminPassword, code: unlockOtp.code };
+  const unlockPath = `/api/v1/accounts/${lifecycleAccount.id}/unlock`;
+  await admin.write(unlockPath, { ...unlockBody, confirmed: false }, 400);
+  await admin.write(unlockPath, { ...unlockBody, currentPassword: "WrongPassword1!" }, 403);
+  const rejectedUnlock = (await (await admin.request("/api/v1/accounts?search=Lifecycle")).json()).data[0];
+  assert.equal(rejectedUnlock.trangThai, false); assert.equal(rejectedUnlock.organizationActive, false);
+  const verifiedUnlock = (await admin.json(unlockPath, unlockBody, 200)).data;
+  assert.equal(verifiedUnlock.organizationRestored, true); assert.equal(verifiedUnlock.organizationId, lifecycleUnit);
+  await admin.write(unlockPath, unlockBody, 403); // Consumed OTP cannot be replayed.
+
   lifecycleRow = (await (await admin.request("/api/v1/accounts?search=Lifecycle")).json()).data[0];
   assert.equal(lifecycleRow.trangThai, true);
-  assert.equal(lifecycleRow.organizationActive, false);
-  assert.equal(lifecycleRow.canSignIn, false);
+  assert.equal(lifecycleRow.organizationActive, true);
+  assert.equal(lifecycleRow.canSignIn, true);
+  const unlockedTree = (await (await admin.request("/api/v1/union-units/tree")).json()).data;
+  assert.ok(unlockedTree.children.some(u => u.id === lifecycleUnit));
+  assert.equal((await oldSession.request(`${authPath}/session`)).status, 401);
+  await admin.write(`/api/v1/union-units/${lifecycleUnit}`, undefined, 200, "DELETE");
   const archived = (await (await admin.request("/api/v1/union-units/inactive")).json()).data;
   assert.ok(archived.some(u => u.id === lifecycleUnit));
   await admin.write(`/api/v1/accounts/${lifecycleAccount.id}/toggle`, undefined, 200); // Lock explicitly before restore.

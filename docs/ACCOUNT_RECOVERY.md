@@ -34,8 +34,10 @@ Reset mật khẩu không khác nhau theo vai trò CDCS, CDBP, TOCD hay ADMIN kh
 
 Màn hình Tài khoản hiển thị mật khẩu khởi tạo từ chính sách backend, nêu giá trị và thời hạn trước khi xác nhận reset, rồi thông báo tài khoản nào đã được reset cùng kết quả chính xác. Người dùng ở bước đổi mật khẩu bắt buộc được nhắc rằng mật khẩu tạm chưa cho phép vào nghiệp vụ.
 
-## Khôi phục đơn vị và mở khóa tài khoản là hai thao tác riêng
+## Mở khóa có xác thực và khôi phục đơn vị
 
-Trong Cây tổ chức, **Ngừng hoạt động / Ẩn khỏi cây** giữ nguyên bản ghi và quan hệ. **Đơn vị ngừng hoạt động / Lưu trữ cũ** liệt kê các đơn vị bị ngừng/ẩn theo luồng cũ; ADMIN hoặc CDCS chọn **Khôi phục đơn vị** sau khi kiểm tra cha và xác nhận. Không tạo lại đơn vị để thay cho khôi phục.
+Trong Tài khoản, **Mở khóa** (hoặc **Mở khóa & khôi phục đơn vị** nếu cờ tài khoản đang mở nhưng đơn vị bị chặn) mở dialog nêu phạm vi ảnh hưởng. Admin xác nhận, nhập mật khẩu và OTP mới của chính mình. Hệ thống khôi phục chính đơn vị liên kết ngừng/ẩn trên cây theo ID cũ và mở tài khoản đã chọn trong một transaction; không tạo lại đơn vị, thay Khối hay ghép dữ liệu theo tên. Nếu đơn vị cha chưa hoạt động, thao tác bị từ chối, không đổi dữ liệu/tiêu thụ OTP. X/Hủy/Escape trước khi gửi không thực hiện thao tác.
 
-Trong Tài khoản, **Mở khóa** chỉ mở cờ tài khoản; với tài khoản tổ chức soft-delete cũ, thao tác này phục hồi bản ghi tài khoản theo ID cũ. Đơn vị vẫn ngừng nếu chưa được khôi phục riêng, tài khoản tiếp tục bị chặn đăng nhập/nghiệp vụ. Ngược lại, khôi phục đơn vị không mở khóa bất kỳ tài khoản nào. Các tài khoản ADMIN vẫn chịu quy trình vòng đời quản trị riêng, không dùng toggle để tự khôi phục.
+Các tài khoản khác giữ cờ khóa/tombstone riêng; tài khoản khác đã mở có thể truy cập lại khi đơn vị hoạt động, còn tài khoản khóa vẫn khóa. Phiên liên quan bị thu hồi, phải đăng nhập lại. Mật khẩu và Authenticator được giữ nguyên; việc mở khóa không gia hạn mật khẩu/mã kích hoạt tạm. Tài khoản chưa thiết lập vẫn cần cấp mã, hoàn tất MFA và đổi mật khẩu nếu được yêu cầu.
+
+Khôi phục đơn vị độc lập trong Cây tổ chức vẫn được giữ và không mở khóa tài khoản. Ngừng đơn vị vẫn bảo toàn mọi dữ liệu/quan hệ. Mở khóa đòi hỏi ADMIN đã hoàn tất MFA; quyền reset mật khẩu/2FA vẫn chỉ dành qlcd_admin khớp ID cấu hình. Không tự mở ADMIN/self qua API này; giữ quy trình quản trị khẩn cấp riêng.

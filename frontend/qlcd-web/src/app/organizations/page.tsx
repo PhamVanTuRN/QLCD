@@ -376,7 +376,7 @@ export default function OrganizationTree() {
 
       {canManageUnits && <section className="panel space-y-4 p-4 sm:p-6" aria-label="Đơn vị ngừng hoạt động">
         <h2 className="text-lg font-bold text-ink">Đơn vị ngừng hoạt động / Lưu trữ cũ</h2>
-        <p className="text-sm text-muted">Khôi phục đơn vị riêng tại đây. Mở khóa tài khoản không làm đơn vị xuất hiện lại; khôi phục đơn vị không mở khóa tài khoản. Đơn vị con phải khôi phục sau đơn vị cha.</p>
+        <p className="text-sm text-muted">Khôi phục đơn vị riêng tại đây. Mở khóa tài khoản tại trang Tài khoản với mật khẩu/OTP admin cũng khôi phục chính đơn vị đang ngừng/ẩn. Khôi phục riêng tại đây không mở khóa tài khoản. Đơn vị con phải khôi phục sau đơn vị cha.</p>
         {inactiveLoading || inactiveError ? <LoadState loading={inactiveLoading} retry={reloadInactive} /> :
           <ul className="divide-y divide-line">{inactive?.data.map(unit => <li key={unit.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
             <div className="min-w-0"><p className="break-words font-semibold text-ink">{unit.tenDonVi}</p>
@@ -406,6 +406,7 @@ export default function OrganizationTree() {
                   {addType === "CDCS" ? "Công đoàn cơ sở" : addType === "CDBP" ? "Công đoàn Bộ phận (CĐBP)" : addType === "TOCD_TRUC_THUOC" ? "Tổ CĐ trực thuộc CĐCS" : "Tổ CĐ thuộc CĐBP"}
                 </div>
               </div>
+              <p className="text-sm text-muted">Tên đăng nhập tự sinh dùng viết tắt TCĐ/CĐBP/CĐCS. Tên hiển thị vẫn giữ nguyên nội dung bạn nhập.</p>
               {blockPicker(addKhoi, setAddKhoi, true)}
               <div>
                 <label htmlFor="organizations-field-1" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Tên đơn vị *</label>

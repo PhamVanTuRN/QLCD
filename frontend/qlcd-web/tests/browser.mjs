@@ -193,11 +193,11 @@ try {
   let departmentActivation;
   if (!baseline) {
     assert.ok(departmentAccount);
-    assert.equal(account.username, "cong_doan_co_so_thu_nghiem");
+    assert.equal(account.username, "cdcs_thu_nghiem");
     assert.equal(departmentAccount.username, "cdbp_chua_co_to_thu_nghiem");
-    assert.equal(accounts.find(row => row.organizationId === team).username, "to_thu_nghiem");
-    assert.equal(accounts.find(row => row.organizationId === targetTeam).username, "to_dich_thu_nghiem");
-    report.flows.push("Unit names preserve entered whitespace and login names have no added role prefixes");
+    assert.equal(accounts.find(row => row.organizationId === team).username, "tcd_thu_nghiem");
+    assert.equal(accounts.find(row => row.organizationId === targetTeam).username, "tcd_dich_thu_nghiem");
+    report.flows.push("Unit names preserve entered whitespace and new login names use abbreviated organization types");
   }
 
   for (const route of ["/accounts", "/organizations", "/members", `/members/${member}`]) {
@@ -357,12 +357,34 @@ try {
     await open("/accounts");
     const retainedRow = page.getByRole("row").filter({ hasText: departmentAccount.username });
     await retainedRow.getByText("Bị chặn truy cập do đơn vị", { exact: true }).waitFor();
-    // Lock then unlock the account. Neither action should make its organization active.
+    // Opening is now an explicitly reauthenticated account + organization recovery operation.
     await retainedRow.getByRole("button", { name: "Khóa", exact: true }).click();
     await retainedRow.getByRole("button", { name: "Mở khóa", exact: true }).click();
+    const unlockDialog = page.getByRole("dialog", { name: "Mở khóa tài khoản", exact: true });
+    await unlockDialog.getByRole("checkbox").check();
+    await unlockDialog.getByLabel("Mật khẩu quản trị viên").fill("UnsubmittedPassword1!");
+    const beforeUnlockCancel = writes.length;
+    await unlockDialog.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    assert.equal(writes.length, beforeUnlockCancel);
+    await retainedRow.getByRole("button", { name: "Mở khóa", exact: true }).click();
+    assert.equal(await unlockDialog.getByRole("checkbox").isChecked(), false);
+    assert.equal(await unlockDialog.getByLabel("Mật khẩu quản trị viên").inputValue(), "");
+    await unlockDialog.getByRole("checkbox").check();
+    await unlockDialog.getByLabel("Mật khẩu quản trị viên").fill(adminPassword);
+    const unlockFactor = await nextFixtureTotp(adminFactor.key, resetFactor.step);
+    await unlockDialog.getByLabel("Mã Authenticator", { exact: true }).fill(unlockFactor.code);
+    await unlockDialog.getByRole("button", { name: "Xác nhận mở khóa", exact: true }).click();
+    await unlockDialog.waitFor({ state: "hidden" });
+    await retainedRow.getByText("Bị chặn truy cập do đơn vị", { exact: true }).waitFor({ state: "hidden" });
     await retainedRow.getByRole("button", { name: "Khóa", exact: true }).waitFor();
-    await retainedRow.getByText("Bị chặn truy cập do đơn vị", { exact: true }).waitFor();
     await open("/organizations");
+    await page.getByRole("button", { name: emptyDepartmentName, exact: true }).click();
+    const afterUnlockTree = (await (await context.request.get("/api/v1/union-units/tree")).json()).data;
+    assert.ok(afterUnlockTree.children.some(u => u.id === emptyDepartmentId));
+    report.flows.push("X cancels verified unlock without writing; valid administrator password/OTP unlocks account and restores its existing organization on the tree");
+    // Standalone restoration remains available and does not unlock other accounts.
+    await page.getByRole("button", { name: /Ngừng hoạt động \/ Ẩn khỏi cây/ }).click();
+    await page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true }).getByRole("button", { name: "Đồng ý", exact: true }).click();
     await page.getByRole("button", { name: emptyDepartmentName, exact: true }).waitFor({ state: "hidden" });
     await inactiveUnits.getByRole("listitem").filter({ hasText: emptyDepartmentName }).getByRole("button", { name: "Khôi phục đơn vị", exact: true }).click();
     await page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true }).getByRole("button", { name: "Đồng ý", exact: true }).click();
@@ -370,7 +392,6 @@ try {
     const restoredAccount = (await (await context.request.get("/api/v1/accounts")).json()).data.find(a => a.id === departmentAccount.id);
     assert.equal(restoredAccount.organizationId, emptyDepartmentId);
     assert.equal(restoredAccount.trangThai, true);
-    report.flows.push("Deactivate unit, retain and unlock account without restoring unit, then explicitly restore the same unit ID");
     await open("/catalogs");
     const blockRow = page.getByRole("region", { name: "Khối quản lý", exact: true }).getByRole("listitem").filter({ hasText: testBlockName });
     await blockRow.getByRole("button", { name: "Sửa khối", exact: true }).click();

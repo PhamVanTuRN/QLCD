@@ -37,6 +37,17 @@ public sealed class AccountsController(IMediator mediator, LoginThrottle throttl
         return Ok(new { success = true, data = active });
     }
 
+    [HttpPost("{id:guid}/unlock")]
+    [RequestSizeLimit(4096)]
+    public async Task<IActionResult> Unlock(Guid id, UnlockAccountRequest request, CancellationToken cancellationToken)
+    {
+        if (!request.Confirmed) return BadRequest(new { success = false, message = "Hãy xác nhận mở khóa tài khoản và khôi phục đơn vị nếu đang ngừng/ẩn." });
+        var session = HttpContext.Features.Get<AuthenticatedSession>()!;
+        if (!throttle.TryAcquireAuthenticatorChange(session.Profile.Id, "admin-unlock")) return RateLimited();
+        var result = await mediator.Send(new UnlockAccount(id, request.CurrentPassword, request.Code, session.SecurityVersion, HttpContext.TraceIdentifier), cancellationToken);
+        return Ok(new { success = true, data = result });
+    }
+
     [HttpPost("{id:guid}/activate")]
     [RequestSizeLimit(4096)]
     public async Task<IActionResult> Activate(Guid id, ActivateAccountRequest request, CancellationToken cancellationToken)
@@ -80,5 +91,9 @@ public sealed record ResetPasswordRequest(bool Confirmed,
     [Required, StringLength(128)] string CurrentPassword,
     [Required, RegularExpression(@"\A[0-9]{6}\z")] string Code);
 public sealed record ResetAccountAuthenticationRequest(bool IdentityVerified,
+    [Required, StringLength(128)] string CurrentPassword,
+    [Required, RegularExpression(@"\A[0-9]{6}\z")] string Code);
+
+public sealed record UnlockAccountRequest(bool Confirmed,
     [Required, StringLength(128)] string CurrentPassword,
     [Required, RegularExpression(@"\A[0-9]{6}\z")] string Code);

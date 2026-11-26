@@ -128,6 +128,11 @@ export async function toggleAccountApi(id: string) {
   return res.data;
 }
 
+export async function unlockAccountApi(id: string, confirmed: boolean, currentPassword: string, code: string) {
+  const { data } = await api.post<{ data: { accountActive: boolean; organizationRestored: boolean; organizationId: string } }>(`/accounts/${id}/unlock`, { confirmed, currentPassword, code });
+  return data.data;
+}
+
 export async function issueAccountActivation(id: string, identityVerified: boolean) {
   const { data } = await api.post<{ data: { activationCode: string } }>(`/accounts/${id}/activate`, { identityVerified });
   return data.data.activationCode;

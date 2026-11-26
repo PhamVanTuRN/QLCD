@@ -111,13 +111,28 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
 
         // Tự động tạo tài khoản quản lý cho đơn vị mới
         var baseName = ToUnaccentedLowercase(request.TenDonVi);
-        // Keep the entered name intact; normalize only the generated login identifier.
-        // Organization type belongs in VaiTro, not in an automatically added username prefix.
+        var prefix = request.LoaiToChuc switch
+        {
+            LoaiToChuc.CDCS => "cdcs",
+            LoaiToChuc.CDBP => "cdbp",
+            _ => "tcd"
+        };
+        var aliases = request.LoaiToChuc switch
+        {
+            LoaiToChuc.CDCS => new[] { "cong_doan_co_so", "cdcs", "cds" },
+            LoaiToChuc.CDBP => new[] { "cong_doan_bo_phan", "cdbp" },
+            _ => new[] { "to_cong_doan", "to_cd", "tocd", "tcd", "to" }
+        };
+        // Only abbreviate leading type words in the generated login; preserve the entered display name.
+        var alias = aliases.FirstOrDefault(a => baseName == a || baseName.StartsWith(a + "_", StringComparison.Ordinal));
+        if (alias is not null)
+            baseName = baseName.Length == alias.Length ? "" : baseName[(alias.Length + 1)..];
         if (baseName.Length == 0) baseName = "don_vi";
-        string username = baseName[..Math.Min(baseName.Length, 36)];
+        var bodyLength = 36 - prefix.Length - 1;
+        string username = prefix + "_" + baseName[..Math.Min(baseName.Length, bodyLength)];
         int suffix = 1;
         string finalUsername = username;
-        while (await _context.TaiKhoans.AnyAsync(a => a.Username == finalUsername, cancellationToken))
+        while (await _context.TaiKhoans.IgnoreQueryFilters().AnyAsync(a => a.Username == finalUsername, cancellationToken))
         {
             finalUsername = $"{username}_{suffix}";
             suffix++;

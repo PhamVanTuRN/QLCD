@@ -1,4 +1,5 @@
 using QLCD.Application.Common;
+using QLCD.Application.Features.Accounts.Commands;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ public sealed class ApiErrors(ILogger<ApiErrors> logger) : IExceptionHandler
     {
         var (status, message) = error switch
         {
+            AdminUnlockAuthenticationException => (403, "Không xác thực được admin. Kiểm tra mật khẩu và dùng mã Authenticator mới."),
             OrganizationStateException => (409, error.Message),
             ValidationException => (400, "Dữ liệu gửi lên không hợp lệ."),
             InvalidEvidenceException => (400, "Tệp không phải PDF hợp lệ hoặc không đạt kiểm tra an toàn."),

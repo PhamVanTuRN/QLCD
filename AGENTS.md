@@ -32,11 +32,11 @@ QLCD là hệ thống quản lý công đoàn cho Bệnh viện Trung ương Qu�
 
 ## Chính sách tài khoản và tên đơn vị
 
-Mật khẩu khởi tạo chuẩn là `PasswordHasher.InitialPassword` (`123456aA@`). Reset mật khẩu cho mọi vai trò đích dùng cùng giá trị, bắt buộc đổi trong 24 giờ, giữ MFA/mã khôi phục và trạng thái khóa; reset 2FA giữ nguyên mật khẩu/cờ/hạn đổi mật khẩu. Giao diện quản trị lấy giá trị/thời hạn từ `credentialPolicy` trong GET accounts. Tạo đơn vị giữ nguyên tên nhập; tên đăng nhập tự sinh không được thêm tiền tố theo vai trò hoặc cắt từ chỉ loại đơn vị mà người dùng đã nhập. Không đổi đơn vị hay tài khoản cũ khi áp dụng quy tắc tạo mới.
+Mật khẩu khởi tạo chuẩn là `PasswordHasher.InitialPassword` (`123456aA@`). Reset mật khẩu cho mọi vai trò đích dùng cùng giá trị, bắt buộc đổi trong 24 giờ, giữ MFA/mã khôi phục và trạng thái khóa; reset 2FA giữ nguyên mật khẩu/cờ/hạn đổi mật khẩu. Giao diện quản trị lấy giá trị/thời hạn từ `credentialPolicy` trong GET accounts. Tạo đơn vị giữ nguyên tên nhập; tên đăng nhập mới dùng tiền tố viết tắt cdcs_/cdbp_/tcd_, thay phần tên loại tổ chức ở đầu nếu đã nhập để không lặp; tên hiển thị giữ nguyên. Không đổi đơn vị hay tài khoản cũ khi áp dụng quy tắc tạo mới.
 
 ## Vòng đời đơn vị và tài khoản
 
-Không xóa/soft-delete đơn vị và tài khoản khi gỡ khỏi cây. Dùng OrganizationLifecycle: TrangThai=0 cho đơn vị, cờ khóa tài khoản giữ riêng, truy cập hiệu lực bị chặn bởi đơn vị/tổ tiên ngừng. Từ chối CĐCS hoặc đơn vị có bất kỳ con nào kể cả con ngừng/soft-delete; không cascade trạng thái. Khôi phục đơn vị dùng endpoint riêng, giữ ID/FK, không mở khóa tài khoản. Không dùng Update metadata để thay trạng thái. Legacy IsDeleted chỉ đọc trong quản trị để khôi phục tường minh, không tự backfill dữ liệu. Thu hồi phiên bằng SecurityVersion trong cùng transaction; kiểm tra trạng thái tổ tiên ở login, session và scope.
+Không xóa/soft-delete đơn vị và tài khoản khi gỡ khỏi cây. Dùng OrganizationLifecycle: TrangThai=0 cho đơn vị, cờ khóa tài khoản giữ riêng, truy cập hiệu lực bị chặn bởi đơn vị/tổ tiên ngừng. Từ chối CĐCS hoặc đơn vị có bất kỳ con nào kể cả con ngừng/soft-delete; không cascade trạng thái. Khôi phục đơn vị độc lập dùng endpoint riêng, giữ ID/FK, không mở khóa tài khoản; luồng mở khóa có xác thực admin bên dưới được phép phối hợp khôi phục cùng đơn vị. Không dùng Update metadata để thay trạng thái. Legacy IsDeleted chỉ đọc trong quản trị để khôi phục tường minh, không tự backfill dữ liệu. Thu hồi phiên bằng SecurityVersion trong cùng transaction; kiểm tra trạng thái tổ tiên ở login, session và scope.
 
 ## Khối quản lý
 
@@ -45,3 +45,7 @@ Dùng KhoiChuyenMons/MaKhoi làm nguồn duy nhất; không tạo lại khái ni
 ## Khối quản lý của cây tổ chức
 
 Nguồn chuẩn là KhoiChuyenMons/MaKhoi hiện có; DanhMucDungChung loại KhoiChuyenMon cũ chỉ đọc, không tiếp tục tạo/seed nguồn trùng. Chỉ ADMIN quản lý khối; danh sách dùng chung cho lookup nhưng số đơn vị liên kết toàn hệ thống chỉ ADMIN được đọc. Đơn vị mới bắt buộc chọn khối đang dùng, không tự kế thừa hoặc gán theo tên. Đơn vị cũ null hiển thị Chưa phân khối và được bổ sung tường minh; giữ MaKhoi khi ngừng/khôi phục đơn vị. Ngừng khối cần xác nhận, không xóa FK hoặc thay đơn vị/tài khoản/quyền; không cung cấp DELETE khối. Thống kê và group header dùng phân loại của chính đơn vị, không dùng khối làm node hay phạm vi truy cập.
+
+## Mở khóa có xác thực admin (yêu cầu mới)
+
+POST accounts/{id}/unlock yêu cầu checkbox xác nhận, mật khẩu và OTP mới của ADMIN đã hoàn tất MFA; không tự mở ADMIN/self. Trong cùng transaction Serializable, khôi phục chính đơn vị ngừng/ẩn theo ID cũ và mở đúng tài khoản đã chọn, giữ dữ liệu/FK/MaKhoi/mật khẩu/MFA và cờ khóa tài khoản khác. Cha ngừng phải khôi phục riêng trước. Lỗi phải rollback cả đơn vị, tài khoản, OTP và audit. Toggle v1 chỉ cho khóa, không được dùng để mở; cấp mã kích hoạt không được vượt qua đơn vị đang ngừng/ẩn. Khôi phục đơn vị độc lập vẫn không tự mở tài khoản. Mở khóa không đặt lại mật khẩu hoặc gia hạn mã/mật khẩu tạm. Chính sách này thay thế quy tắc cũ “mở khóa không khôi phục đơn vị”; không nới quyền reset mật khẩu/2FA vốn chỉ dành qlcd_admin có ID cấu hình.

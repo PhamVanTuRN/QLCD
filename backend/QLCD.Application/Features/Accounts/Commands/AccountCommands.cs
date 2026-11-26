@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QLCD.Application.Common.Interfaces;
@@ -10,29 +11,66 @@ using QLCD.Shared.Security;
 namespace QLCD.Application.Features.Accounts.Commands;
 
 public sealed record ToggleAccount(Guid AccountId) : IRequest<bool>;
+public sealed record UnlockAccount(Guid AccountId, string CurrentPassword, string Code, Guid SessionVersion, string Trace) : IRequest<UnlockAccountResult>;
+public sealed record UnlockAccountResult(bool AccountActive, bool OrganizationRestored, Guid OrganizationId);
+public sealed class AdminUnlockAuthenticationException : UnauthorizedAccessException;
+
 public sealed record IssueAccountActivation(Guid AccountId, bool IdentityVerified, string Trace) : IRequest<string>;
 public sealed record ResetAccountPassword(Guid AccountId, string CurrentPassword, string Code, Guid SessionVersion, string Trace) : IRequest;
 public sealed record ResetAccountAuthenticator(Guid AccountId, string CurrentPassword, string Code, Guid SessionVersion, string Trace) : IRequest<string>;
 
 public sealed class AccountCommands(IQLCDDbContext database, ICurrentUserService user, TimeProvider clock, IMfaVerifier mfa,
     CredentialResetPermission permission)
-    : IRequestHandler<ToggleAccount, bool>, IRequestHandler<IssueAccountActivation, string>,
+    : IRequestHandler<ToggleAccount, bool>, IRequestHandler<UnlockAccount, UnlockAccountResult>, IRequestHandler<IssueAccountActivation, string>,
     IRequestHandler<ResetAccountPassword>, IRequestHandler<ResetAccountAuthenticator, string>
 {
     public async Task<bool> Handle(ToggleAccount request, CancellationToken cancellationToken)
     {
         var account = await LoadAsync(request.AccountId, cancellationToken);
-        account.TrangThai = account.IsDeleted || !account.TrangThai;
-        account.IsDeleted = false; // Explicit account recovery only; never change the linked organization.
+        if (account.IsDeleted || !account.TrangThai)
+            throw new OrganizationStateException("Mở khóa yêu cầu xác nhận, mật khẩu và OTP của admin qua thao tác Mở khóa riêng.");
+        account.TrangThai = false;
         account.SecurityVersion = Guid.NewGuid();
         await database.SaveChangesAsync(cancellationToken);
         return account.TrangThai;
+    }
+
+    public async Task<UnlockAccountResult> Handle(UnlockAccount request, CancellationToken cancellationToken)
+    {
+        await using var transaction = database.Database.IsRelational()
+            ? await database.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken) : null;
+        var target = await LoadAsync(request.AccountId, cancellationToken);
+        var actor = await database.TaiKhoans.Include(a => a.Organization)
+            .SingleOrDefaultAsync(a => a.Id == user.UserId, cancellationToken);
+        if (actor is null || actor.VaiTro != SecurityRoles.Admin || !LoginCommandHandler.IsUsable(actor)
+            || actor.MustChangePassword || actor.ProtectedMfaSecret is null
+            || LoginCommandHandler.SessionVersion(actor) != request.SessionVersion
+            || !PasswordHasher.Verify(request.CurrentPassword, actor.PasswordHash)
+            || !mfa.TryVerify(actor, request.Code, out var used))
+            throw new AdminUnlockAuthenticationException();
+        if (target.OrganizationId is not Guid organizationId)
+            throw new OrganizationStateException("Tài khoản chưa liên kết đơn vị hợp lệ; không tự tạo đơn vị khi mở khóa.");
+        var organization = await database.DonViCongDoans.IgnoreQueryFilters().SingleOrDefaultAsync(u => u.Id == organizationId, cancellationToken)
+            ?? throw new KeyNotFoundException("Đơn vị không tồn tại.");
+        var restored = organization.IsDeleted || organization.TrangThai != 1;
+        if (!await database.DonViCongDoans.OperationalUnits().AnyAsync(u => u.Id == organizationId, cancellationToken))
+            await OrganizationLifecycle.ChangeAsync(database, user, organizationId, true, cancellationToken);
+        actor.LastMfaStep = used;
+        target.TrangThai = true;
+        target.IsDeleted = false;
+        target.SecurityVersion = Guid.NewGuid();
+        database.AuditLogs.Add(AccountCredentials.Event(user.UserId!.Value, target.Id, "AUTH_ACCOUNT_UNLOCK", request.Trace));
+        await database.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        return new UnlockAccountResult(true, restored, organizationId);
     }
 
     public async Task<string> Handle(IssueAccountActivation request, CancellationToken cancellationToken)
     {
         if (!request.IdentityVerified) throw new ArgumentException("Verify the user's identity before issuing a code.");
         var account = await LoadAsync(request.AccountId, cancellationToken);
+        if (account.OrganizationId is not Guid unitId || !await database.DonViCongDoans.OperationalUnits().AnyAsync(u => u.Id == unitId, cancellationToken))
+            throw new OrganizationStateException("Hãy mở khóa và khôi phục đơn vị bằng mật khẩu/OTP của admin trước khi cấp mã kích hoạt.");
         if (account.IsDeleted || !AccountCredentials.CanIssueInitialActivation(account))
             throw new ArgumentException("Use the verified account recovery workflow for this account.");
 

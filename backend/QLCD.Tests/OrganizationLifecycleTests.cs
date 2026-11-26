@@ -49,7 +49,7 @@ public sealed class OrganizationLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DeactivationKeepsAllAccountsRelationshipsAndBusinessDataAndUnlockDoesNotRestoreUnit()
+    public async Task DeactivationPreservesDataAndLegacyToggleCannotBypassAuthenticatedUnlock()
     {
         var (root, unit, accounts) = await Seed();
         var member = new DoanVien { HoTen = "Synthetic member", SoCCCD = "000000000901", MaNhanVien = "ORG-001", MaToCongDoan = unit.Id };
@@ -72,13 +72,13 @@ public sealed class OrganizationLifecycleTests : IAsyncLifetime
         var tree = await Tree(); Assert.DoesNotContain(tree!.Children, u => u.Id == unit.Id);
         var inactive = await new GetInactiveUnitsQueryHandler(db, admin).Handle(new(), default);
         Assert.Equal(unit.Id, Assert.Single(inactive).Id);
-        await Toggle(accounts[1].Id);
-        Assert.True(accounts[1].TrangThai); Assert.Equal(0, unit.TrangThai);
+        await Assert.ThrowsAsync<OrganizationStateException>(() => Toggle(accounts[1].Id));
+        Assert.False(accounts[1].TrangThai); Assert.Equal(0, unit.TrangThai);
         Assert.DoesNotContain((await Tree())!.Children, u => u.Id == unit.Id);
         Assert.All(await ListAccounts(), a => Assert.False(a.CanSignIn));
         await Toggle(accounts[0].Id); // Explicitly lock one account; organization restoration must not unlock it.
         await Restore(unit.Id);
-        Assert.Equal(1, unit.TrangThai); Assert.False(accounts[0].TrangThai); Assert.True(accounts[1].TrangThai);
+        Assert.Equal(1, unit.TrangThai); Assert.False(accounts[0].TrangThai); Assert.False(accounts[1].TrangThai);
         Assert.Contains((await Tree())!.Children, u => u.Id == unit.Id);
         Assert.Equal(2, await db.DonViCongDoans.IgnoreQueryFilters().CountAsync());
         Assert.Single(db.DoanViens); Assert.Single(db.HoatDongCongDoans);
@@ -111,9 +111,9 @@ public sealed class OrganizationLifecycleTests : IAsyncLifetime
         Assert.True(row.LegacyDeleted); Assert.True(row.CanRestore);
         await Restore(unit.Id);
         Assert.All(await ListAccounts(), a => { Assert.True(a.AccountArchived); Assert.True(a.OrganizationActive); Assert.False(a.CanSignIn); });
-        await Toggle(accounts[0].Id);
-        Assert.False(accounts[0].IsDeleted); Assert.True(accounts[0].TrangThai);
-        Assert.True((await ListAccounts()).Single(a => a.Id == accounts[0].Id).CanSignIn);
+        await Assert.ThrowsAsync<OrganizationStateException>(() => Toggle(accounts[0].Id));
+        Assert.True(accounts[0].IsDeleted); Assert.False(accounts[0].TrangThai);
+        Assert.All(await ListAccounts(), a => Assert.False(a.CanSignIn));
         Assert.True(accounts[1].IsDeleted); Assert.Equal(1, unit.TrangThai);
     }
 

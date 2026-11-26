@@ -29,7 +29,7 @@ public static class OrganizationLifecycle
     public static async Task<bool> ChangeAsync(IQLCDDbContext db, ICurrentUserService user, Guid id, bool restore, CancellationToken ct)
     {
         RequireManager(user);
-        await using var transaction = db.Database.IsRelational()
+        await using var transaction = db.Database.IsRelational() && db.Database.CurrentTransaction is null
             ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct) : null;
         var unit = await db.DonViCongDoans.IgnoreQueryFilters().SingleOrDefaultAsync(u => u.Id == id, ct)
             ?? throw new KeyNotFoundException("Đơn vị không tồn tại.");
