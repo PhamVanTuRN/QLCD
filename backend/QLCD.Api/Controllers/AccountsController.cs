@@ -1,5 +1,6 @@
 using MediatR;
 using QLCD.Application.Common;
+using QLCD.Application.Features.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QLCD.Application.Features.Accounts.Commands;
@@ -20,7 +21,13 @@ public sealed class AccountsController(IMediator mediator, LoginThrottle throttl
     {
         var list = await mediator.Send(new GetAccountsQuery { Page = page, PageSize = pageSize, Search = search }, HttpContext.RequestAborted);
         var canResetCredentials = (await authorization.AuthorizeAsync(User, CredentialResetPermission.Policy)).Succeeded;
-        return Ok(new { success = true, data = list.Take(pageSize), hasMore = list.Count > pageSize, canResetCredentials });
+        return Ok(new { success = true, data = list.Take(pageSize), hasMore = list.Count > pageSize, canResetCredentials,
+            credentialPolicy = new
+            {
+                initialPassword = AccountCredentials.InitialPassword,
+                temporaryPasswordLifetimeHours = AccountCredentials.TemporaryPasswordLifetimeHours,
+                activationCodeLifetimeHours = AccountCredentials.ActivationCodeLifetimeHours
+            } });
     }
 
     [HttpPost("{id:guid}/toggle")]

@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +12,7 @@ public sealed class ApiErrors(ILogger<ApiErrors> logger) : IExceptionHandler
     {
         var (status, message) = error switch
         {
+            OrganizationStateException => (409, error.Message),
             ValidationException => (400, "Dữ liệu gửi lên không hợp lệ."),
             InvalidEvidenceException => (400, "Tệp không phải PDF hợp lệ hoặc không đạt kiểm tra an toàn."),
             ArgumentException => (400, "Dữ liệu hoặc thao tác không hợp lệ."),

@@ -1,5 +1,7 @@
 "use client";
 
+import useConfirmation from "@/components/useConfirmation";
+
 import { useState, useCallback, use } from "react";
 import { apiMessage, getMemberDetailApi, updateMemberApi, deleteMemberApi, getCatalogsApi, type CatalogDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -138,6 +140,7 @@ function MemberDetail({ member, catalogs, showAlert, reload }: {
   showAlert: (type: "success" | "error", message: string) => void;
   reload: () => void;
 }) {
+  const { confirm, confirmationDialog } = useConfirmation();
   const { id } = member;
   const { user } = useAuth();
   const router = useRouter();
@@ -255,7 +258,7 @@ function MemberDetail({ member, catalogs, showAlert, reload }: {
 
   const handleDelete = async () => {
     if (!member) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa hồ sơ đoàn viên "${member.hoTen}" khỏi hệ thống?`)) return;
+    if (!await confirm(`Bạn có chắc chắn muốn xóa hồ sơ đoàn viên "${member.hoTen}" khỏi hệ thống?`)) return;
     try {
       await deleteMemberApi(id);
       router.push("/members");
@@ -266,6 +269,7 @@ function MemberDetail({ member, catalogs, showAlert, reload }: {
 
   return (
     <div className="space-y-6">
+      {confirmationDialog}
       {/* Nav breadcrumb & Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs text-muted">

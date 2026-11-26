@@ -1,5 +1,7 @@
 "use client";
 
+import useConfirmation from "@/components/useConfirmation";
+
 import FormDialog from "@/components/FormDialog";
 
 import { useResource } from "@/lib/use-resource";
@@ -15,6 +17,7 @@ import { useAuth } from "@/lib/auth-context";
 import EvidenceUpload from "@/components/EvidenceUpload";
 
 export default function FinancePage() {
+  const { confirm, confirmationDialog } = useConfirmation();
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -89,7 +92,7 @@ export default function FinancePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa giao dịch này?")) return;
+    if (!await confirm("Bạn có chắc chắn muốn xóa giao dịch này?")) return;
     try {
       await deleteFinanceApi(id);
       showAlert("success", "Xóa giao dịch thành công");
@@ -147,6 +150,7 @@ export default function FinancePage() {
 
   return (
     <div className="space-y-6">
+      {confirmationDialog}
       {/* Alert */}
       <Notice value={notice} dismiss={dismiss} />
 

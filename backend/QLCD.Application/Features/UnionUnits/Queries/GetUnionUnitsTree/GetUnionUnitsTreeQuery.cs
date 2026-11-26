@@ -65,7 +65,7 @@ public class GetUnionUnitsTreeQueryHandler : IRequestHandler<GetUnionUnitsTreeQu
         if (allowed is { Count: 0 })
             return null;
 
-        var units = _context.DonViCongDoans.AsNoTracking();
+        var units = _context.DonViCongDoans.OperationalUnits().AsNoTracking();
         var members = _context.DoanViens.AsNoTracking();
         if (allowed is not null)
         {

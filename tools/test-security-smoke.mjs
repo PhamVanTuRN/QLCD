@@ -77,6 +77,9 @@ try {
   assert.equal(accountResponse.status, 200);
   const accountPage = await accountResponse.json();
   assert.equal(accountPage.canResetCredentials, true);
+  assert.deepEqual(accountPage.credentialPolicy, {
+    initialPassword, temporaryPasswordLifetimeHours: 24, activationCodeLifetimeHours: 24,
+  });
   assert.equal(accountPage.data.length, 2);
   assert.equal(accountPage.hasMore, true);
   assert.ok(accountPage.data.every(account => account.organizationId !== departmentUnit.data));
@@ -150,9 +153,7 @@ try {
   }, 200);
   assert.equal((await directDetail()).maToCongDoan, childTeam.data);
   assert.equal((await departmentTree()).soDoanVien, 1);
-  await admin.write(`/api/v1/union-units/${childTeam.data}`, {
-    id: childTeam.data, tenDonVi: "Fixture department team", maKhoi: null, trangThai: 0
-  }, 200, "PUT");
+  await admin.write(`/api/v1/union-units/${childTeam.data}`, undefined, 200, "DELETE");
   const treeWithInactiveTeam = await departmentTree();
   assert.deepEqual(treeWithInactiveTeam.children, []);
   assert.equal(treeWithInactiveTeam.coTheTiepNhanDoanVien, false);
@@ -279,6 +280,48 @@ try {
     `], { windowsHide: true, timeout: 30000 });
     assert.equal(audit.status, 0, audit.stderr?.toString());
   }
+  // Additional onboarding and lifecycle checks use a fresh shared-IP quota window.
+  await delay(61_000);
+  const lifecycleUnit = (await admin.json("/api/v1/union-units", {
+    tenDonVi: "Lifecycle leaf", loaiToChuc: "CDBP", maParent: centralUnit.data
+  }, 200)).data;
+  const lifecycleAccount = (await (await admin.request("/api/v1/accounts?search=Lifecycle")).json()).data[0];
+  const lifecycleActivation = (await admin.json(`/api/v1/accounts/${lifecycleAccount.id}/activate`, { identityVerified: true }, 200)).data.activationCode;
+  const lifecyclePassword = password();
+  const lifecycleClient = session(origin);
+  await onboard(lifecycleClient, lifecycleAccount.username, lifecycleActivation, lifecyclePassword);
+  const oldSession = lifecycleClient.copy();
+  await lifecycleClient.write(`/api/v1/union-units/${lifecycleUnit}`, undefined, 403, "DELETE");
+  await admin.write(`/api/v1/union-units/${centralUnit.data}`, undefined, 409, "DELETE");
+  await admin.write(`/api/v1/union-units/${departmentUnit.data}`, undefined, 409, "DELETE");
+  await admin.write(`/api/v1/union-units/${lifecycleUnit}`, undefined, 200, "DELETE");
+  const inactiveTree = (await (await admin.request("/api/v1/union-units/tree")).json()).data;
+  assert.ok(!inactiveTree.children.some(u => u.id === lifecycleUnit));
+  let lifecycleRow = (await (await admin.request("/api/v1/accounts?search=Lifecycle")).json()).data[0];
+  assert.equal(lifecycleRow.id, lifecycleAccount.id);
+  assert.equal(lifecycleRow.organizationId, lifecycleUnit);
+  assert.equal(lifecycleRow.organizationActive, false);
+  assert.equal(lifecycleRow.canSignIn, false);
+  assert.equal(lifecycleRow.trangThai, true); // Own lock flag remains independent.
+  assert.equal((await oldSession.request(`${authPath}/session`)).status, 401);
+  assert.equal((await oldSession.request(memberPath)).status, 401);
+  await session(origin).write(`${authPath}/login`, { username: lifecycleAccount.username, password: lifecyclePassword }, 401);
+  await admin.write(`/api/v1/accounts/${lifecycleAccount.id}/toggle`, undefined, 200);
+  await admin.write(`/api/v1/accounts/${lifecycleAccount.id}/toggle`, undefined, 200);
+  lifecycleRow = (await (await admin.request("/api/v1/accounts?search=Lifecycle")).json()).data[0];
+  assert.equal(lifecycleRow.trangThai, true);
+  assert.equal(lifecycleRow.organizationActive, false);
+  assert.equal(lifecycleRow.canSignIn, false);
+  const archived = (await (await admin.request("/api/v1/union-units/inactive")).json()).data;
+  assert.ok(archived.some(u => u.id === lifecycleUnit));
+  await admin.write(`/api/v1/accounts/${lifecycleAccount.id}/toggle`, undefined, 200); // Lock explicitly before restore.
+  await admin.write(`/api/v1/union-units/${lifecycleUnit}/restore`, undefined, 200);
+  lifecycleRow = (await (await admin.request("/api/v1/accounts?search=Lifecycle")).json()).data[0];
+  assert.equal(lifecycleRow.organizationActive, true);
+  assert.equal(lifecycleRow.trangThai, false);
+  assert.equal(lifecycleRow.canSignIn, false);
+  assert.equal((await oldSession.request(`${authPath}/session`)).status, 401);
+
   console.log(`Security smoke passed (${useSql ? "isolated SQL Server Express database" : "InMemory"}, synthetic accounts and files).`);
 
   async function provision(role, permanentPassword) {

@@ -1,5 +1,7 @@
 "use client";
 
+import useConfirmation from "@/components/useConfirmation";
+
 import { useRef, useState } from "react";
 import { FileText, Upload } from "lucide-react";
 import { apiMessage, uploadEvidenceFile, deleteEvidenceFile } from "@/lib/api";
@@ -13,6 +15,7 @@ interface EvidenceUploadProps {
 }
 
 export default function EvidenceUpload({ fileId, initialFileName, onChange, moduleName, organizationId }: EvidenceUploadProps) {
+  const { confirm, confirmationDialog } = useConfirmation();
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState("");
@@ -45,7 +48,7 @@ export default function EvidenceUpload({ fileId, initialFileName, onChange, modu
   }
 
   async function remove() {
-    if (!fileId || pending.current || !window.confirm("Xóa tệp minh chứng này?")) return;
+    if (!fileId || pending.current || !await confirm("Xóa tệp minh chứng này?")) return;
     pending.current = true;
     setBusy(true);
     setError("");
@@ -62,6 +65,7 @@ export default function EvidenceUpload({ fileId, initialFileName, onChange, modu
   }
 
   return <div className="space-y-2">
+    {confirmationDialog}
     {fileId ? <div className="flex flex-wrap items-center gap-3 rounded-lg border border-edge p-3">
       <FileText size={17} aria-hidden="true" />
       <a href={`/api/v1/evidence-files/download/${fileId}`} className="min-w-0 grow break-all font-semibold text-brand-strong underline">

@@ -1,5 +1,7 @@
 "use client";
 
+import useConfirmation from "@/components/useConfirmation";
+
 import FormDialog from "@/components/FormDialog";
 
 import LoadState from "@/components/LoadState";
@@ -39,6 +41,7 @@ function collectGroups(node: UnionUnitDto, parent?: UnionUnitDto): {
 }
 
 export default function MembersList() {
+  const { confirm, confirmationDialog } = useConfirmation();
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
@@ -105,7 +108,7 @@ export default function MembersList() {
   };
 
   const handleDeleteMember = async (id: string, name: string) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa đoàn viên "${name}" khỏi hệ thống?`)) return;
+    if (!await confirm(`Bạn có chắc chắn muốn xóa đoàn viên "${name}" khỏi hệ thống?`)) return;
     try {
       await deleteMemberApi(id);
       showAlert("success", "Đã xóa đoàn viên.");
@@ -117,6 +120,7 @@ export default function MembersList() {
 
   return (
     <div className="space-y-6">
+      {confirmationDialog}
       <Notice value={notice} dismiss={dismiss} />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

@@ -1,11 +1,14 @@
 "use client";
 
+import useConfirmation from "@/components/useConfirmation";
+
 import FormDialog from "@/components/FormDialog";
 
-import { useState } from "react";
-import { apiMessage, getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, UnionUnitDto } from "@/lib/api";
+import { useCallback, useState } from "react";
+import { apiMessage, getUnionTree, createUnionUnit, updateUnionUnit, deleteUnionUnit, getInactiveUnits, restoreUnionUnit, UnionUnitDto } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
+import ListPager from "@/components/ListPager";
 import LoadState from "@/components/LoadState";
 import Notice, { useNotice } from "@/components/Notice";
 import { useResource } from "@/lib/use-resource";
@@ -26,10 +29,28 @@ function findUnit(node: UnionUnitDto | null | undefined, id: string | null): Uni
 }
 
 export default function OrganizationTree() {
+  const { confirm, confirmationDialog } = useConfirmation();
   const { user } = useAuth();
   const canManageUnits = user?.role === "ADMIN" || user?.role === "CDCS";
   const { notice, dismiss, showAlert } = useNotice();
   const { data: tree, loading: treeLoading, error: treeError, reload: loadTree } = useResource(getUnionTree);
+  const [inactivePage, setInactivePage] = useState(1);
+  const readInactive = useCallback((signal: AbortSignal) => canManageUnits
+    ? getInactiveUnits(inactivePage, signal) : Promise.resolve({ data: [], hasMore: false }), [canManageUnits, inactivePage]);
+  const { data: inactive, loading: inactiveLoading, error: inactiveError, reload: reloadInactive } = useResource(readInactive);
+  const [changingUnit, setChangingUnit] = useState(false);
+
+  const restoreUnit = async (id: string, name: string) => {
+    if (changingUnit || !await confirm(`Khôi phục đơn vị "${name}" trên cây? Thao tác này không mở khóa tài khoản.`)) return;
+    setChangingUnit(true);
+    try {
+      await restoreUnionUnit(id);
+      loadTree(); reloadInactive();
+      showAlert("success", "Đã khôi phục đơn vị theo ID cũ. Trạng thái khóa của tài khoản không thay đổi.");
+    } catch (err) { showAlert("error", apiMessage(err, "Không thể khôi phục đơn vị.")); }
+    finally { setChangingUnit(false); }
+  };
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedNode = findUnit(tree, selectedId) ?? tree;
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
@@ -77,15 +98,17 @@ export default function OrganizationTree() {
   };
 
   const handleDeleteUnit = async () => {
-    if (!selectedNode) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa đơn vị "${selectedNode.tenDonVi}"?`)) return;
+    if (!selectedNode || changingUnit) return;
+    if (!await confirm(`Ngừng hoạt động và ẩn đơn vị "${selectedNode.tenDonVi}" khỏi cây? Giữ toàn bộ dữ liệu, quan hệ và tài khoản. Các tài khoản liên quan sẽ bị chặn truy cập do đơn vị ngừng hoạt động, không đổi cờ khóa riêng. Đơn vị còn đơn vị con sẽ bị từ chối.`)) return;
+    setChangingUnit(true);
     try {
       await deleteUnionUnit(selectedNode.id);
       setSelectedId(null);
-      loadTree();
+      loadTree(); reloadInactive();
+      showAlert("success", "Đã ngừng hoạt động đơn vị. Tài khoản vẫn còn trong danh sách, bị chặn truy cập do đơn vị; mọi dữ liệu và quan hệ được giữ nguyên.");
     } catch (err) {
-      showAlert("error", apiMessage(err, "Lỗi khi xóa tổ chức"));
-    }
+      showAlert("error", apiMessage(err, "Không thể ngừng hoạt động đơn vị"));
+    } finally { setChangingUnit(false); }
   };
 
   const getBadgeColor = (type: string) => {
@@ -113,11 +136,12 @@ export default function OrganizationTree() {
 
     try {
       await createUnionUnit({
-        tenDonVi: addName.trim(),
+        tenDonVi: addName,
         loaiToChuc: loaiMap[addType],
         maParent: selectedNode?.id
       });
       setShowAddModal(false);
+      showAlert("success", "Đã tạo đơn vị và tài khoản quản lý ở trạng thái khóa. Vào Tài khoản để xem tên đăng nhập, mật khẩu khởi tạo và cấp mã kích hoạt sau khi xác minh danh tính.");
       setAddName("");
       loadTree();
     } catch (err: unknown) {
@@ -183,6 +207,7 @@ export default function OrganizationTree() {
 
   return (
     <div className="space-y-6">
+      {confirmationDialog}
       <Notice value={notice} dismiss={dismiss} />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -300,21 +325,38 @@ export default function OrganizationTree() {
                   </button>
                   <button
                     onClick={handleDeleteUnit}
-                    disabled={selectedNode.loaiToChuc === "CDCS"}
-                    className={`py-2.5 rounded-xl text-xs font-semibold border transition-all text-center ${
+                    disabled={selectedNode.loaiToChuc === "CDCS" || selectedNode.children.length > 0 || changingUnit}
+                    title={selectedNode.children.length ? "Đơn vị còn đơn vị con. Không tự động ngừng các đơn vị con." : "Ngừng hoạt động, giữ nguyên dữ liệu và tài khoản"}
+                    className={`py-2.5 rounded-xl text-xs font-semibold border transition-all text-center disabled:opacity-50 disabled:cursor-not-allowed ${
                       selectedNode.loaiToChuc === "CDCS"
                         ? "bg-soft text-muted border-line cursor-not-allowed"
                         : "bg-danger-soft hover:bg-danger-line border-danger-line text-danger"
                     }`}
                   >
-                    🗑️ Xóa Đơn vị
+                    Ngừng hoạt động / Ẩn khỏi cây
                   </button>
+                  <p className="col-span-2 text-xs text-muted">Không áp dụng cho Công đoàn cơ sở hoặc đơn vị còn đơn vị con, kể cả con đã ngừng/lưu trữ. Dữ liệu và tài khoản không bị xóa.</p>
                 </div>
               </div>
             </>
           )}
         </div>
       </div>
+
+      {canManageUnits && <section className="panel space-y-4 p-4 sm:p-6" aria-label="Đơn vị ngừng hoạt động">
+        <h2 className="text-lg font-bold text-ink">Đơn vị ngừng hoạt động / Lưu trữ cũ</h2>
+        <p className="text-sm text-muted">Khôi phục đơn vị riêng tại đây. Mở khóa tài khoản không làm đơn vị xuất hiện lại; khôi phục đơn vị không mở khóa tài khoản. Đơn vị con phải khôi phục sau đơn vị cha.</p>
+        {inactiveLoading || inactiveError ? <LoadState loading={inactiveLoading} retry={reloadInactive} /> :
+          <ul className="divide-y divide-line">{inactive?.data.map(unit => <li key={unit.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="min-w-0"><p className="break-words font-semibold text-ink">{unit.tenDonVi}</p>
+              <p className="text-sm text-muted">{unit.parentName ? `Đơn vị cha: ${unit.parentName}` : unit.maParent ? "Đơn vị cha không khả dụng" : "Đơn vị gốc"} · {unit.legacyDeleted ? "Đã ẩn theo luồng cũ" : "Ngừng hoạt động hoặc bị chặn do đơn vị cha"}</p>
+            </div>
+            <button type="button" disabled={changingUnit || !unit.canRestore} onClick={() => restoreUnit(unit.id, unit.tenDonVi)}
+              className="min-h-11 rounded-lg border border-brand-line bg-brand-soft px-4 py-2 font-semibold text-brand disabled:opacity-50">Khôi phục đơn vị</button>
+          </li>)}</ul>}
+        {!inactiveLoading && !inactiveError && !inactive?.data.length && <p className="text-sm text-muted">Không có đơn vị ngừng hoạt động.</p>}
+        <ListPager page={inactivePage} hasMore={inactive?.hasMore ?? false} loading={inactiveLoading} onChange={setInactivePage} />
+      </section>}
 
       {/* Add Modal */}
       {showAddModal && (
@@ -392,17 +434,7 @@ export default function OrganizationTree() {
                 />
               </div>
 
-              <div>
-                <label htmlFor="organizations-field-3" className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-2">Trạng thái hoạt động</label>
-                <select id="organizations-field-3"
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(Number(e.target.value))}
-                  className="w-full bg-surface border border-line rounded-xl px-4 py-2.5 text-sm text-ink focus:outline-none focus:border-brand transition-all"
-                >
-                  <option value={1}>Đang hoạt động</option>
-                  <option value={0}>Ngừng hoạt động</option>
-                </select>
-              </div>
+              <p className="text-sm text-muted">Sửa thông tin không thay đổi trạng thái. Dùng Ngừng hoạt động hoặc Khôi phục đơn vị ở các khu vực riêng.</p>
             </div>
 
             {editError && (

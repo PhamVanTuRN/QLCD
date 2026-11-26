@@ -22,7 +22,8 @@ public sealed class AccountCommands(IQLCDDbContext database, ICurrentUserService
     public async Task<bool> Handle(ToggleAccount request, CancellationToken cancellationToken)
     {
         var account = await LoadAsync(request.AccountId, cancellationToken);
-        account.TrangThai = !account.TrangThai;
+        account.TrangThai = account.IsDeleted || !account.TrangThai;
+        account.IsDeleted = false; // Explicit account recovery only; never change the linked organization.
         account.SecurityVersion = Guid.NewGuid();
         await database.SaveChangesAsync(cancellationToken);
         return account.TrangThai;
@@ -32,7 +33,7 @@ public sealed class AccountCommands(IQLCDDbContext database, ICurrentUserService
     {
         if (!request.IdentityVerified) throw new ArgumentException("Verify the user's identity before issuing a code.");
         var account = await LoadAsync(request.AccountId, cancellationToken);
-        if (!AccountCredentials.CanIssueInitialActivation(account))
+        if (account.IsDeleted || !AccountCredentials.CanIssueInitialActivation(account))
             throw new ArgumentException("Use the verified account recovery workflow for this account.");
 
         var activation = AccountCredentials.NewCode();
@@ -40,7 +41,7 @@ public sealed class AccountCommands(IQLCDDbContext database, ICurrentUserService
         AccountCredentials.IssueEnrollment(account, activation, now);
         if (account.MustChangePassword && account.TemporaryPasswordExpiresUtc is null)
         {
-            account.TemporaryPasswordExpiresUtc = now.AddHours(24);
+            account.TemporaryPasswordExpiresUtc = now.AddHours(AccountCredentials.TemporaryPasswordLifetimeHours);
             account.TrangThai = true;
         }
         database.AuditLogs.Add(AccountCredentials.Event(user.UserId!.Value, account.Id, "AUTH_ACTIVATE", request.Trace));
@@ -89,7 +90,7 @@ public sealed class AccountCommands(IQLCDDbContext database, ICurrentUserService
         if (user.Role != SecurityRoles.Admin || user.UserId is null || user.UserId == id)
             throw new UnauthorizedAccessException("Self-service uses the authenticated password-change operation.");
 
-        var account = await database.TaiKhoans.SingleOrDefaultAsync(value => value.Id == id, cancellationToken)
+        var account = await database.TaiKhoans.IgnoreQueryFilters().SingleOrDefaultAsync(value => value.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException("Account not found.");
         if (account.VaiTro == SecurityRoles.Admin)
             throw new UnauthorizedAccessException("Administrator lifecycle is managed through separate maintenance.");

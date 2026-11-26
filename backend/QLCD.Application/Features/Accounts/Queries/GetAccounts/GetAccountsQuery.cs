@@ -25,6 +25,9 @@ public class AccountDto
     public required string VaiTro { get; set; }
     public Guid? OrganizationId { get; set; }
     public string? DonViTen { get; set; }
+    public bool OrganizationActive { get; set; }
+    public bool AccountArchived { get; set; }
+    public bool CanSignIn { get; set; }
     public bool MustChangePassword { get; set; }
     public bool TrangThai { get; set; }
     public bool AuthenticatorEnabled { get; set; }
@@ -46,7 +49,10 @@ public class GetAccountsQueryHandler : IRequestHandler<GetAccountsQuery, List<Ac
     {
         var offset = PageBounds.Offset(request.Page, request.PageSize);
         var search = PageBounds.Search(request.Search);
-        var query = _context.TaiKhoans.AsNoTracking();
+        var operational = _context.DonViCongDoans.OperationalUnits();
+        // Include legacy soft-deleted organization accounts in the administration list.
+        var query = _context.TaiKhoans.IgnoreQueryFilters().AsNoTracking()
+            .Where(a => !a.IsDeleted || a.OrganizationId != null);
         if (search is not null)
         {
             var matchesSystemOrganization = SystemOrganizationName.ToLowerInvariant().Contains(search, StringComparison.Ordinal);
@@ -63,6 +69,9 @@ public class GetAccountsQueryHandler : IRequestHandler<GetAccountsQuery, List<Ac
             .Skip(offset).Take(request.PageSize + 1)
             .Select(t => new AccountDto
             {
+                OrganizationActive = t.OrganizationId == null || operational.Any(u => u.Id == t.OrganizationId),
+                AccountArchived = t.IsDeleted,
+                CanSignIn = !t.IsDeleted && t.TrangThai && (t.OrganizationId == null || operational.Any(u => u.Id == t.OrganizationId)),
                 Id = t.Id,
                 Username = t.Username,
                 HoTen = t.HoTen,
@@ -73,7 +82,7 @@ public class GetAccountsQueryHandler : IRequestHandler<GetAccountsQuery, List<Ac
                 TrangThai = t.TrangThai,
                 AuthenticatorEnabled = t.ProtectedMfaSecret != null,
                 ActivationPending = t.ActivationCodeHash != null,
-                CanIssueActivation = t.ProtectedMfaSecret == null && t.ActivationCodeHash == null
+                CanIssueActivation = !t.IsDeleted && t.ProtectedMfaSecret == null && t.ActivationCodeHash == null
             })
             .ToListAsync(cancellationToken);
     }

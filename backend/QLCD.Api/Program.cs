@@ -19,6 +19,8 @@ using QLCD.Infrastructure;
 using QLCD.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables().AddCommandLine(args);
 var local = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing");
 var migrate = args.Contains("--migrate", StringComparer.Ordinal);
 var initialize = args.Contains("--initialize-data", StringComparer.Ordinal);

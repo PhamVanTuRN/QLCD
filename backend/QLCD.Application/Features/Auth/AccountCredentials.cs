@@ -8,6 +8,8 @@ namespace QLCD.Application.Features.Auth;
 public static class AccountCredentials
 {
     public const string InitialPassword = PasswordHasher.InitialPassword;
+    public const int TemporaryPasswordLifetimeHours = 24;
+    public const int ActivationCodeLifetimeHours = 24;
 
     public static bool IsCode(string? value) => value is { Length: 32 } && value.All(Uri.IsHexDigit);
 
@@ -41,7 +43,7 @@ public static class AccountCredentials
     {
         account.PasswordHash = PasswordHasher.Hash(InitialPassword);
         account.MustChangePassword = true;
-        account.TemporaryPasswordExpiresUtc = now.AddHours(24);
+        account.TemporaryPasswordExpiresUtc = now.AddHours(TemporaryPasswordLifetimeHours);
         account.SecurityVersion = Guid.NewGuid();
     }
 
@@ -55,7 +57,7 @@ public static class AccountCredentials
 
     public static void IssueEnrollment(TaiKhoan account, string activation, DateTime now)
     {
-        account.ActivationCodeExpiresUtc = now.AddHours(24);
+        account.ActivationCodeExpiresUtc = now.AddHours(ActivationCodeLifetimeHours);
         account.ActivationCodeHash = HashCode(activation);
         account.SecurityVersion = Guid.NewGuid();
     }

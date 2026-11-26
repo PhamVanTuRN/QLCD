@@ -29,3 +29,11 @@ QLCD là hệ thống quản lý công đoàn cho Bệnh viện Trung ương Qu�
 - Đổi truy vấn, index hoặc migration với [qlcd-sql](.agents/skills/qlcd-sql/SKILL.md).
 - Cập nhật hoặc chạy kiểm thử với [qlcd-testing](.agents/skills/qlcd-testing/SKILL.md).
 - Đánh giá diff và kiểm tra tương thích với [qlcd-code-review](.agents/skills/qlcd-code-review/SKILL.md).
+
+## Chính sách tài khoản và tên đơn vị
+
+Mật khẩu khởi tạo chuẩn là `PasswordHasher.InitialPassword` (`123456aA@`). Reset mật khẩu cho mọi vai trò đích dùng cùng giá trị, bắt buộc đổi trong 24 giờ, giữ MFA/mã khôi phục và trạng thái khóa; reset 2FA giữ nguyên mật khẩu/cờ/hạn đổi mật khẩu. Giao diện quản trị lấy giá trị/thời hạn từ `credentialPolicy` trong GET accounts. Tạo đơn vị giữ nguyên tên nhập; tên đăng nhập tự sinh không được thêm tiền tố theo vai trò hoặc cắt từ chỉ loại đơn vị mà người dùng đã nhập. Không đổi đơn vị hay tài khoản cũ khi áp dụng quy tắc tạo mới.
+
+## Vòng đời đơn vị và tài khoản
+
+Không xóa/soft-delete đơn vị và tài khoản khi gỡ khỏi cây. Dùng OrganizationLifecycle: TrangThai=0 cho đơn vị, cờ khóa tài khoản giữ riêng, truy cập hiệu lực bị chặn bởi đơn vị/tổ tiên ngừng. Từ chối CĐCS hoặc đơn vị có bất kỳ con nào kể cả con ngừng/soft-delete; không cascade trạng thái. Khôi phục đơn vị dùng endpoint riêng, giữ ID/FK, không mở khóa tài khoản. Không dùng Update metadata để thay trạng thái. Legacy IsDeleted chỉ đọc trong quản trị để khôi phục tường minh, không tự backfill dữ liệu. Thu hồi phiên bằng SecurityVersion trong cùng transaction; kiểm tra trạng thái tổ tiên ở login, session và scope.

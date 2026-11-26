@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import DialogCloseButton from "@/components/DialogCloseButton";
 import { ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import LoadState from "@/components/LoadState";
@@ -66,6 +67,8 @@ export default function AccountSecurity() {
           <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-strong">
             {!data.needsAuthenticator || recoveryCodes ? "Đang bật" : "Cần thiết lập"}
           </span>
+          {(pending || rotating) && !recoveryCodes && <DialogCloseButton disabled={busy}
+            onClose={() => { clearForm(); setRotating(false); }} />}
         </div>
         {recoveryCodes ? <RecoveryCodes codes={recoveryCodes} onContinue={async () => {
           await refreshSession();

@@ -23,6 +23,9 @@ export interface AccountDto {
   hoTen: string;
   vaiTro: string;
   organizationId: string | null;
+  organizationActive: boolean;
+  accountArchived: boolean;
+  canSignIn: boolean;
   donViTen: string | null;
   mustChangePassword: boolean;
   trangThai: boolean;
@@ -49,13 +52,14 @@ export default function AccountsPage() {
 
   const readPage = useCallback((signal: AbortSignal) => getAccountsApi<AccountDto>({ search: search.trim() || undefined, page }, signal), [search, page]);
   const { data: list, loading, error: listError, reload: loadAccounts } = useResource(readPage, search ? 200 : 0);
+  const policy = list?.credentialPolicy;
   const accounts = list?.data ?? [];
   const hasMore = list?.hasMore ?? false;
 
   const handleToggleStatus = async (id: string) => {
     try {
       await toggleAccountApi(id);
-      showAlert("success", "Thay đổi trạng thái tài khoản thành công");
+      showAlert("success", "Đã đổi trạng thái khóa tài khoản. Trạng thái đơn vị được giữ nguyên; tài khoản thuộc đơn vị ngừng hoạt động vẫn không thể đăng nhập.");
       loadAccounts();
     } catch (err) {
       showAlert("error", apiMessage(err, "Lỗi thay đổi trạng thái tài khoản"));
@@ -72,9 +76,19 @@ export default function AccountsPage() {
     setActivationError("");
   };
 
+  const closeActivation = () => {
+    if (submitting) return;
+    setSelectedAccount(null);
+    setConfirmed(false);
+    setCurrentPassword("");
+    setOtp("");
+    setActivation("");
+    setActivationError("");
+  };
+
   const handleActivation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting || !selectedAccount || !confirmed) return;
+    if (submitting || !selectedAccount || !confirmed || !policy) return;
 
     setActivationError("");
     setSubmitting(true);
@@ -82,7 +96,7 @@ export default function AccountsPage() {
       if (action === "password") {
         await resetAccountPassword(selectedAccount.id, confirmed, currentPassword, otp);
         setSelectedAccount(null);
-        showAlert("success", "Đã đặt lại mật khẩu. Chủ tài khoản phải đổi mật khẩu ở lần đăng nhập tiếp theo.");
+        showAlert("success", `Đã đặt lại mật khẩu của ${selectedAccount.username} thành ${policy?.initialPassword}. Có hiệu lực ${policy?.temporaryPasswordLifetimeHours} giờ; bắt buộc đổi trước khi vào nghiệp vụ. Authenticator và trạng thái khóa được giữ nguyên.`);
       } else {
         const code = action === "activate"
           ? await issueAccountActivation(selectedAccount.id, confirmed)
@@ -131,6 +145,11 @@ export default function AccountsPage() {
         </div>
       </header>
 
+      {policy && <section aria-label="Mật khẩu khởi tạo" className="rounded-xl border border-brand-line bg-brand-soft p-4 text-sm text-copy">
+        <p>Mật khẩu khởi tạo dùng chung cho tài khoản mới và reset mật khẩu: <code className="font-bold text-ink">{policy.initialPassword}</code>.</p>
+        <p>Khóa tài khoản và ngừng hoạt động đơn vị là hai trạng thái riêng. Mở khóa tài khoản không khôi phục đơn vị. Tài khoản mới được tạo ở trạng thái khóa. Sau khi xác minh danh tính và cấp mã kích hoạt, tài khoản được mở để thiết lập Authenticator và đổi mật khẩu trong {policy.temporaryPasswordLifetimeHours} giờ. Reset mật khẩu không mở khóa tài khoản và không thay Authenticator.</p>
+      </section>}
+
       {/* Main card */}
       <div className="panel overflow-hidden">
         <div className="overflow-x-auto" role="region" aria-label="Bảng tài khoản" tabIndex={0}>
@@ -174,6 +193,7 @@ export default function AccountsPage() {
                     </td>
                     <td className="py-3 px-4 font-semibold text-brand">
                       {item.donViTen || "Hệ thống chung"}
+                      {!item.organizationActive && <span className="block text-xs font-normal text-danger">Đơn vị ngừng hoạt động / bị ẩn</span>}
                     </td>
                     <td className="py-3 px-4">
                       {item.authenticatorEnabled ? "Đang bật" : item.activationPending ? "Đã cấp mã" : "Chưa thiết lập"}
@@ -187,8 +207,9 @@ export default function AccountsPage() {
                             : "bg-danger-soft text-danger border-danger-line"
                         }`}
                       >
-                        {item.trangThai ? "Hoạt động" : "Bị khóa"}
+                        {item.accountArchived ? "Tài khoản lưu trữ cũ" : item.trangThai ? "Đã mở khóa" : "Bị khóa"}
                       </span>
+                      {!item.canSignIn && !item.organizationActive && <p className="mt-1 text-xs text-danger">Bị chặn truy cập do đơn vị</p>}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -201,14 +222,14 @@ export default function AccountsPage() {
                               : "bg-brand-soft hover:bg-soft-strong border-brand-line text-brand"
                           }`}
                         >
-                          {item.trangThai ? "Khóa" : "Mở khóa"}
+                          {item.trangThai && !item.accountArchived ? "Khóa" : "Mở khóa"}
                         </button>
                         {item.canIssueActivation && item.vaiTro !== "ADMIN" && <button type="button" className={credentialButton}
                           onClick={() => openActivation(item, "activate")}>{credentialLabels.activate}</button>}
                         {list?.canResetCredentials && user && user.id !== item.id && <>
-                          <button type="button" className={credentialButton}
+                          <button type="button" className={credentialButton} disabled={item.accountArchived} title={item.accountArchived ? "Khôi phục tài khoản trước khi reset" : undefined}
                             onClick={() => openActivation(item, "password")}>{credentialLabels.password}</button>
-                          <button type="button" className={credentialButton}
+                          <button type="button" className={credentialButton} disabled={item.accountArchived} title={item.accountArchived ? "Khôi phục tài khoản trước khi reset" : undefined}
                             onClick={() => openActivation(item, "authenticator")}>{credentialLabels.authenticator}</button>
                         </>}
                       </div>
@@ -223,16 +244,18 @@ export default function AccountsPage() {
       </div>
 
       {selectedAccount && (
-        <FormDialog label={credentialLabels[action]} onClose={() => { setActivation(""); setSelectedAccount(null); }} busy={submitting}>
+        <FormDialog label={credentialLabels[action]} onClose={closeActivation} busy={submitting}>
           <h2 className="text-lg font-bold text-ink">{credentialLabels[action]}</h2>
           <p className="break-all text-sm text-muted">{selectedAccount.username}</p>
           {activation ? <div className="space-y-3 text-sm text-copy">
-            <p>Gửi mã này cho đúng chủ tài khoản qua kênh riêng đã xác minh. Mã chỉ hiển thị ở đây và có hiệu lực trong 24 giờ.</p>
-            <code className="block rounded-lg bg-soft p-3 break-all text-ink">{activation}</code>
-            <button type="button" className="rounded-lg bg-brand px-4 py-2 font-bold text-white" onClick={() => { setActivation(""); setSelectedAccount(null); }}>Đã lưu mã</button>
+            <p>Gửi mã này cho đúng chủ tài khoản qua kênh riêng đã xác minh. Mã chỉ hiển thị ở đây và có hiệu lực trong {policy?.activationCodeLifetimeHours} giờ.</p>
+            {action === "authenticator" ? <p>Mật khẩu hiện tại và trạng thái khóa được giữ nguyên. Mã này chỉ dùng để thiết lập lại Authenticator.</p>
+              : <p>Mật khẩu tài khoản mới là <code>{policy?.initialPassword}</code>. Tài khoản cũ dùng mật khẩu hiện tại; cấp mã không đặt lại mật khẩu.</p>}
+            <code data-testid="activation-code" className="block rounded-lg bg-soft p-3 break-all text-ink">{activation}</code>
+            <button type="button" className="rounded-lg bg-brand px-4 py-2 font-bold text-white" onClick={closeActivation}>Đã lưu mã</button>
           </div> : <form onSubmit={handleActivation} className="space-y-4 text-sm">
             <fieldset disabled={submitting} className="space-y-4">
-              {action === "password" && <p className="text-muted">Mật khẩu sẽ trở về giá trị khởi tạo trong 24 giờ. Chủ tài khoản phải đổi mật khẩu và tiếp tục dùng Authenticator đã đăng ký.</p>}
+              {action === "password" && <p className="text-muted">Mật khẩu sẽ được đặt lại thành <strong className="text-ink">{policy?.initialPassword}</strong>, có hiệu lực {policy?.temporaryPasswordLifetimeHours} giờ. Chủ tài khoản phải đổi mật khẩu trước khi vào nghiệp vụ. Authenticator và trạng thái khóa được giữ nguyên.</p>}
               {action === "authenticator" && <p className="text-muted">Authenticator và mã khôi phục cũ sẽ hết hiệu lực. Chủ tài khoản dùng mật khẩu hiện tại và mã kích hoạt mới để đăng ký lại.</p>}
               <label className="flex items-start gap-2">
                 <input type="checkbox" required checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />

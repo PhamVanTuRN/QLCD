@@ -1,5 +1,7 @@
 "use client";
 
+import useConfirmation from "@/components/useConfirmation";
+
 import FormDialog from "@/components/FormDialog";
 
 import { useResource } from "@/lib/use-resource";
@@ -14,6 +16,7 @@ import { useAuth } from "@/lib/auth-context";
 import EvidenceUpload from "@/components/EvidenceUpload";
 
 export default function ActivitiesPage() {
+  const { confirm, confirmationDialog } = useConfirmation();
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -87,7 +90,7 @@ export default function ActivitiesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa hoạt động này?")) return;
+    if (!await confirm("Bạn có chắc chắn muốn xóa hoạt động này?")) return;
     try {
       await deleteActivityApi(id);
       showAlert("success", "Xóa hoạt động thành công");
@@ -132,6 +135,7 @@ export default function ActivitiesPage() {
 
   return (
     <div className="space-y-6">
+      {confirmationDialog}
       {/* Alert */}
       <Notice value={notice} dismiss={dismiss} />
 

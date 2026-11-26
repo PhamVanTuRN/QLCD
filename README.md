@@ -40,6 +40,12 @@ $env:ConnectionStrings__Migration = $env:ConnectionStrings__DefaultConnection
 
 Khi tạo cơ sở dữ liệu lần đầu, chạy backend với `--migrate`, sau đó `--initialize-data`. Dùng `--bootstrap-admin` cùng `Bootstrap__Username` và `Bootstrap__ActivationCode` để tạo tài khoản quản trị đầu tiên rồi bỏ hai biến này trước khi chạy ứng dụng. Với quản trị viên cũ chưa thiết lập Authenticator, dùng `--issue-mfa-enrollment` để cấp mã và giữ mật khẩu hiện tại. [Nâng schema và phát hành](docs/SECURITY.md)
 
+### SQL Server local trên macOS/Linux
+
+API đọc `backend/QLCD.Api/appsettings.Local.json` (Git bỏ qua). Biến môi trường và tham số dòng lệnh ưu tiên hơn tệp này. Cấu hình `ConnectionStrings:DefaultConnection` và `ConnectionStrings:Migration` với SQL Authentication; không đưa mật khẩu vào tệp được Git theo dõi. Dùng database riêng `QLCD_Local`.
+
+Với SQL Server local dùng chứng thư tự ký, chỉ trong Development, đặt `Data:TrustLocalSqlCertificate=true` và `TrustServerCertificate=True` trong chuỗi kết nối. Ngoại lệ chỉ áp dụng cho `localhost`, `127.0.0.1` hoặc `[::1]` (có thể kèm cổng), không có failover partner; kết nối vẫn mã hóa bắt buộc. Môi trường khác tiếp tục kiểm tra chứng thư. Chạy lần lượt `--migrate`, `--initialize-data`, `--bootstrap-admin` như hướng dẫn trên, sau đó chạy API với `ASPNETCORE_ENVIRONMENT=Development dotnet run --project backend/QLCD.Api --no-launch-profile -- --urls http://127.0.0.1:5023`.
+
 ## Xác minh thay đổi
 
 Từ thư mục gốc, chạy `dotnet build backend/QLCD.sln`, `dotnet test backend/QLCD.sln` và `node tools/test-security-smoke.mjs`. Tập lệnh HTTP sử dụng API Debug trên loopback với dữ liệu tổng hợp. Trên Windows, `./tools/test-sql.ps1` kiểm tra các migration và truy vấn báo cáo bằng SQL Express local, Windows Authentication, `sqlcmd` và EF CLI 10.
@@ -49,6 +55,12 @@ Thêm `-RehearseRestore` để diễn tập sao lưu và phục hồi SQL bằng
 Dùng `node tools/test-security-smoke.mjs --sql-local` để chạy cùng bộ kiểm thử HTTP với một database SQL Express tổng hợp trên Windows. Database này được tạo và dọn riêng cho mỗi lượt chạy.
 
 Trong `frontend/qlcd-web`, chạy `npm run lint -- --max-warnings 0`, `npm run build` và `npm run typecheck`. Sau khi build cả API Debug và frontend, chạy `npm run test:browser`. Trình duyệt được chọn bằng `QLCD_CHROMIUM_PATH`, Chrome đã cài trên Windows hoặc Chromium do Playwright cài bằng `npx playwright-core install chromium`. Ảnh và JSON được lưu trong `artifacts/browser`. [Kịch bản kiểm thử](frontend/qlcd-web/tests/browser.mjs)
+
+Browser smoke cũng kiểm tra các nhánh X/Escape/Hủy không gửi API ghi, reset biểu mẫu khi mở lại, focus sau khi đóng, hộp thoại lồng nhau, trạng thái đang xử lý và nút Đồng ý sau khi hủy hoặc lỗi. Trên macOS này, chạy HTTP/browser smoke với `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8` để tránh lỗi 400 ở luồng tạo hoạt động gặp với locale mặc định `C.UTF-8`; không thay đổi quy tắc xác thực hay nghiệp vụ để bỏ qua lỗi. Đặt `QLCD_CHROMIUM_PATH` tới Chrome/Chromium đã cài khi cần.
+
+Trong Cây tổ chức, dùng **Ngừng hoạt động / Ẩn khỏi cây** và khu vực **Đơn vị ngừng hoạt động / Lưu trữ cũ** để khôi phục. Hai trạng thái đơn vị và khóa tài khoản độc lập; không tạo lại đơn vị khi mở khóa tài khoản. Xem [quy tắc vòng đời](docs/03-Business-Rules.md) và [khôi phục](docs/ACCOUNT_RECOVERY.md).
+
+Hồi quy vòng đời tổ chức chạy trong `OrganizationLifecycleTests`. Để kiểm tra SQL Server thật trên macOS/Linux, truyền chuỗi SQL test qua `QLCD_TEST_ORG_SQL_CONNECTION` với tên database bắt đầu `QLCD_Test_`, rồi chạy `dotnet test backend/QLCD.Tests --filter FullyQualifiedName~OrganizationLifecycleTests`. Mỗi ca tự tạo database `QLCD_Test_Org_<GUID>`, áp dụng migrations hiện hành, kiểm tra model drift và dọn đúng database thử của nó. Không trỏ biến kiểm thử tới database nghiệp vụ.
 
 ## Tài liệu
 

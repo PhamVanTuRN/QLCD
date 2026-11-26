@@ -112,9 +112,15 @@ async function getPage<T>(path: string, params?: ListParams, signal?: AbortSigna
   return { data: response.data.data ?? [], hasMore: response.data.hasMore === true };
 }
 
+export interface CredentialPolicy {
+  initialPassword: string;
+  temporaryPasswordLifetimeHours: number;
+  activationCodeLifetimeHours: number;
+}
+
 export async function getAccountsApi<T>(params?: ListParams, signal?: AbortSignal) {
-  const { data } = await api.get<PageSlice<T> & { canResetCredentials: boolean }>("/accounts", { params, signal });
-  return { data: data.data ?? [], hasMore: data.hasMore === true, canResetCredentials: data.canResetCredentials === true };
+  const { data } = await api.get<PageSlice<T> & { canResetCredentials: boolean; credentialPolicy: CredentialPolicy }>("/accounts", { params, signal });
+  return { data: data.data ?? [], hasMore: data.hasMore === true, canResetCredentials: data.canResetCredentials === true, credentialPolicy: data.credentialPolicy };
 }
 
 export async function toggleAccountApi(id: string) {
@@ -214,6 +220,23 @@ export async function createUnionUnit(payload: CreateUnionUnitPayload) {
 export async function updateUnionUnit(id: string, payload: { id: string; tenDonVi: string; maKhoi: string | null; trangThai: number }) {
   const res = await api.put(`/union-units/${id}`, payload);
   return res.data;
+}
+
+export interface InactiveUnitDto {
+  id: string;
+  tenDonVi: string;
+  maParent: string | null;
+  parentName: string | null;
+  legacyDeleted: boolean;
+  canRestore: boolean;
+}
+
+export async function getInactiveUnits(page: number, signal?: AbortSignal) {
+  return getPage<InactiveUnitDto>("/union-units/inactive", { page }, signal);
+}
+
+export async function restoreUnionUnit(id: string) {
+  await api.post(`/union-units/${id}/restore`);
 }
 
 export async function deleteUnionUnit(id: string) {

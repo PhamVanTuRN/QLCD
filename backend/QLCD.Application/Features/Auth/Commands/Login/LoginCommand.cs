@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -57,7 +58,9 @@ public sealed class LoginCommandHandler(IQLCDDbContext context, IMfaVerifier mfa
     {
         var username = request.Username.Trim().ToLowerInvariant();
         var now = clock.GetUtcNow().UtcDateTime;
+        var operational = context.DonViCongDoans.OperationalUnits();
         var account = await context.TaiKhoans.Include(user => user.Organization)
+            .Where(user => user.OrganizationId == null || operational.Any(u => u.Id == user.OrganizationId))
             .SingleOrDefaultAsync(user => user.Username == username && user.TrangThai, cancellationToken);
         var passwordMatches = request.VerifiedPassword is { } proof
             ? account is not null && proof.AccountId == account.Id && proof.SecurityVersion == SessionVersion(account)
@@ -111,7 +114,8 @@ public sealed class LoginCommandHandler(IQLCDDbContext context, IMfaVerifier mfa
 
     public static bool IsUsable(TaiKhoan account)
     {
-        if (!account.TrangThai)
+        if (account.IsDeleted || !account.TrangThai
+            || (account.OrganizationId != null && account.Organization is not { IsDeleted: false, TrangThai: 1 }))
             return false;
         if (account.VaiTro == SecurityRoles.Admin)
             return true;

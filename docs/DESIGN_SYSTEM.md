@@ -15,3 +15,9 @@ Dùng `.panel` cho vùng chứa dữ liệu, font hệ thống hỗ trợ tiến
 | Biểu đồ | Tổng quan có nhãn và số bằng văn bản. Thanh biểu thị tỷ lệ hỗ trợ đọc. Định dạng số theo `vi-VN`. |
 
 Đánh giá khả năng truy cập theo WCAG 2.2 AA. Kiểm tra focus, tên accessible, tương phản, reduced motion và thao tác bàn phím. Axe và Chromium ghi nhận các trang đã đo. Screen reader, trình duyệt khác và thiết bị thật cần nghiệm thu riêng. [WCAG 2.2](https://www.w3.org/TR/WCAG22/) · [Kịch bản trình duyệt](../frontend/qlcd-web/tests/browser.mjs)
+
+## Đóng và hủy xác nhận
+
+Các hộp thoại biểu mẫu và xác nhận dùng nút X chung ở góc trên bên phải, tên truy cập “Đóng hộp thoại”, vùng bấm 44×44 px và focus hiển thị. Nút ở trong vùng sticky để vẫn tiếp cận được khi nội dung cuộn. X có `type="button"`, chỉ gọi nhánh đóng/hủy; không submit biểu mẫu. Escape và nút Hủy có cùng ý nghĩa. Khi đang gửi dữ liệu, khóa X và Escape đến khi có kết quả. Khi đóng, trả focus về nút mở nếu còn trên trang.
+
+Xác nhận xóa dùng `useConfirmation`: chỉ “Đồng ý” trả về chấp thuận. X, Escape, Hủy hoặc unmount trả về từ chối. Hủy hộp xác nhận xóa tệp nằm trong biểu mẫu không đóng biểu mẫu cha. Bước tạo lại mã khôi phục có cùng nút X để bỏ dữ liệu nhập trước khi gửi; xác thực bắt buộc vẫn giữ nguyên. Đóng phần hiển thị kết quả đã hoàn tất không hoàn tác thao tác đã thực hiện.

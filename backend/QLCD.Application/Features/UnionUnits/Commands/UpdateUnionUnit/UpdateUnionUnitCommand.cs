@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
@@ -22,14 +23,17 @@ public record UpdateUnionUnitCommand : IRequest<bool>
 public class UpdateUnionUnitCommandHandler : IRequestHandler<UpdateUnionUnitCommand, bool>
 {
     private readonly IQLCDDbContext _context;
+    private readonly ICurrentUserService _user;
 
-    public UpdateUnionUnitCommandHandler(IQLCDDbContext context)
+    public UpdateUnionUnitCommandHandler(IQLCDDbContext context, ICurrentUserService user)
     {
         _context = context;
+        _user = user;
     }
 
     public async Task<bool> Handle(UpdateUnionUnitCommand request, CancellationToken cancellationToken)
     {
+        OrganizationLifecycle.RequireManager(_user);
         var unit = await _context.DonViCongDoans
             .FirstOrDefaultAsync(u => u.Id == request.Id, cancellationToken);
 
@@ -38,18 +42,10 @@ public class UpdateUnionUnitCommandHandler : IRequestHandler<UpdateUnionUnitComm
             throw new ArgumentException("Đơn vị công đoàn không tồn tại.");
         }
 
+        if (request.TrangThai != unit.TrangThai)
+            throw new OrganizationStateException("Dùng thao tác Ngừng hoạt động hoặc Khôi phục đơn vị riêng; sửa thông tin không đổi trạng thái.");
         unit.TenDonVi = request.TenDonVi;
         unit.MaKhoi = request.MaKhoi;
-        unit.TrangThai = request.TrangThai;
-
-        var accounts = await _context.TaiKhoans.Where(account => account.OrganizationId == request.Id)
-            .ToListAsync(cancellationToken);
-        foreach (var account in accounts)
-        {
-            account.HoTen = $"Quản lý {request.TenDonVi}";
-            if (request.TrangThai != 1)
-                account.SecurityVersion = Guid.NewGuid();
-        }
 
         await _context.SaveChangesAsync(cancellationToken);
         return true;

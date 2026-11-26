@@ -27,7 +27,9 @@ const centralPassword = password();
 const widths = [360, 390, 768, 1024, 1280, 1440, 1920];
 const report = { screens: [], accessibility: [], browserErrors: [], apiFailures: [], dashboard: [], flows: [] };
 let browser;
+let adminFactor;
 let ingress;
+const writes = [];
 let page;
 
 try {
@@ -64,6 +66,10 @@ try {
   const context = await browser.newContext({ baseURL: origin, reducedMotion: "reduce" });
   page = await context.newPage();
   page.setDefaultTimeout(12_000);
+  page.on("request", request => {
+    if (request.url().includes("/api/v1/") && !["GET", "HEAD", "OPTIONS"].includes(request.method()))
+      writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
   page.on("pageerror", error => report.browserErrors.push(error.message));
   page.on("console", message => {
     if (message.type() === "error" && !message.text().startsWith("Failed to load resource:"))
@@ -71,6 +77,7 @@ try {
   });
   page.on("response", response => {
     if (response.status() >= 400 && response.url().includes("/api/v1/")
+      && response.headers()["x-qlcd-test-error"] !== "true"
       && !(response.status() === 401 && response.url().endsWith("/auth/session")))
       report.apiFailures.push(`${response.request().method()} ${new URL(response.url()).pathname} ${response.status()}`);
   });
@@ -84,7 +91,7 @@ try {
     await changePassword(initialPassword, adminPassword);
     await signIn(adminUsername, adminPassword);
   } else {
-    await enroll(adminUsername, adminActivation, adminPassword);
+    adminFactor = await enroll(adminUsername, adminActivation, adminPassword);
     report.flows.push("Administrator completes mandatory activation, QR enrollment and OTP-gated password change");
   }
   await page.waitForURL(origin + "/");
@@ -113,9 +120,9 @@ try {
       const dialog = page.getByRole("dialog", { name: "Thêm đơn vị" });
       await dialog.getByLabel("Tên đơn vị *", { exact: true }).fill(name);
       await dialog.getByRole("button", { name: "Xác nhận tạo" }).click();
-      await page.getByRole("button", { name, exact: true }).waitFor();
+      await page.getByRole("button", { name: name.trim(), exact: true }).waitFor();
     }
-    await createUnit("Tạo Công đoàn cơ sở", centralName);
+    await createUnit("Tạo Công đoàn cơ sở", `  ${centralName}  `);
     await createUnit("Thêm Công đoàn Bộ phận", emptyDepartmentName);
     await page.getByRole("button", { name: emptyDepartmentName, exact: true }).click();
     await page.getByText("Chưa có tổ công đoàn", { exact: true }).waitFor();
@@ -128,6 +135,7 @@ try {
     const response = await context.request.get("/api/v1/union-units/tree");
     assert.equal(response.status(), 200);
     const tree = (await response.json()).data;
+    assert.equal(tree.tenDonVi, `  ${centralName}  `, "Creation must preserve exactly the entered unit name");
     const directTeam = tree.children.find(unit => unit.tenDonVi === directTeamName);
     const department = tree.children.find(unit => unit.tenDonVi === departmentName);
     const emptyDepartment = tree.children.find(unit => unit.tenDonVi === emptyDepartmentName);
@@ -138,7 +146,9 @@ try {
     emptyDepartmentId = emptyDepartment.id;
     team = directTeam.id;
     targetTeam = departmentTeam.id;
-    report.flows.push("Create an empty department and teams at both levels");
+    await page.getByRole("button", { name: departmentName, exact: true }).click();
+    assert.equal(await page.getByRole("button", { name: /Ngừng hoạt động \/ Ẩn khỏi cây/ }).isDisabled(), true);
+    report.flows.push("Create an empty department and teams at both levels; parent deactivation is disabled without cascading");
   }
   const member = await post("/union-members", {
     hoTen: "Đoàn viên thử nghiệm", ngaySinh: "1990-01-01", gioiTinh: 0, soCCCD: "000000000123",
@@ -146,7 +156,11 @@ try {
   });
   const accountList = await context.request.get("/api/v1/accounts");
   assert.equal(accountList.status(), 200);
-  const accounts = (await accountList.json()).data;
+  const accountPage = await accountList.json();
+  const accounts = accountPage.data;
+  if (!baseline) assert.deepEqual(accountPage.credentialPolicy, {
+    initialPassword, temporaryPasswordLifetimeHours: 24, activationCodeLifetimeHours: 24,
+  });
   const account = accounts.find(row => row.vaiTro === "CDCS");
   const temporaryPassword = password();
   let centralActivation;
@@ -161,6 +175,11 @@ try {
   let departmentActivation;
   if (!baseline) {
     assert.ok(departmentAccount);
+    assert.equal(account.username, "cong_doan_co_so_thu_nghiem");
+    assert.equal(departmentAccount.username, "cdbp_chua_co_to_thu_nghiem");
+    assert.equal(accounts.find(row => row.organizationId === team).username, "to_thu_nghiem");
+    assert.equal(accounts.find(row => row.organizationId === targetTeam).username, "to_dich_thu_nghiem");
+    report.flows.push("Unit names preserve entered whitespace and login names have no added role prefixes");
   }
 
   for (const route of ["/accounts", "/organizations", "/members", `/members/${member}`]) {
@@ -169,6 +188,7 @@ try {
   }
   if (!baseline) {
     await open("/accounts");
+    await page.getByRole("region", { name: "Mật khẩu khởi tạo", exact: true }).getByText(initialPassword, { exact: true }).waitFor();
     const accountSearch = page.getByRole("textbox", { name: "Tìm kiếm", exact: true });
     const accountsTable = page.getByRole("region", { name: "Bảng tài khoản" });
     await accountsTable.getByText(departmentAccount.username, { exact: true }).waitFor();
@@ -188,26 +208,99 @@ try {
     const ownRow = accountsTable.getByRole("row").filter({ hasText: adminUsername });
     assert.equal(await ownRow.getByRole("button", { name: /^Reset/ }).count(), 0);
     for (const action of ["Reset mật khẩu", "Reset 2FA"]) {
-      await departmentRow.getByRole("button", { name: action, exact: true }).click();
+      const trigger = departmentRow.getByRole("button", { name: action, exact: true });
+      await trigger.click();
       const confirmation = page.getByRole("dialog", { name: action });
-      await confirmation.getByRole("checkbox").waitFor();
-      await confirmation.getByLabel("Mã Authenticator", { exact: true }).waitFor();
+      if (action === "Reset mật khẩu") {
+        await confirmation.getByText(initialPassword, { exact: true }).waitFor();
+        await confirmation.getByText(/trạng thái khóa được giữ nguyên/).waitFor();
+      } else await confirmation.getByText(/dùng mật khẩu hiện tại/).waitFor();
+      await confirmation.getByRole("checkbox").check();
+      await confirmation.getByLabel("Mật khẩu quản trị viên").fill("FixtureUnsubmitted1!");
+      await confirmation.getByLabel("Mã Authenticator", { exact: true }).fill("123456");
+      const before = writes.length;
+      const close = confirmation.getByRole("button", { name: "Đóng hộp thoại", exact: true });
+      await page.setViewportSize({ width: 360, height: 480 });
+      await confirmation.evaluate(async node => {
+        await new Promise(requestAnimationFrame);
+        node.scrollTop = node.scrollHeight;
+        await new Promise(requestAnimationFrame);
+      });
+      const smallBox = await close.boundingBox();
+      assert.ok(smallBox.x >= 0 && smallBox.x + smallBox.width <= 360 && smallBox.y >= 0 && smallBox.y + smallBox.height <= 480, JSON.stringify(smallBox));
+      await page.setViewportSize({ width: 1440, height: 960 });
+      const box = await close.boundingBox();
+      assert.ok(box.width >= 44 && box.height >= 44);
+      await close.focus();
+      await page.keyboard.press("Enter");
+      await confirmation.waitFor({ state: "hidden" });
+      assert.equal(writes.length, before, "Closing a filled reset form must not write");
+      assert.equal(await trigger.evaluate(node => node === document.activeElement), true);
+      await trigger.click();
+      assert.equal(await confirmation.getByRole("checkbox").isChecked(), false);
+      assert.equal(await confirmation.getByLabel("Mật khẩu quản trị viên").inputValue(), "");
+      assert.equal(await confirmation.getByLabel("Mã Authenticator", { exact: true }).inputValue(), "");
       await page.keyboard.press("Escape");
       await confirmation.waitFor({ state: "hidden" });
+      assert.equal(writes.length, before);
     }
     report.flows.push("Configured administrator sees independent reset dialogs with OTP and confirmation only for other accounts");
     await departmentRow.getByRole("button", { name: "Cấp mã kích hoạt" }).click();
     const activationDialog = page.getByRole("dialog", { name: "Cấp mã kích hoạt" });
+    const activationWrites = writes.length;
     await activationDialog.getByRole("checkbox").check();
+    for (const width of [360, 390, 768, 1024, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 960 });
+      const close = activationDialog.getByRole("button", { name: "Đóng hộp thoại", exact: true });
+      const box = await close.boundingBox();
+      assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.width <= width);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    }
+    await page.screenshot({ path: join(output, "activation-confirmation-1920.png") });
+    await page.setViewportSize({ width: 360, height: 960 });
+    await page.screenshot({ path: join(output, "activation-confirmation-360.png") });
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await activationDialog.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    await activationDialog.waitFor({ state: "hidden" });
+    assert.equal(writes.length, activationWrites);
+    await departmentRow.getByRole("button", { name: "Cấp mã kích hoạt" }).click();
+    assert.equal(await activationDialog.getByRole("checkbox").isChecked(), false);
+    await activationDialog.getByRole("checkbox").check();
+    let releaseActivation;
+    const activationGate = new Promise(resolve => { releaseActivation = resolve; });
+    const activationPattern = `**/api/v1/accounts/${departmentAccount.id}/activate`;
+    await page.route(activationPattern, async route => { await activationGate; await route.continue(); });
+    const activationRequest = page.waitForRequest(request => request.url().endsWith(`/accounts/${departmentAccount.id}/activate`));
     await activationDialog.getByRole("button", { name: "Xác nhận cấp mã" }).click();
-    await activationDialog.locator("code").waitFor();
-    departmentActivation = await activationDialog.locator("code").textContent();
+    await activationRequest;
+    try {
+      assert.equal(await activationDialog.getByRole("button", { name: "Đóng hộp thoại", exact: true }).isDisabled(), true);
+      await page.keyboard.press("Escape");
+      assert.equal(await activationDialog.isVisible(), true);
+    } finally { releaseActivation(); }
+
+    await activationDialog.getByTestId("activation-code").waitFor();
+    await page.unroute(activationPattern);
+    assert.equal(writes.length, activationWrites + 1, "Agree must submit activation exactly once");
+    departmentActivation = await activationDialog.getByTestId("activation-code").textContent();
     await activationDialog.getByRole("button", { name: "Đã lưu mã" }).click();
     report.flows.push("Administrator delivers a one-time activation code after verifying identity");
+    await departmentRow.getByRole("button", { name: "Reset mật khẩu", exact: true }).click();
+    const passwordDialog = page.getByRole("dialog", { name: "Reset mật khẩu", exact: true });
+    await passwordDialog.getByRole("checkbox").check();
+    await passwordDialog.getByLabel("Mật khẩu quản trị viên").fill(adminPassword);
+    const resetFactor = await nextFixtureTotp(adminFactor.key, adminFactor.step);
+    await passwordDialog.getByLabel("Mã Authenticator", { exact: true }).fill(resetFactor.code);
+    await passwordDialog.getByRole("button", { name: "Xác nhận reset", exact: true }).click();
+    await passwordDialog.waitFor({ state: "hidden" });
+    await page.getByRole("status").filter({ hasText: `Đã đặt lại mật khẩu của ${departmentAccount.username} thành ${initialPassword}` }).waitFor();
+    report.flows.push("Password reset success states the exact initial password, 24-hour deadline, forced change and preserved MFA/lock");
+
 
     await open("/catalogs");
     await page.getByRole("button", { name: /Thêm Danh mục/ }).click();
     const catalog = page.getByRole("dialog", { name: "Thông tin danh mục" });
+    await cancelForm(catalog, page.getByRole("button", { name: /Thêm Danh mục/ }));
     await catalog.getByLabel(/Mã danh mục/).fill("FIXTURE_CATALOG");
     await catalog.getByLabel(/Tên hiển thị/).fill("Danh mục qua giao diện");
     await catalog.getByRole("button", { name: /Lưu/ }).click();
@@ -216,7 +309,51 @@ try {
     await catalog.getByLabel(/Tên hiển thị/).fill("Danh mục đã cập nhật");
     await catalog.getByRole("button", { name: /Lưu/ }).click();
     await row.getByText("Danh mục đã cập nhật").waitFor();
-    report.flows.push("Create and edit reference catalog");
+    await cancelDelete(row.getByRole("button", { name: "Xóa", exact: true }));
+    await row.getByText("Danh mục đã cập nhật").waitFor();
+    await page.route("**/api/v1/catalogs/*", async route => {
+      if (route.request().method() !== "DELETE") return route.continue();
+      await route.fulfill({ status: 409, contentType: "application/json", headers: { "x-qlcd-test-error": "true" },
+        body: JSON.stringify({ message: "Lỗi xóa tổng hợp để kiểm thử" }) });
+    });
+    await row.getByRole("button", { name: "Xóa", exact: true }).click();
+    await page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true }).getByRole("button", { name: "Đồng ý", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "Lỗi xóa tổng hợp để kiểm thử" }).waitFor();
+    await page.unroute("**/api/v1/catalogs/*");
+    await cancelDelete(row.getByRole("button", { name: "Xóa", exact: true }));
+    const beforeDelete = writes.length;
+    await row.getByRole("button", { name: "Xóa", exact: true }).click();
+    await page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true }).getByRole("button", { name: "Đồng ý", exact: true }).click();
+    await row.waitFor({ state: "hidden" });
+    assert.equal(writes.length, beforeDelete + 1, "Agree must delete exactly once after a refused retry");
+    report.flows.push("Catalog deletion: refuse via X/Escape/Cancel, handle injected error, refuse retry, then agree exactly once");
+    await open("/organizations");
+    await page.getByRole("button", { name: emptyDepartmentName, exact: true }).click();
+    await cancelDelete(page.getByRole("button", { name: /Ngừng hoạt động \/ Ẩn khỏi cây/ }));
+    await page.getByRole("button", { name: /Ngừng hoạt động \/ Ẩn khỏi cây/ }).click();
+    await page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true }).getByRole("button", { name: "Đồng ý", exact: true }).click();
+    await page.getByRole("button", { name: emptyDepartmentName, exact: true }).waitFor({ state: "hidden" });
+    const inactiveUnits = page.getByRole("region", { name: "Đơn vị ngừng hoạt động", exact: true });
+    await inactiveUnits.getByText(emptyDepartmentName, { exact: true }).waitFor();
+    await open("/accounts");
+    const retainedRow = page.getByRole("row").filter({ hasText: departmentAccount.username });
+    await retainedRow.getByText("Bị chặn truy cập do đơn vị", { exact: true }).waitFor();
+    // Lock then unlock the account. Neither action should make its organization active.
+    await retainedRow.getByRole("button", { name: "Khóa", exact: true }).click();
+    await retainedRow.getByRole("button", { name: "Mở khóa", exact: true }).click();
+    await retainedRow.getByRole("button", { name: "Khóa", exact: true }).waitFor();
+    await retainedRow.getByText("Bị chặn truy cập do đơn vị", { exact: true }).waitFor();
+    await open("/organizations");
+    await page.getByRole("button", { name: emptyDepartmentName, exact: true }).waitFor({ state: "hidden" });
+    await inactiveUnits.getByRole("listitem").filter({ hasText: emptyDepartmentName }).getByRole("button", { name: "Khôi phục đơn vị", exact: true }).click();
+    await page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true }).getByRole("button", { name: "Đồng ý", exact: true }).click();
+    await page.getByRole("button", { name: emptyDepartmentName, exact: true }).waitFor();
+    const restoredAccount = (await (await context.request.get("/api/v1/accounts")).json()).data.find(a => a.id === departmentAccount.id);
+    assert.equal(restoredAccount.organizationId, emptyDepartmentId);
+    assert.equal(restoredAccount.trangThai, true);
+    report.flows.push("Deactivate unit, retain and unlock account without restoring unit, then explicitly restore the same unit ID");
+
+    await page.getByRole("button", { name: emptyDepartmentName, exact: true }).waitFor();
     await open("/finance");
     await page.getByRole("heading", { name: "Bạn chưa có quyền mở trang này" }).waitFor();
     report.flows.push("Admin finance access screen");
@@ -300,8 +437,16 @@ try {
     assert.match(await created.getAttribute("href"), /^\/members\/[\da-f-]+$/i);
     const newRow = page.getByRole("row").filter({ hasText: "FIXTURE02" });
     await newRow.waitFor();
+    await cancelDelete(newRow.getByRole("button", { name: /Xóa/ }));
     await newRow.getByRole("button", { name: /Điều động/ }).click();
     const transfer = page.getByRole("dialog", { name: "Chuyển sinh hoạt" });
+    const beforeTransfer = writes.length;
+    await transfer.getByLabel("Tổ CĐ đích").selectOption(targetTeam);
+    await transfer.getByLabel("Lý do điều động").fill("Hủy trước khi chuyển");
+    await transfer.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    await transfer.waitFor({ state: "hidden" });
+    assert.equal(writes.length, beforeTransfer);
+    await newRow.getByRole("button", { name: /Điều động/ }).click();
     await transfer.getByLabel("Tổ CĐ đích").selectOption(targetTeam);
     await transfer.getByLabel("Lý do điều động").fill("Kiểm tra ghi lịch sử chuyển sinh hoạt");
     await transfer.getByRole("button", { name: "Xác nhận chuyển" }).click();
@@ -315,16 +460,36 @@ try {
     await page.getByRole("button", { name: /Lưu thay đổi/ }).click();
     await page.getByRole("heading", { name: "Đoàn viên đã cập nhật" }).waitFor();
     await page.getByRole("cell", { name: "Tiếng Pháp", exact: true }).waitFor();
-    report.flows.push("Create, transfer, view history, edit member and save two language records");
+    await cancelDelete(page.getByRole("button", { name: /Xóa Hồ Sơ/ }));
+    report.flows.push("Create, cancel/confirm transfer, view history, edit member; cancel deletion in list and detail");
 
     await open("/activities");
     await page.getByRole("button", { name: /Thêm Hoạt động/ }).click();
     const activity = page.getByRole("dialog", { name: "Thông tin hoạt động" });
+    await cancelForm(activity, page.getByRole("button", { name: /Thêm Hoạt động/ }));
     await activity.getByLabel(/Tên hoạt động/).fill("Hoạt động qua giao diện");
     await activity.getByLabel(/Địa điểm tổ chức/).fill("Phòng thử nghiệm");
     await activity.locator("input[type=file]").setInputFiles({
       name: "browser-fixture.pdf",
       mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n"),
+    });
+    await activity.getByRole("link", { name: "browser-fixture.pdf" }).waitFor();
+    await cancelDelete(activity.getByRole("button", { name: "Xóa tệp", exact: true }));
+    assert.equal(await activity.isVisible(), true, "Nested confirmation cancellation must keep the form open");
+    await activity.getByRole("link", { name: "browser-fixture.pdf" }).waitFor();
+    const pendingLink = activity.getByRole("link", { name: "browser-fixture.pdf" });
+    const pendingAttachment = await context.request.get(await pendingLink.getAttribute("href"));
+    assert.equal(pendingAttachment.status(), 200);
+    const beforePdfDelete = writes.length;
+    await activity.getByRole("button", { name: "Xóa tệp", exact: true }).click();
+    await page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true }).getByRole("button", { name: "Đồng ý", exact: true }).click();
+    await pendingLink.waitFor({ state: "hidden" });
+    assert.equal(writes.length, beforePdfDelete + 1);
+    assert.equal(await activity.isVisible(), true);
+    report.flows.push("Pending PDF remains downloadable after refusal and deletes only on explicit agreement");
+    await activity.locator("input[type=file]").setInputFiles({
+      name: "browser-fixture.pdf", mimeType: "application/pdf",
       buffer: Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n"),
     });
     await activity.getByRole("link", { name: "browser-fixture.pdf" }).waitFor();
@@ -341,11 +506,13 @@ try {
     const attachment = await context.request.get(await evidence.getAttribute("href"));
     assert.equal(attachment.status(), 200);
     assert.match(attachment.headers()["content-disposition"], /^attachment/);
-    report.flows.push("Create and edit activity, avoid double submission, upload and download PDF");
+    await cancelDelete(page.getByRole("row").filter({ hasText: "Hoạt động đã cập nhật" }).getByRole("button", { name: "Xóa", exact: true }));
+    report.flows.push("Create and edit activity, refuse PDF/activity deletion, avoid double submission, upload and download PDF");
 
     await open("/finance");
     await page.getByRole("button", { name: /Ghi nhận Giao dịch/ }).click();
     const finance = page.getByRole("dialog", { name: "Thông tin giao dịch" });
+    await cancelForm(finance, page.getByRole("button", { name: /Ghi nhận Giao dịch/ }));
     await finance.getByLabel(/Loại giao dịch/).selectOption("THU_DOAN_PHI");
     await finance.getByLabel(/Số tiền/).fill("125000");
     await finance.getByLabel(/Người giao dịch/).fill("Giao dịch thử nghiệm");
@@ -356,11 +523,13 @@ try {
     await finance.getByRole("button", { name: "Lưu", exact: true }).click();
     await receipt.getByText(/135.000/).waitFor();
     await page.getByText("Tổng thu theo bộ lọc").locator("..").getByText(/135.000/).waitFor();
-    report.flows.push("Record and edit finance transaction with updated totals");
+    await cancelDelete(receipt.getByRole("button", { name: "Xóa", exact: true }));
+    report.flows.push("Record and edit finance transaction with updated totals; refuse deletion");
 
     await open("/welfare");
     await page.getByRole("button", { name: /Yêu cầu Trợ cấp/ }).click();
     const welfare = page.getByRole("dialog", { name: "Đề xuất phúc lợi" });
+    await cancelForm(welfare, page.getByRole("button", { name: /Yêu cầu Trợ cấp/ }));
     await welfare.getByLabel("Tìm theo tên hoặc mã nhân viên").fill("FIXTURE01");
     await welfare.getByLabel(/Đoàn viên nhận hỗ trợ/).selectOption(member);
     await welfare.getByLabel(/Lý do chi tiết/).fill("Đề xuất phúc lợi thử nghiệm");
@@ -373,16 +542,19 @@ try {
     await open("/initiatives");
     await page.getByRole("button", { name: /Đăng ký Sáng kiến/ }).click();
     const initiative = page.getByRole("dialog", { name: "Thông tin sáng kiến" });
+    await cancelForm(initiative, page.getByRole("button", { name: /Đăng ký Sáng kiến/ }));
     await initiative.getByLabel("Tìm theo tên hoặc mã nhân viên").fill("FIXTURE01");
     await initiative.getByLabel(/Tác giả đăng ký/).selectOption(member);
     await initiative.getByLabel(/Tên đề tài/).fill("Sáng kiến qua giao diện");
     await initiative.getByRole("button", { name: "Lưu", exact: true }).click();
     await page.getByText("Sáng kiến qua giao diện", { exact: true }).waitFor();
-    report.flows.push("Register initiative with a searched member");
+    await cancelDelete(page.getByRole("row").filter({ hasText: "Sáng kiến qua giao diện" }).getByRole("button", { name: "Xóa", exact: true }));
+    report.flows.push("Register initiative with a searched member; refuse deletion");
 
     await open("/emulations");
     await page.getByRole("button", { name: /Khai báo Thi đua/ }).click();
     const emulation = page.getByRole("dialog", { name: "Thông tin thi đua" });
+    await cancelForm(emulation, page.getByRole("button", { name: /Khai báo Thi đua/ }));
     await emulation.getByLabel(/Tên phong trào thi đua/).fill("Thi đua qua giao diện");
     await emulation.getByLabel(/Thi đua Tập thể/).selectOption(team);
     await emulation.getByLabel(/Năm thi đua/).fill("2026");
@@ -390,7 +562,8 @@ try {
     await emulation.getByLabel(/Trạng thái thi đua/).selectOption("2");
     await emulation.getByRole("button", { name: "Lưu", exact: true }).click();
     await page.getByText("Thi đua qua giao diện", { exact: true }).waitFor();
-    report.flows.push("Record evaluated emulation from UI");
+    await cancelDelete(page.getByRole("row").filter({ hasText: "Thi đua qua giao diện" }).getByRole("button", { name: "Xóa", exact: true }));
+    report.flows.push("Record evaluated emulation from UI; refuse deletion");
     await open("/quality");
     await page.getByLabel("Năm báo cáo").fill("2026");
     await page.getByRole("button", { name: "Xem báo cáo" }).click();
@@ -459,6 +632,14 @@ try {
     await page.getByRole("link", { name: "Bảo mật tài khoản" }).click();
     await page.getByText("Đang bật", { exact: true }).waitFor();
     await capture("/account-security");
+    const beforeRecovery = writes.length;
+    await page.getByRole("button", { name: "Tạo lại mã khôi phục", exact: true }).click();
+    await page.getByLabel("Mật khẩu hiện tại", { exact: true }).fill("UnsubmittedPassword1!");
+    await page.getByLabel("Mã Authenticator", { exact: true }).fill("123456");
+    await page.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    await page.getByRole("button", { name: "Tạo lại mã khôi phục", exact: true }).waitFor();
+    assert.equal(writes.length, beforeRecovery);
+    report.flows.push("X cancels recovery-code rotation without changing existing codes");
     await post("/auth/logout", undefined, 204);
     await page.goto("/login");
     await signIn(departmentAccount.username, departmentPassword);
@@ -546,9 +727,9 @@ try {
     const rotation = await nextFixtureTotp(key, factor.step);
     await changePassword(initialPassword, credential, rotation.code);
     await signIn(username, credential);
-    await verifyFactor(key, rotation.step);
+    const step = await verifyFactor(key, rotation.step);
     await page.waitForURL(origin + "/");
-    return { codes };
+    return { codes, key, step };
   }
 
   async function post(path, data, expected = 200) {
@@ -566,6 +747,31 @@ try {
     assert.equal(response.status(), 200, route);
     await page.locator("main h1, main h2, main h3").first().waitFor();
     await page.evaluate(async () => { await document.fonts.ready; });
+  }
+
+  async function cancelForm(dialog, trigger) {
+    const before = writes.length;
+    await dialog.getByRole("button", { name: "Đóng hộp thoại", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
+    assert.equal(writes.length, before);
+    assert.equal(await trigger.evaluate(node => node === document.activeElement), true);
+    await trigger.click();
+    await dialog.waitFor();
+  }
+
+  async function cancelDelete(trigger) {
+    for (const choice of ["x", "escape", "cancel"]) {
+      const before = writes.length;
+      await trigger.click();
+      const confirmation = page.getByRole("dialog", { name: "Xác nhận thao tác", exact: true });
+      await confirmation.waitFor();
+      assert.equal(writes.length, before, "Opening confirmation must not submit");
+      if (choice === "escape") await page.keyboard.press("Escape");
+      else await confirmation.getByRole("button", { name: choice === "x" ? "Đóng hộp thoại" : "Hủy", exact: true }).click();
+      await confirmation.waitFor({ state: "hidden" });
+      assert.equal(writes.length, before, "Refusing confirmation must not send any API write");
+      assert.equal(await trigger.evaluate(node => node === document.activeElement), true);
+    }
   }
 
   async function capture(route) {

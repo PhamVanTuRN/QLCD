@@ -8,7 +8,11 @@ Tài liệu này tổng hợp toàn bộ các quy tắc ràng buộc logic nghi�
 * **BR_ORG_03 (Vị trí của Tổ công đoàn trực thuộc CĐCS)**: Tổ trực thuộc CĐCS phải có cha trực tiếp là `CDCS`.
 * **BR_ORG_04 (Vị trí của Tổ công đoàn thuộc CĐBP)**: Tổ công đoàn thuộc CĐBP bắt buộc phải có cha trực tiếp là `CDBP`.
 * **BR_ORG_05 (Không có cấp 4)**: Tuyệt đối không cho phép tạo bất kỳ tổ chức con nào dưới Tổ công đoàn (Level 3 hoặc nút lá).
-* **BR_ORG_06 (Chặn xóa tổ chức có dữ liệu)**: Không cho phép xóa vật lý (Hard Delete) bất kỳ đơn vị tổ chức nào nếu đơn vị đó đang chứa tổ chức con, đoàn viên, giao dịch tài chính, hoạt động công đoàn, hoặc khen thưởng/kỷ luật liên quan. Chỉ được phép chuyển sang trạng thái `Ngừng hoạt động`.
+* **BR_ORG_06 (Ngừng hoạt động và khôi phục)**: Không hard-delete đơn vị, tài khoản hoặc quan hệ nghiệp vụ. Gỡ khỏi cây là đặt `TrangThai=0`, không đặt `IsDeleted` cho bản ghi mới. Giữ ID, cha–con, đoàn viên và toàn bộ dữ liệu. Chặn ngừng CĐCS và mọi đơn vị có con, kể cả con đã ngừng hoặc soft-delete cũ; không cascade trạng thái. Cho phép ngừng đơn vị lá có đoàn viên/nghiệp vụ vì dữ liệu được bảo toàn. Cây chính chỉ hiển thị đơn vị có cả chuỗi tổ tiên hoạt động. Danh sách ngừng hoạt động riêng cho ADMIN/CDCS hỗ trợ khôi phục cùng ID, cha phải hoạt động trước. Khôi phục không mở khóa tài khoản.
+* **BR_ORG_08 (Tách khóa tài khoản)**: `TaiKhoan.TrangThai` là cờ khóa riêng, không đồng bộ với trạng thái đơn vị. Tài khoản gắn đơn vị/cha ngừng hoặc bị ẩn vẫn hiển thị quản trị nhưng bị chặn truy cập (`organizationActive=false`, `canSignIn=false`) dù cờ khóa riêng đang mở. Mở khóa chỉ thay trạng thái/tombstone cũ của chính tài khoản và SecurityVersion, không đổi đơn vị. Ngừng/khôi phục đơn vị thu hồi phiên bằng SecurityVersion; không đổi mật khẩu, MFA, quan hệ hoặc cờ khóa tài khoản.
+
+
+* **BR_ORG_07 (Giữ dữ liệu nhập khi tạo mới)**: Tên đơn vị được lưu đúng chuỗi người dùng nhập, không thêm CDS/CDCS, TCD/TOCD hay CDBP và không tự cắt các từ này nếu người dùng đã nhập. API hiện dùng ID GUID, không có trường mã đơn vị dạng chuỗi. Tên đăng nhập tự sinh chỉ chuẩn hóa tên sang chữ thường không dấu, phân cách bằng `_`, tối đa 36 ký tự gốc; không thêm tiền tố vai trò hay bỏ các cụm từ chỉ loại đơn vị. Nếu trùng tên đăng nhập, thêm `_1`, `_2`…; nếu không có ký tự dùng được, dùng `don_vi`. Chỉ áp dụng lúc tạo mới, không đổi tên, ID hay tài khoản hiện có.
 
 ## 2. Ràng buộc về Đoàn viên & Biến động (BR_MEM)
 * **BR_MEM_01 (Trùng lặp CCCD/Mã NV)**: Số CCCD/CMTQĐ và Mã nhân viên của đoàn viên phải là duy nhất trên toàn bộ hệ thống.

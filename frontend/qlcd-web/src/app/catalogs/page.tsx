@@ -1,5 +1,7 @@
 "use client";
 
+import useConfirmation from "@/components/useConfirmation";
+
 import FormDialog from "@/components/FormDialog";
 
 import { useResource } from "@/lib/use-resource";
@@ -38,6 +40,7 @@ const CATALOG_TYPES = [
 ];
 
 export default function CatalogsPage() {
+  const { confirm, confirmationDialog } = useConfirmation();
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN";
 
@@ -88,7 +91,7 @@ export default function CatalogsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa danh mục này?")) return;
+    if (!await confirm("Bạn có chắc chắn muốn xóa danh mục này?")) return;
     try {
       await deleteCatalogApi(id);
       showAlert("success", "Xóa danh mục thành công");
@@ -132,6 +135,7 @@ export default function CatalogsPage() {
 
   return (
     <div className="space-y-6">
+      {confirmationDialog}
       {/* Alert Header */}
       <Notice value={notice} dismiss={dismiss} />
 

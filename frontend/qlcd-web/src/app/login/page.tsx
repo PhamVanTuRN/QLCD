@@ -130,6 +130,9 @@ export default function LoginPage() {
             </div>
           </div>
           <h1 id="login-title" className="mb-6 text-3xl font-bold tracking-tight text-ink sm:text-4xl">{title}</h1>
+          {changing && user?.mustChangePassword && <p role="status" className="mb-4 rounded-lg bg-gold-soft p-3 text-sm text-gold-ink">
+            Bạn đang dùng mật khẩu tạm của tài khoản mới hoặc sau khi được đặt lại. Bạn bắt buộc đổi mật khẩu trước khi sử dụng các chức năng nghiệp vụ; xác nhận bằng Authenticator đã đăng ký.
+          </p>}
           {replacementCodes ? <RecoveryCodes codes={replacementCodes} onContinue={() => {
             setReplacementCodes(null);
             backToPassword();

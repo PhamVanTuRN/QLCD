@@ -20,7 +20,7 @@ namespace QLCD.Tests;
 public sealed class ReportQueriesTests
 {
     [Fact]
-    public async Task AccountsSearchFiltersBeforePaginationAndKeepsDeletedAccountsHidden()
+    public async Task AccountsSearchFiltersBeforePaginationAndKeepsUnlinkedDeletedAccountsHidden()
     {
         await using var database = CreateDatabase();
         var unit = new DonViCongDoan { TenDonVi = "Công đoàn Mẫu Đông", LoaiToChuc = LoaiToChuc.CDBP, Level = 2 };
@@ -28,7 +28,7 @@ public sealed class ReportQueriesTests
         database.TaiKhoans.AddRange(
             Account("search-recent", "Unrelated record", 4),
             Account("search_old", "Người quản lý mẫu", 1, unit.Id),
-            Account("search-deleted", "Người quản lý mẫu", 3, unit.Id, deleted: true));
+            Account("search-deleted", "Người quản lý mẫu", 3, deleted: true));
         await database.SaveChangesAsync();
 
         var query = new GetAccountsQueryHandler(database);

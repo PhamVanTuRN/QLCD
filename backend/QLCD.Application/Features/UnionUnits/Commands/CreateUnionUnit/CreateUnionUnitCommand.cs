@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System;
 using System.Threading;
@@ -37,7 +38,7 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
         // 1. Kiểm tra ràng buộc chỉ có duy nhất 01 CĐCS
         if (request.LoaiToChuc == LoaiToChuc.CDCS)
         {
-            var existsCdcs = await _context.DonViCongDoans
+            var existsCdcs = await _context.DonViCongDoans.IgnoreQueryFilters()
                 .AnyAsync(u => u.LoaiToChuc == LoaiToChuc.CDCS, cancellationToken);
             if (existsCdcs)
             {
@@ -50,9 +51,9 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
         // 2. Kiểm tra ràng buộc quan hệ cha-con
         if (request.MaParent.HasValue)
         {
-            var parent = await _context.DonViCongDoans
+            var parent = await _context.DonViCongDoans.OperationalUnits()
                 .FirstOrDefaultAsync(u => u.Id == request.MaParent.Value, cancellationToken);
-            if (parent == null)
+            if (parent == null || parent.TrangThai != 1)
             {
                 throw new ArgumentException("Đơn vị cha không tồn tại.");
             }
@@ -107,20 +108,10 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
 
         // Tự động tạo tài khoản quản lý cho đơn vị mới
         var baseName = ToUnaccentedLowercase(request.TenDonVi);
-        baseName = baseName.Replace("cong_doan_co_so_", "")
-                           .Replace("cong_doan_bo_phan_", "")
-                           .Replace("to_cong_doan_", "")
-                           .Replace("cong_doan_", "")
-                           .Replace("to_cd_", "");
-
-        string prefix = request.LoaiToChuc switch
-        {
-            LoaiToChuc.CDCS => "cdcs_",
-            LoaiToChuc.CDBP => "cdbp_",
-            _ => "tocd_"
-        };
-
-        string username = prefix + baseName[..Math.Min(baseName.Length, 36)];
+        // Keep the entered name intact; normalize only the generated login identifier.
+        // Organization type belongs in VaiTro, not in an automatically added username prefix.
+        if (baseName.Length == 0) baseName = "don_vi";
+        string username = baseName[..Math.Min(baseName.Length, 36)];
         int suffix = 1;
         string finalUsername = username;
         while (await _context.TaiKhoans.AnyAsync(a => a.Username == finalUsername, cancellationToken))
@@ -174,7 +165,7 @@ public class CreateUnionUnitCommandHandler : IRequestHandler<CreateUnionUnitComm
             "o", "o", "o", "o", "o", "o", "o", "o", "o", "o", "o", "o", "o", "o", "o", "o", "o",
             "u", "u", "u", "u", "u", "u", "u", "u", "u", "u", "u",
             "y", "y", "y", "y", "y" };
-        string result = text.ToLower();
+        string result = text.ToLowerInvariant();
         for (int i = 0; i < arr1.Length; i++)
         {
             result = result.Replace(arr1[i], arr2[i]);

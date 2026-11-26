@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
@@ -43,6 +44,9 @@ public sealed class SessionAuthenticationHandler(
                 return AuthenticateResult.Fail("Invalid session.");
 
             var account = session.Account;
+            if (account.OrganizationId is Guid organizationId && !await database.DonViCongDoans.OperationalUnits()
+                .AnyAsync(u => u.Id == organizationId, Context.RequestAborted))
+                return AuthenticateResult.Fail("Inactive organization.");
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, account.Id.ToString()),

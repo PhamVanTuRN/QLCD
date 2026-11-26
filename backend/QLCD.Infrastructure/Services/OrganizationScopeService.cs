@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,6 +28,8 @@ public class OrganizationScopeService : IOrganizationScopeService
 
         if (!SecurityRoles.IsStaff(role))
             return [];
+        if (orgId.HasValue && !await _context.DonViCongDoans.OperationalUnits().AnyAsync(u => u.Id == orgId.Value, cancellationToken))
+            return [];
         if (role == SecurityRoles.Admin)
             return null;
         if (!orgId.HasValue || orgId == Guid.Empty)
@@ -37,7 +40,7 @@ public class OrganizationScopeService : IOrganizationScopeService
         if (role == SecurityRoles.Department)
         {
             // CDBP scope: current CDBP + direct children (Tổ công đoàn)
-            var childIds = await _context.DonViCongDoans
+            var childIds = await _context.DonViCongDoans.OperationalUnits()
                 .Where(u => u.MaParent == orgId.Value && u.TrangThai == 1)
                 .Select(u => u.Id)
                 .ToListAsync(cancellationToken);
@@ -56,7 +59,7 @@ public class OrganizationScopeService : IOrganizationScopeService
         var allowedIds = await GetAllowedOrganizationIdsAsync(cancellationToken);
         return targetOrgId != Guid.Empty
             && (allowedIds is null || allowedIds.Contains(targetOrgId))
-            && await _context.DonViCongDoans.AnyAsync(unit => unit.Id == targetOrgId && unit.TrangThai == 1, cancellationToken);
+            && await _context.DonViCongDoans.OperationalUnits().AnyAsync(unit => unit.Id == targetOrgId, cancellationToken);
     }
 
     public async Task<bool> IsMemberInScopeAsync(Guid memberId, CancellationToken cancellationToken = default)

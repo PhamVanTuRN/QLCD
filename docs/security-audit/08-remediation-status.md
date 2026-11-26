@@ -60,3 +60,13 @@ Tại máy làm việc, backend và frontend build thành công, 9 test xUnit đ
 - `node tools/test-security-smoke.mjs` khởi chạy API thử nghiệm loopback, tự cấp dữ liệu tổng hợp và kiểm phiên, reset, phân quyền, phân trang và download.
 - Frontend dùng `npm ci` và `npm run build` trong `frontend/qlcd-web`. [Workflow bảo mật](../../.github/workflows/security.yml)
 - SQL migration có thể sinh script idempotent bằng EF CLI để duyệt trước cutover. Nghiệm thu SQL Server, ClamAV, backup, MFA production, ingress và CI cần sử dụng artifact và cấu hình của môi trường đích. [Checklist](07-security-checklist.md)
+
+## Hủy xác nhận trên giao diện (26/11/2026)
+
+Hộp cấp mã kích hoạt, reset mật khẩu và reset 2FA có nút X để hủy trước khi submit. Đóng sẽ xóa checkbox, mật khẩu, OTP, mã hiển thị và lỗi khỏi state của biểu mẫu; không gọi API reset/cấp mã. Khi đang xử lý, nút X và Escape bị khóa. Bảo mật tài khoản cho phép đóng bước tạo lại mã khôi phục/QR đang nhập mà không xác nhận thay đổi; không bỏ qua yêu cầu Authenticator hay đổi mật khẩu bắt buộc. Các quyền backend, yêu cầu OTP và thu hồi phiên sau khi xác nhận vẫn giữ nguyên.
+
+## Bảo toàn đơn vị và tài khoản khi gỡ khỏi cây (26/11/2026)
+
+Nguyên nhân cũ là DeleteUnionUnitCommand đặt IsDeleted cho cả đơn vị lẫn mọi tài khoản trực tiếp; global filter làm tài khoản biến mất. Luồng mới dùng TrangThai=0 cho đơn vị và thu hồi phiên, không soft/hard-delete tài khoản hay quan hệ. Tài khoản và đơn vị có trạng thái riêng; quyền truy cập hiệu lực yêu cầu cả tài khoản mở và chuỗi tổ tiên hoạt động. Update thông tin không được thay trạng thái để vượt kiểm tra con. DELETE v1 được giữ với nghĩa ngừng hoạt động; POST /union-units/{id}/restore và GET /union-units/inactive dành ADMIN/CDCS, có CSRF cho ghi, phân trang cho đọc và lỗi xung đột 409 có thông báo nghiệp vụ an toàn.
+
+Ngừng/khôi phục dùng transaction Serializable trên SQL và SecurityVersion concurrency token hiện hành cho tài khoản, audit ORG_DEACTIVATE/ORG_RESTORE. Ngừng từ chối tất cả đơn vị có con kể cả soft-delete cũ, không tự cascade. Khôi phục nhánh cũ chỉ thu hồi phiên liên quan, không đổi trạng thái con hoặc cờ khóa tài khoản. Không đổi EF model/schema, không migration sửa dữ liệu, không tự backfill bản ghi triển khai. Tài khoản tổ chức và đơn vị soft-delete cũ chỉ được đưa vào danh sách quản trị để phục hồi tường minh.

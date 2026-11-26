@@ -1,3 +1,4 @@
+using QLCD.Application.Common;
 using System;
 using System.Threading.Tasks;
 using MediatR;
@@ -37,6 +38,22 @@ public class UnionUnitsController : ControllerBase
     {
         var tree = await _mediator.Send(new GetUnionUnitsTreeQuery(), HttpContext.RequestAborted);
         return Ok(new { success = true, data = tree });
+    }
+
+    [HttpGet("inactive")]
+    [Authorize(Roles = "ADMIN,CDCS")]
+    public async Task<IActionResult> Inactive([FromQuery] int page = 1, [FromQuery] int pageSize = PageBounds.DefaultSize)
+    {
+        var rows = await _mediator.Send(new GetInactiveUnitsQuery(page, pageSize), HttpContext.RequestAborted);
+        return Ok(new { success = true, data = rows.Take(pageSize), hasMore = rows.Count > pageSize });
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    [Authorize(Roles = "ADMIN,CDCS")]
+    public async Task<IActionResult> Restore(Guid id)
+    {
+        var result = await _mediator.Send(new RestoreUnionUnitCommand(id), HttpContext.RequestAborted);
+        return Ok(new { success = true, data = result });
     }
 
     [HttpGet("stats")]
